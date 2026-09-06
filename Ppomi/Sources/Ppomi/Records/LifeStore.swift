@@ -11,9 +11,11 @@ final class LifeStore {
     private let db: DB
     private let lock = NSRecursiveLock()
     private let evidenceDirectory: URL
+    private let now: () -> Date
 
-    init(path: String = LifeStore.defaultPath) throws {
+    init(path: String = LifeStore.defaultPath, now: @escaping () -> Date = { Date() }) throws {
         self.path = path
+        self.now = now
         let folder = URL(fileURLWithPath: path).deletingLastPathComponent()
         evidenceDirectory = folder.appendingPathComponent("record-evidence", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true,
@@ -229,7 +231,11 @@ final class LifeStore {
 
     private func validateReferences(_ record: LifeRecord) throws {
         try record.validate()
-        guard try entity(id: record.subjectID) != nil else { throw LifeError.missing("기록의 대상 ID가 등록되어 있지 않습니다.") }
+        if record.kind == .habit, record.occurredAt > now() {
+            throw LifeError.validation("미래 시각의 습관 보고를 저장할 수 없습니다. 알림과 예정은 완료 기록이 아닙니다.")
+        }
+        guard let subject = try entity(id: record.subjectID) else { throw LifeError.missing("기록의 대상 ID가 등록되어 있지 않습니다.") }
+        if record.kind == .habit, subject.kind != .person { throw LifeError.validation("습관 확인은 사람의 기록에만 저장합니다.") }
         for id in record.evidenceIDs {
             guard try db.scalar("SELECT id FROM life_evidence WHERE id=?", [id]) != nil else {
                 throw LifeError.missing("등록되지 않은 증빙 ID입니다: \(id)")

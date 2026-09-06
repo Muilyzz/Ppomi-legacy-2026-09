@@ -4,17 +4,23 @@ import CoreFoundation
 /// The voice and MCP channels write the same private records as the health view.
 /// Agent arguments can describe a report or an estimate, never certify a record.
 enum HealthTools {
-    static let kinds: Set<LifeRecord.Kind> = [.measurement, .meal, .exercise, .checkIn]
+    static let kinds: Set<LifeRecord.Kind> = [.measurement, .meal, .exercise, .checkIn, .habit]
     static let specs: [ToolSpec] = [
         Tools.T("health_records", "비공개 건강 기록을 발생 시각 최신순으로 읽는다. 기본 대상은 나(self), 다른 사람은 등록된 person ID를 명시한다. 금융 기록은 제외. 실측·사용자 보고·AI 추정·검토 상태를 구분하고, 미기록을 0 또는 안 했음으로 해석하지 마라.",
-            ["subjectID": ("string", "기본 self; 등록된 사람 ID"), "kind": ("string", "선택: measurement, meal, exercise, checkIn"),
+            ["subjectID": ("string", "기본 self; 등록된 사람 ID"), "kind": ("string", "선택: measurement, meal, exercise, checkIn, habit"),
+             "activityID": ("string", "선택: 습관 ID로 필터, 예 sunscreen. 취소 상태 retracted는 완료가 아님"),
+             "activityDay": ("string", "선택: 습관의 실제 행동 날짜 YYYY-MM-DD로 필터. since/before는 보고 시각 필터"),
              "since": ("string", "선택: 포함할 시작 시각, 시간대 포함 ISO8601"), "before": ("string", "선택: 제외할 끝 시각, 시간대 포함 ISO8601"),
              "limit": ("integer", "기본 30, 1~100건")]),
-        Tools.T("record_health", "사용자가 기록해 달라고 한 체성분·식사·운동·컨디션 한 건을 비공개 저장한다. reported는 사용자가 말한 내용만, aiEstimate는 AI 추정 수치이며 섞지 말고 따로 저장한다. 발생 시각이 불명확하면 묻고, 모르는 값은 생략한다. 사용자 확인 상태는 부여할 수 없다. sourceID는 원본 발화/기록의 안정적인 고유 ID로 재시도에 그대로 사용한다.",
-            ["subjectID": ("string", "기본 self; 등록된 사람 ID"), "kind": ("string", "measurement, meal, exercise, checkIn 중 하나"),
-             "occurredAt": ("string", "시간대 포함 ISO8601, 예: 2026-09-06T12:30:00+09:00"),
+        Tools.T("record_health", "사용자가 기록해 달라고 한 체성분·식사·운동·컨디션·습관 한 건을 비공개 저장한다. reported는 사용자 보고, aiEstimate는 추정이며 별도 저장한다. habit 완료는 사용자가 실제로 했다고 말한 경우만 reported로 저장하고 예정·알림·사진·추정으로 완료 처리하지 마라. habit의 occurredAt은 원본 보고 시각, activityDay는 실제 행동 날짜, activityTimeZone은 그 날짜의 시간대다. 어제 바르고 오늘 말했다면 두 날짜를 분리하라. 불명확하면 묻고 실제 수행 시각을 추정하지 마라. 미래 보고·미래 행동 날짜를 완료로 저장할 수 없다. 사용자 확인 상태는 부여할 수 없다. sourceID는 원본 발화/기록의 안정적인 고유 ID로 재시도에 그대로 사용한다.",
+            ["subjectID": ("string", "기본 self; 등록된 사람 ID"), "kind": ("string", "measurement, meal, exercise, checkIn, habit 중 하나"),
+             "occurredAt": ("string", "시간대 포함 ISO8601. habit는 원본 보고·확인 시각, 다른 종류는 발생 시각"),
              "sourceID": ("string", "원본 발화/기록의 고유 ID. 같은 사실 재시도는 같은 ID, 별도 추정은 다른 ID"),
              "attribution": ("string", "reported 또는 aiEstimate"),
+             "activityID": ("string", "habit일 때 필수. 안정적인 영문 소문자 ID, 예 sunscreen. 다른 종류는 생략"),
+             "activityStatus": ("string", "habit만: completed(기본) 또는 retracted. 명시적 완료취소는 retracted와 원래 완료의 sourceID를 재사용. 취소로 미실행을 단정하지 않음"),
+             "activityDay": ("string", "habit일 때 필수. 실제 행동 날짜 YYYY-MM-DD. 보고 날짜와 다를 수 있음. 모호하면 질문"),
+             "activityTimeZone": ("string", "habit일 때 필수. 행동 날짜의 시간대 식별자, 예 Asia/Seoul"),
              "metrics": ("string", "선택: JSON 배열 문자열 [{\"code\":\"weight\",\"title\":\"체중\",\"value\":72.3,\"unit\":\"kg\"}]. 체성분 kg/%/kg/m2/ratio/level, 식사 energy:kcal·protein/carbohydrate/fat:g, 운동 duration:min·steps:count·distance:km·energy:kcal, 컨디션 wellbeing:score/5. 모르는 항목 생략"),
              "note": ("string", "선택: 사용자가 보고한 식사·운동 등 내용. 추정은 명시"), "device": ("string", "선택: 사용자가 알려준 측정 기기")],
             ["kind", "occurredAt", "sourceID", "attribution"]),
@@ -22,13 +28,19 @@ enum HealthTools {
     ]
 
     static func records(_ arguments: [String: Any], store: LifeStore) throws -> String {
-        try allowed(arguments, ["subjectID", "kind", "since", "before", "limit"])
+        try allowed(arguments, ["subjectID", "kind", "activityID", "activityDay", "since", "before", "limit"])
         let subject = try person(arguments, store: store)
         let kind = try optionalString("kind", arguments).map { raw -> LifeRecord.Kind in
             guard let kind = LifeRecord.Kind(rawValue: raw), kinds.contains(kind) else { throw LifeError.validation("건강 기록 종류가 아닙니다.") }
             return kind
         }
         let since = try optionalDate("since", arguments), before = try optionalDate("before", arguments)
+        let activityID = try optionalString("activityID", arguments)
+        if let activityID, !LifeRecord.isValidActivityID(activityID) { throw LifeError.validation("유효하지 않은 습관 ID입니다.") }
+        let activityDay = try optionalString("activityDay", arguments)
+        if let activityDay, !LifeRecord.isValidActivityDay(activityDay, timeZone: TimeZone(secondsFromGMT: 0)!) {
+            throw LifeError.validation("행동 날짜는 유효한 YYYY-MM-DD여야 합니다.")
+        }
         if let since, let before, since >= before { throw LifeError.validation("시작 시각은 끝 시각보다 빨라야 합니다.") }
         let limit: Int
         if let raw = arguments["limit"] {
@@ -39,6 +51,8 @@ enum HealthTools {
         } else { limit = 30 }
         let matching = try store.allRecords().filter { record in
             record.subjectID == subject.id && kinds.contains(record.kind) && (kind == nil || record.kind == kind) &&
+                (activityID == nil || record.activityID == activityID) &&
+                (activityDay == nil || record.activityDay == activityDay) &&
                 (since == nil || record.occurredAt >= since!) && (before == nil || record.occurredAt < before!)
         }.sorted { $0.occurredAt == $1.occurredAt ? $0.id < $1.id : $0.occurredAt > $1.occurredAt }
         let values = try matching.prefix(limit).map { record -> [String: Any] in
@@ -53,9 +67,9 @@ enum HealthTools {
     }
 
     static func record(_ arguments: [String: Any], store: LifeStore) throws -> String {
-        try allowed(arguments, ["subjectID", "kind", "occurredAt", "sourceID", "attribution", "metrics", "note", "device"])
+        try allowed(arguments, ["subjectID", "kind", "occurredAt", "sourceID", "attribution", "metrics", "note", "device", "activityID", "activityStatus", "activityDay", "activityTimeZone"])
         guard let kind = LifeRecord.Kind(rawValue: try requiredString("kind", arguments)), kinds.contains(kind) else {
-            throw LifeError.validation("measurement, meal, exercise, checkIn만 건강 기록으로 저장합니다.")
+            throw LifeError.validation("measurement, meal, exercise, checkIn, habit만 건강 기록으로 저장합니다.")
         }
         let occurredAt = try requiredDate("occurredAt", arguments)
         let sourceID = try requiredString("sourceID", arguments)
@@ -66,6 +80,17 @@ enum HealthTools {
         case "reported": method = .manual
         case "aiEstimate": method = .aiEstimate
         default: throw LifeError.validation("attribution은 reported 또는 aiEstimate여야 합니다.")
+        }
+        let activityID = try optionalString("activityID", arguments)
+        let activityDay = try optionalString("activityDay", arguments), activityTimeZone = try optionalString("activityTimeZone", arguments)
+        let activityStatus: LifeRecord.ActivityStatus?
+        if kind == .habit {
+            let raw = try optionalString("activityStatus", arguments) ?? "completed"
+            guard let value = LifeRecord.ActivityStatus(rawValue: raw) else { throw LifeError.validation("습관 상태는 completed 또는 retracted여야 합니다.") }
+            activityStatus = value
+        } else {
+            guard arguments["activityStatus"] == nil else { throw LifeError.validation("activityStatus는 습관에만 사용합니다.") }
+            activityStatus = nil
         }
         var metrics: [LifeMetric] = []
         if let raw = try optionalString("metrics", arguments) {
@@ -78,7 +103,23 @@ enum HealthTools {
         let subject = try person(arguments, store: store)
         let record = LifeRecord(subjectID: subject.id, kind: kind, occurredAt: occurredAt,
             sourceName: "Ppomi agent", sourceRecordID: subject.id + ":" + sourceID,
-            method: method, review: .unreviewed, metrics: metrics, note: note, device: device)
+            method: method, review: .unreviewed, metrics: metrics, note: note, device: device,
+            activityID: activityID, activityStatus: activityStatus, activityDay: activityDay, activityTimeZone: activityTimeZone)
+        try record.validate()
+        if kind == .habit, activityStatus == .retracted {
+            guard let previous = try store.allRecords().first(where: {
+                $0.subjectID == subject.id && $0.sourceName == record.sourceName && $0.sourceRecordID == record.sourceRecordID
+            }), previous.kind == .habit, previous.activityID == activityID,
+               previous.activityDay == activityDay, previous.activityTimeZone == activityTimeZone else {
+                throw LifeError.missing("취소할 원래 습관 완료의 sourceID가 필요합니다. 없는 완료 기록을 만들지 않습니다.")
+            }
+            if previous.activityStatus == .retracted {
+                return try json(["status": "duplicate", "recordID": previous.id, "activityStatus": "retracted"])
+            }
+            var revised = previous; revised.activityStatus = .retracted; revised.review = .unreviewed
+            try store.revise(revised, reason: "사용자가 에이전트에게 습관 완료 취소를 요청함", expectedPrevious: previous)
+            return try json(["status": "updated", "recordID": previous.id, "activityStatus": "retracted", "review": "unreviewed"])
+        }
         let result = try store.save(record)
         let id: String, status: String
         switch result {

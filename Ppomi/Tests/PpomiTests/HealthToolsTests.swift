@@ -191,4 +191,33 @@ final class HealthToolsTests: XCTestCase {
         XCTAssertEqual(wakes, 1)
         XCTAssertEqual(captures, 1)
     }
+
+    func testHabitRequiresUserReportAndRetractionRevisesOriginalSource() throws {
+        var habit: [String: Any] = ["kind": "habit", "activityID": "sunscreen", "occurredAt": "2026-09-06T08:30:00+09:00",
+                                   "sourceID": "synthetic-sunscreen-report", "attribution": "reported",
+                                   "activityDay": "2026-09-05", "activityTimeZone": "Asia/Seoul"]
+        let result = try decoded(HealthTools.record(habit, store: store))
+        let id = try XCTUnwrap(result["recordID"] as? String)
+        XCTAssertEqual(try store.record(id: id)?.activityStatus, .completed)
+        XCTAssertEqual(try decoded(HealthTools.record(habit, store: store))["status"] as? String, "duplicate")
+        XCTAssertEqual(try decoded(HealthTools.records(["kind": "habit", "activityID": "sunscreen"], store: store))["totalMatching"] as? Int, 1)
+        XCTAssertEqual(try decoded(HealthTools.records(["activityID": "sunscreen", "activityDay": "2026-09-05"], store: store))["totalMatching"] as? Int, 1)
+        XCTAssertEqual(try decoded(HealthTools.records(["activityID": "sunscreen", "activityDay": "2026-09-06"], store: store))["totalMatching"] as? Int, 0)
+        var estimate = habit; estimate["sourceID"] = "synthetic-estimate"; estimate["attribution"] = "aiEstimate"
+        XCTAssertThrowsError(try HealthTools.record(estimate, store: store))
+        var noActivity = habit; noActivity.removeValue(forKey: "activityID")
+        XCTAssertThrowsError(try HealthTools.record(noActivity, store: store))
+        for field in ["activityDay", "activityTimeZone"] {
+            var missing = habit; missing.removeValue(forKey: field)
+            XCTAssertThrowsError(try HealthTools.record(missing, store: store), field)
+        }
+        habit["activityStatus"] = "retracted"
+        XCTAssertEqual(try decoded(HealthTools.record(habit, store: store))["status"] as? String, "updated")
+        XCTAssertEqual(try store.record(id: id)?.activityStatus, .retracted)
+        XCTAssertEqual(try store.revisions(recordID: id).count, 1)
+        XCTAssertEqual(try decoded(HealthTools.record(habit, store: store))["status"] as? String, "duplicate")
+        var missing = habit; missing["sourceID"] = "nonexistent-completion"
+        XCTAssertThrowsError(try HealthTools.record(missing, store: store))
+        XCTAssertEqual(try store.allRecords().count, 1)
+    }
 }

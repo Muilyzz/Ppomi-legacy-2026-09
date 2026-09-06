@@ -54,13 +54,14 @@ struct LifeMetric: Codable, Equatable, Identifiable {
 
 struct LifeRecord: Codable, Identifiable, Equatable {
     enum Kind: String, Codable, CaseIterable {
-        case measurement, meal, exercise, checkIn, financialSnapshot, financialTransaction
+        case measurement, meal, exercise, checkIn, habit, financialSnapshot, financialTransaction
         var title: String {
             switch self {
             case .measurement: return "몸의 변화"
             case .meal: return "식사"
             case .exercise: return "운동"
             case .checkIn: return "컨디션"
+            case .habit: return "습관"
             case .financialSnapshot: return "자산 관측"
             case .financialTransaction: return "금융 거래"
             }
@@ -79,6 +80,7 @@ struct LifeRecord: Codable, Identifiable, Equatable {
         }
     }
     enum Review: String, Codable { case unreviewed, userConfirmed }
+    enum ActivityStatus: String, Codable { case completed, retracted }
     var id: String
     var subjectID: String
     var kind: Kind
@@ -92,15 +94,27 @@ struct LifeRecord: Codable, Identifiable, Equatable {
     var note: String?
     var device: String?
     var evidenceIDs: [String]
+    var activityID: String?
+    var activityStatus: ActivityStatus?
+    var activityDay: String?
+    var activityTimeZone: String?
 
     init(id: String = UUID().uuidString, subjectID: String, kind: Kind, occurredAt: Date,
          recordedAt: Date = Date(), sourceName: String, sourceRecordID: String? = nil,
          method: Method, review: Review = .unreviewed, metrics: [LifeMetric] = [],
-         note: String? = nil, device: String? = nil, evidenceIDs: [String] = []) {
+         note: String? = nil, device: String? = nil, evidenceIDs: [String] = [],
+         activityID: String? = nil, activityStatus: ActivityStatus? = nil,
+         activityDay: String? = nil, activityTimeZone: String? = nil) {
         self.id = id; self.subjectID = subjectID; self.kind = kind; self.occurredAt = occurredAt
         self.recordedAt = recordedAt; self.sourceName = sourceName; self.sourceRecordID = sourceRecordID
         self.method = method; self.review = review; self.metrics = metrics; self.note = note
         self.device = device; self.evidenceIDs = evidenceIDs
+        self.activityID = activityID; self.activityStatus = activityStatus
+        self.activityDay = activityDay; self.activityTimeZone = activityTimeZone
+    }
+
+    static func isValidActivityID(_ value: String) -> Bool {
+        value.range(of: #"^[a-z][a-z0-9._-]{0,99}$"#, options: .regularExpression) != nil
     }
 
     func validate() throws {
@@ -119,12 +133,31 @@ struct LifeRecord: Codable, Identifiable, Equatable {
         guard Set(evidenceIDs).count == evidenceIDs.count else { throw LifeError.validation("증빙 ID가 중복됐습니다.") }
         guard (note?.count ?? 0) <= 20_000 else { throw LifeError.validation("메모는 20,000자까지 저장합니다.") }
         for metric in metrics { try metric.validate() }
+        if kind == .habit {
+            guard let activityID, Self.isValidActivityID(activityID), activityStatus != nil else {
+                throw LifeError.validation("습관에는 안정적인 activityID와 completed/retracted 상태가 필요합니다.")
+            }
+            guard method == .manual else { throw LifeError.validation("습관 완료는 사용자가 직접 말하거나 누른 사실만 기록합니다. 추정으로 완료 처리할 수 없습니다.") }
+            guard let activityDay, let activityTimeZone, let zone = TimeZone(identifier: activityTimeZone),
+                  Self.isValidActivityDay(activityDay, timeZone: zone) else {
+                throw LifeError.validation("습관에는 실제 행동 날짜 activityDay(YYYY-MM-DD)와 activityTimeZone이 필요합니다.")
+            }
+            var calendar = Calendar(identifier: .gregorian); calendar.timeZone = zone
+            let parts = calendar.dateComponents([.year, .month, .day], from: occurredAt)
+            let reportDay = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+            guard activityDay <= reportDay else {
+                throw LifeError.validation("보고 시각보다 미래인 날짜의 습관을 완료 처리할 수 없습니다.")
+            }
+        } else if activityID != nil || activityStatus != nil || activityDay != nil || activityTimeZone != nil {
+            throw LifeError.validation("activity 필드는 습관 기록에만 사용할 수 있습니다.")
+        }
         let allowed: Set<String>
         switch kind {
         case .measurement: allowed = ["weight", "bodyFatPercent", "skeletalMuscleMass", "bodyFatMass", "bmi", "waistHipRatio", "extracellularWaterRatio", "visceralFatLevel"]
         case .meal: allowed = ["energy", "protein", "carbohydrate", "fat"]
         case .exercise: allowed = ["duration", "steps", "distance", "energy"]
         case .checkIn: allowed = ["wellbeing"]
+        case .habit: allowed = []
         case .financialSnapshot: allowed = ["balance"]
         case .financialTransaction: allowed = ["amount"]
         }
@@ -134,6 +167,15 @@ struct LifeRecord: Codable, Identifiable, Equatable {
            (note ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, evidenceIDs.isEmpty {
             throw LifeError.validation("내용이나 수치, 사진 중 하나를 기록해 주세요.")
         }
+    }
+
+    static func isValidActivityDay(_ value: String, timeZone: TimeZone) -> Bool {
+        guard value.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil else { return false }
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian); formatter.timeZone = timeZone
+        formatter.dateFormat = "yyyy-MM-dd"; formatter.isLenient = false
+        guard let date = formatter.date(from: value) else { return false }
+        return formatter.string(from: date) == value
     }
 
     /// Recollection timestamps and review do not change the source's observed fact.

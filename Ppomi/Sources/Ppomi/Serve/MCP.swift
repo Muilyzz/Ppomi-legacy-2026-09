@@ -116,7 +116,8 @@ final class MCPServer {
         (Playbooks.all().first { $0.app == "공통" }?.text ?? "") +
             "\nlist_playbooks 로 앱 ID와 가능한 작업을 확인하고, 폰 앱 작업 전에 read_playbook(앱 ID) 을 읽어라. 새 버릇은 note_footprint 로 남겨라. 결제·구매 버튼은 confirm_payment 승인 뒤에만 phone_tap 된다(코드가 막는다)." +
             "\n폰 앱 작업은 run_combo 먼저, 멈춘 화면부터 phone_screen/phone_tap." +
-            "\n건강 기록은 health_records/record_health, 본인 인바디 결과는 inbody_capture로 비공개 저장한다. 발생 시각·사람을 확인하고 사용자 보고와 AI 추정은 구분해 별도 기록한다. 추정·미검토·기기 변경을 숨기거나 미기록을 0으로 보지 마라. 검토 완료는 사용자가 앱에서 직접 표시한다."
+            "\n건강 기록은 health_records/record_health, 본인 인바디 결과는 inbody_capture로 비공개 저장한다. 발생 시각·사람을 확인하고 사용자 보고와 AI 추정은 구분해 별도 기록한다. 추정·미검토·기기 변경을 숨기거나 미기록을 0으로 보지 마라. 검토 완료는 사용자가 앱에서 직접 표시한다." +
+            "\n‘선크림 발랐어’ 같은 실제 사용자 보고만 record_health(kind=habit, activityID=sunscreen, activityStatus=completed, attribution=reported)로 기록한다. occurredAt은 보고 시각, activityDay/activityTimeZone은 실제 바른 날짜·시간대이며 어제 바르고 오늘 보고했다면 분리한다. 모호하면 묻고 알림·예정·사진·미래 날짜를 완료로 만들지 않는다."
     }
 
     /// Encode the catalog's actual types so new fields reach MCP without another presentation mapping.

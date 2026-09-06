@@ -523,7 +523,8 @@
             "exercise",
             "checkIn",
             "financialSnapshot",
-            "financialTransaction"
+            "financialTransaction",
+            "habit"
           ]
         },
         "occurredAt": {
@@ -575,6 +576,26 @@
             "minLength": 1
           },
           "uniqueItems": true
+        },
+        "activityID": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._-]{0,99}$"
+        },
+        "activityStatus": {
+          "enum": [
+            "completed",
+            "retracted"
+          ]
+        },
+        "activityDay": {
+          "type": "string",
+          "format": "date",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "activityTimeZone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Time zone identifier for the activity date, e.g. Asia/Seoul; runtime validates it."
         }
       },
       "required": [
@@ -748,6 +769,57 @@
                 },
                 "minItems": 1
               }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "habit"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "activityID",
+              "activityStatus",
+              "activityDay",
+              "activityTimeZone"
+            ],
+            "properties": {
+              "method": {
+                "const": "manual"
+              },
+              "metrics": {
+                "maxItems": 0
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "activityID"
+                  ]
+                },
+                {
+                  "required": [
+                    "activityStatus"
+                  ]
+                },
+                {
+                  "required": [
+                    "activityDay"
+                  ]
+                },
+                {
+                  "required": [
+                    "activityTimeZone"
+                  ]
+                }
+              ]
             }
           }
         }

@@ -148,7 +148,13 @@ struct HealthRecordDetail: View {
             HStack { Text(record.kind.title).font(.title2.bold()); Spacer(); Button("닫기") { dismiss() }.keyboardShortcut(.cancelAction) }
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    LabeledContent("발생 시각", value: record.occurredAt.formatted(date: .complete, time: .shortened))
+                    LabeledContent(record.kind == .habit ? "확인 시각" : "발생 시각", value: record.occurredAt.formatted(date: .complete, time: .shortened))
+                    if record.kind == .habit {
+                        LabeledContent("습관", value: record.activityID ?? "미기록")
+                        LabeledContent("활동 날짜", value: record.activityDay ?? "미기록")
+                        LabeledContent("날짜 기준", value: record.activityTimeZone ?? "미기록")
+                        LabeledContent("완료 표시", value: record.activityStatus == .retracted ? "취소됨" : "기록됨")
+                    }
                     LabeledContent("수집 시각", value: record.recordedAt.formatted(date: .abbreviated, time: .shortened))
                     LabeledContent("출처", value: record.sourceName)
                     if let device = record.device { LabeledContent("기기", value: device) }
@@ -177,7 +183,7 @@ struct HealthRecordDetail: View {
                 }.padding(.trailing, 8)
             }
             HStack {
-                Button("수정") { onEdit() }
+                Button("수정") { onEdit() }.disabled(record.kind == .habit)
                 Spacer()
                 Button("원본과 직접 확인했어요") { onReviewed() }.disabled(record.review == .userConfirmed)
             }

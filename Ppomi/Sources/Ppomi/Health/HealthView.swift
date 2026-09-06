@@ -14,14 +14,25 @@ final class HealthModel: ObservableObject {
     @Published var busy = false
     @Published var message = ""
     @Published var error: String?
+    private var loadedFileDate: Date?
+
+    func refreshIfChanged() {
+        guard !busy, fileDate != loadedFileDate else { return }
+        reload()
+    }
+    private var fileDate: Date? {
+        (try? FileManager.default.attributesOfItem(atPath: LifeStore.defaultPath)[.modificationDate]) as? Date
+    }
 
     func reload() {
         do {
+            let readDate = fileDate
             let store = try LifeStore()
             selfID = try store.ensureSelfEntity().id
             people = try store.entities().filter { $0.kind == .person }
             if !people.contains(where: { $0.id == subjectID }) { subjectID = selfID }
             allHealthRecords = try store.allRecords().filter { ![.financialSnapshot, .financialTransaction].contains($0.kind) }
+            loadedFileDate = readDate
             error = nil
         }
         catch { self.error = error.localizedDescription }
@@ -63,6 +74,7 @@ struct HealthView: View {
                 }
                 if !model.message.isEmpty { Text(model.message).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("health-import-status") }
                 if model.busy { ProgressView("기록 읽는 중…") }
+                SunCareCard(model: model)
                 if measurements.isEmpty { emptyState } else {
                     latestMetrics
                     Picker("기간", selection: $range) {
@@ -79,7 +91,13 @@ struct HealthView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Color(white: 0.045))
-        .task { model.reload() }
+        .task {
+            model.reload()
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(3)) } catch { return }
+                model.refreshIfChanged()
+            }
+        }
         .sheet(item: $editor) { target in HealthRecordEditor(target: target, model: model) }
         .sheet(item: $selected) { record in
             HealthRecordDetail(record: record, onEdit: {
@@ -185,7 +203,7 @@ struct HealthView: View {
                         Image(systemName: record.kind == .measurement ? "chart.xyaxis.line" : record.kind == .meal ? "fork.knife" : record.kind == .exercise ? "figure.walk" : "sun.max")
                             .foregroundStyle(.mint).frame(width: 24)
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(record.kind.title + " · " + record.occurredAt.formatted(date: .abbreviated, time: .shortened)).font(.callout)
+                            Text(recordTitle(record)).font(.callout)
                             Text(record.metrics.map { "\($0.title) \($0.value.formatted()) \($0.unit)" }.joined(separator: " · "))
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                             if record.kind != .measurement, let note = record.note { Text(note).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
@@ -198,6 +216,14 @@ struct HealthView: View {
                 Divider()
             }
         }
+    }
+    private func recordTitle(_ record: LifeRecord) -> String {
+        guard record.kind == .habit else {
+            return record.kind.title + " · " + record.occurredAt.formatted(date: .abbreviated, time: .shortened)
+        }
+        let title = record.activityID == "sunscreen" ? "선크림" : "습관"
+        let day = record.activityDay ?? "날짜 미기록"
+        return title + " · " + day + (record.activityStatus == .retracted ? " · 완료 취소" : " · 완료 기록")
     }
     private func importFile(image: Bool) {
         let panel = NSOpenPanel(); panel.allowedContentTypes = image ? [.image] : [.json]; panel.allowsMultipleSelection = false

@@ -45,6 +45,15 @@ enum LifeSchema {
             if let sourceID = record.sourceRecordID { node["ppomi:sourceRecordID"] = sourceID }
             if let note = record.note { node["description"] = note }
             if let device = record.device { node["ppomi:deviceLabel"] = device }
+            if record.kind == .habit {
+                node["@type"] = ["ppomi:Record", "ppomi:HabitConfirmation"]
+                node["ppomi:activityID"] = record.activityID
+                node["ppomi:activityStatus"] = record.activityStatus?.rawValue
+                node["ppomi:activityDay"] = record.activityDay
+                node["ppomi:activityTimeZone"] = record.activityTimeZone
+                node["ppomi:confirmationTime"] = LifeJSON.timestamp(record.occurredAt)
+                // Confirmation time is not the time sunscreen was actually applied.
+            }
             if record.kind == .meal || record.kind == .exercise {
                 node["@type"] = ["ppomi:Record", record.kind == .meal ? "EatAction" : "ExerciseAction"]
                 node["agent"] = ["@id": id("entity", record.subjectID)]
