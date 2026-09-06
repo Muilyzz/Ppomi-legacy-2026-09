@@ -20,9 +20,20 @@ final class AppState: ObservableObject {
     @Published var pendingJob: String? = nil    // an agent job interrupted by the human picking the phone up; resumes on CONNECTED
     @Published var kioskOn = false              // the same workbench expanded to the screen's usable area
     @Published var phoneSize = Mirroring.defaultSize   // the mirroring window's size: the dock pane in the 뽀미 window is this big
+    @Published var workSurface: WorkSurface = .iphone
+    @Published var windowsSize = CGSize(width: 900, height: 620)
+    @Published var windowsWindowVisible = false
     @Published var shown = 0                    // bumps when a menu item wants the 뽀미 window up (the controller owns it)
 
     func reveal() { shown += 1 }
+    var surfaceSize: CGSize { workSurface == .iphone ? phoneSize : windowsSize }
+
+    func selectSurface(_ surface: WorkSurface) {
+        guard ask == nil || surface == .iphone else { return }
+        guard workSurface != surface else { reveal(); return }
+        workSurface = surface
+        reveal()
+    }
     @Published var ledger: Ledger? = nil        // read from data/ledger.db (am.py writes it); nil until loaded
     @Published var ledgerError: String? = nil
     @Published var ledgerVersion = 0                    // bumps on every (re)load, so pages built from the ledger rebuild
@@ -62,6 +73,8 @@ final class AppState: ObservableObject {
             return
         }
         guard ask?.id != q.id else { return }
+        // Current MCP/voice tools operate on iPhone. Show that target with its human approval.
+        workSurface = .iphone
         ask = (q.id, HTML.plain(q.html).replacingOccurrences(of: "\n", with: " · "), q.options)
         if case .humanUse = phase {} else { phase = .humanTurn(reason: "승인 대기 · 작업대 하단 버튼") }
         reveal()
@@ -103,6 +116,9 @@ final class AppState: ObservableObject {
     private var phaseLine: String {
         switch phase {
         case .idle, .humanUse(true):
+            if workSurface == .windows {
+                return windowsWindowVisible ? "Parallels 창 표시 중 · 인증은 해당 창에서" : "Parallels에서 Windows 창을 열어 주세요"
+            }
             switch mirror {
             case .connected: return "폰 연결됨 · 대기"
             case .none: return "미러링 없음"
@@ -111,7 +127,11 @@ final class AppState: ObservableObject {
             }
         case .agent(let job): return "뽀미가 \(job) 중"
         case .humanTurn(let r): return r
-        case .humanUse: return "손에 든 iPhone · 잠그면 돌아옴" + (pendingJob.map { " · 이어서 \($0)" } ?? "")
+        case .humanUse:
+            if workSurface == .windows {
+                return windowsWindowVisible ? "Parallels 창 표시 중 · 인증은 해당 창에서" : "Parallels에서 Windows 창을 열어 주세요"
+            }
+            return "손에 든 iPhone · 잠그면 돌아옴" + (pendingJob.map { " · 이어서 \($0)" } ?? "")
         }
     }
     var menuIcon: String {
@@ -130,6 +150,7 @@ final class AppState: ObservableObject {
     /// Feed a mirroring event. The transitions of the table in the design notes.
     func mirroring(_ s: MirrorState) {
         mirror = s
+        if ask != nil, case .humanTurn = phase { return }
         switch (s, phase) {
         case (.inUse, .agent(let job)): pendingJob = job; phase = .humanUse(onScreen: false)
         case (.inUse, .idle): phase = .humanUse(onScreen: false)

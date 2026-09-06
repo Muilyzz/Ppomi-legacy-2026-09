@@ -40,6 +40,25 @@ struct Workbench: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Text("작업 화면")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.55))
+                Picker("작업 화면", selection: Binding(get: { state.workSurface }, set: { state.selectSurface($0) })) {
+                    ForEach(WorkSurface.allCases) { surface in
+                        Label(surface.displayName, systemImage: surface.symbolName).tag(surface)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .accessibilityIdentifier("work-surface-picker")
+                .disabled(state.ask != nil)
+                .frame(maxWidth: 240)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 10)
             HStack(spacing: 32) {
                 HStack(spacing: 12) { tab("타임라인", .timeline); tab("증빙·전표", .evidence) }
                 tab("절차", .playbooks)

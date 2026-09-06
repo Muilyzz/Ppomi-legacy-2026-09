@@ -1,5 +1,5 @@
-// A normal workbench stays directly behind iPhone Mirroring. Immersive mode lends its existing views to
-// elevated covers around the phone on the current display, without moving or repeatedly activating the phone.
+// The workbench stays directly behind the selected iPhone or Parallels window. Immersive mode lends
+// its existing views to covers around that window without repeatedly activating it.
 import AppKit
 import SwiftUI
 import Combine
@@ -7,9 +7,14 @@ import CoreGraphics
 
 /// Navigation leaves the mirroring app active; every explicit raise stays directly behind its window.
 final class MainPanel: NSPanel {
+    var surfacePID: pid_t? {
+        didSet {
+            if oldValue != surfacePID { diagnosticSampler?.updateMirrorPID(surfacePID) }
+        }
+    }
     var phoneID: CGWindowID? {
         didSet {
-            if WindowDiagnostics.enabled, oldValue != phoneID { diagnosticSampler?.updateMirrorPID(Mirroring.app()?.processIdentifier) }
+            if WindowDiagnostics.enabled, oldValue != phoneID { diagnosticSampler?.updateMirrorPID(surfacePID) }
         }
     }
     private var kioskAction: (() -> Void)?
@@ -17,7 +22,7 @@ final class MainPanel: NSPanel {
 
     func startWindowDiagnostics() {
         guard WindowDiagnostics.enabled, diagnosticSampler == nil else { return }
-        diagnosticSampler = WindowDiagnosticsSampler(panelID: CGWindowID(windowNumber), mirrorPID: Mirroring.app()?.processIdentifier)
+        diagnosticSampler = WindowDiagnosticsSampler(panelID: CGWindowID(windowNumber), mirrorPID: surfacePID)
         WindowDiagnostics.panel("trace.started", self)
     }
 
@@ -133,7 +138,19 @@ final class KioskController {
     private var awaitingPresentedPhone = false
     private var explicitRevealUntil: TimeInterval = 0
     private var placementRequested = false
+    private var displayedSurface: WorkSurface = .iphone
+    private var surfaceFrames: [WorkSurface: CGRect] = [:]
+    private struct DesktopFit {
+        var requestedWindow: CGWindowID?
+        var originalSize: CGSize?
+        var deadline: TimeInterval = 0
+    }
+    private var desktopFit: DesktopFit?
+    private var placedDesktopID: CGWindowID?
     private(set) var up = false
+
+    private var surface: WorkSurface { displayedSurface }
+    private var surfaceSize: CGSize { surface == .iphone ? state.phoneSize : state.windowsSize }
 
     init(state: AppState) {
         self.state = state
@@ -160,7 +177,7 @@ final class KioskController {
                         return
                     }
                     guard self.main?.isVisible == true,
-                          NSWorkspace.shared.frontmostApplication?.bundleIdentifier == Mirroring.bundleID,
+                          self.surface.isFrontmost,
                           Self.isFullscreenChord(e) else { return }
                     if !e.isARepeat { self.state.toggleKiosk() }
                 }
@@ -218,16 +235,56 @@ final class KioskController {
     }
 
     private func sync() {
+        let switched = displayedSurface != state.workSurface
+        if switched { switchSurface() }
         content?.phase = state.phase
         content?.band.sync()
-        if state.shown != lastShown { lastShown = state.shown; showMain() }
+        if state.shown != lastShown || switched { lastShown = state.shown; showMain() }
         if state.kioskOn != up { setExpanded(state.kioskOn) }
+    }
+
+    /// Target changes are explicit user actions. Polling and ordinary workbench clicks never enter here.
+    private func switchSurface() {
+        if up { revealPhoneOnExit = false; setExpanded(false) }
+        if let main { surfaceFrames[surface] = main.frame }
+        displayedSurface = state.workSurface
+        desktopFit = displayedSurface == .windows ? DesktopFit() : nil
+        placedDesktopID = nil
+        lastDock = nil
+        mirrorPresence = MirrorPresence()
+        awaitingPresentedPhone = false
+        placementRequested = true
+        guard let p = main, let c = content else { return }
+        p.phoneID = nil
+        c.surface = surface
+        c.followedPhone = nil
+        if !surface.isRunning { surface.launch() }
+        if let size = surface.axFrame()?.size {
+            if surface == .iphone { state.phoneSize = size } else { state.windowsSize = size }
+        }
+        p.contentMinSize = .zero
+        p.contentMaxSize = CGSize(width: 10000, height: 10000)
+        let restored = surfaceFrames[surface]
+        if let frame = restored { p.setFrame(frame, display: true) }
+        else {
+            p.setContentSize(WorkbenchContent.size(bandWidth: WorkbenchContent.minimumBandWidth(for: surface),
+                                                  phone: surfaceSize, surface: surface))
+        }
+        Self.fitMain(p, content: c, phoneSize: surfaceSize)
+        if let screen = p.screen ?? NSScreen.main {
+            let visible = screen.visibleFrame
+            let origin = restored.map { Self.clampedOrigin($0.origin, size: p.frame.size, in: visible) }
+                ?? Self.centeredOrigin(for: p.frame.size, in: visible)
+            p.setFrameOrigin(origin)
+        }
     }
 
     private func makeMain() -> MainPanel {
         let c = WorkbenchContent(frame: CGRect(origin: .zero,
-                                size: WorkbenchContent.size(bandWidth: 620, phone: state.phoneSize)))
-        c.phoneSize = state.phoneSize
+                                size: WorkbenchContent.size(bandWidth: surface == .iphone ? 620 : 380,
+                                                            phone: surfaceSize, surface: surface)))
+        c.surface = surface
+        c.phoneSize = surfaceSize
         c.phase = state.phase; c.band.state = state; c.band.sync()
         c.workbench = workbench
         c.workbenchArea.addSubview(workbench)
@@ -249,6 +306,7 @@ final class KioskController {
         p.contentView = c
         p.bindKioskButton { [weak self] in self?.state.toggleKiosk() }
         p.center()
+        p.surfacePID = surface.processIdentifier
         p.startWindowDiagnostics()
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: p, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.wantMain = false }
@@ -265,26 +323,28 @@ final class KioskController {
         if up {
             if stage {
                 NSApp.unhideWithoutActivation()
-                if Permissions.accessibility { _ = Mirroring.revealWindow() }
+                if Permissions.accessibility { _ = surface.revealWindow() }
             }
             updateImmersive()
             return
         }
-        if first { Self.fitMain(p, content: c, phoneSize: state.phoneSize); placementRequested = true }
+        if first { Self.fitMain(p, content: c, phoneSize: surfaceSize); placementRequested = true }
         // A live window can still be buried behind another app. Explicit reopen raises the pair first;
         // ordinary clicks and the docking timer never enter this path.
         if stage {
             WindowDiagnostics.panel("reveal.request", p)
             NSApp.unhideWithoutActivation()
             if p.isMiniaturized { p.deminiaturize(nil) }
-            let presented = Permissions.accessibility && Mirroring.revealWindow()
+            if !surface.isRunning { surface.launch() }
+            let presented = Permissions.accessibility && surface.revealWindow()
+            p.surfacePID = surface.processIdentifier
             awaitingPresentedPhone = !presented
             if !presented { lastDock = nil }
             explicitRevealUntil = ProcessInfo.processInfo.systemUptime + 2
-            p.phoneID = presented ? Mirroring.liveWindow()?.id : nil
+            p.phoneID = presented ? surface.liveWindow()?.id : nil
             WindowDiagnostics.panel("reveal.presented", p, fields: ["phonePresented": presented])
         } else {
-            p.phoneID = Mirroring.liveWindow()?.id
+            p.phoneID = surface.liveWindow()?.id
         }
         c.layoutSubtreeIfNeeded()
         p.orderFront(nil)
@@ -292,6 +352,7 @@ final class KioskController {
 
     /// Move the same view objects between hosts, preserving the timeline page and pending human approval.
     private func setExpanded(_ expanded: Bool) {
+        placedDesktopID = nil
         if main == nil { showMain(stage: false) }
         guard let p = main, let c = content else { return }
         if expanded {
@@ -306,7 +367,7 @@ final class KioskController {
                     self.state.toggleKiosk()
                 }
             }
-            if Permissions.accessibility { _ = Mirroring.revealWindow() }
+            if Permissions.accessibility { _ = surface.revealWindow() }
             immersive?.show(on: screen, phone: immersivePhoneFrame())
             WindowDiagnostics.panel("immersive.enter", p)
         } else {
@@ -320,7 +381,7 @@ final class KioskController {
             p.contentMinSize = .zero
             p.contentMaxSize = CGSize(width: 10000, height: 10000)
             if let savedFrame { p.setFrame(savedFrame, display: true) }
-            Self.fitMain(p, content: c, phoneSize: state.phoneSize)
+            Self.fitMain(p, content: c, phoneSize: surfaceSize)
             savedFrame = nil
             lastDock = nil
             placementRequested = false
@@ -334,9 +395,9 @@ final class KioskController {
 
     /// The opening is only for a visible phone, never a different app that has covered it.
     private func immersivePhoneFrame() -> CGRect? {
-        guard Permissions.accessibility, let phone = Mirroring.liveWindow(),
-              Mirroring.isInFrontOfOtherApplications(phone.id),
-              let frame = Mirroring.axFrame(), DockChange.near(frame, phone.rect) else { return nil }
+        guard Permissions.accessibility, let phone = surface.liveWindow(),
+              surface.isInFrontOfOtherApplications(phone.id),
+              let frame = surface.axFrame(), DockChange.near(frame, phone.rect) else { return nil }
         return cgRect(frame)
     }
 
@@ -356,7 +417,8 @@ final class KioskController {
 
     static func fitMain(_ p: NSPanel, content c: WorkbenchContent, phoneSize: CGSize) {
         c.phoneSize = phoneSize
-        let min = WorkbenchContent.size(bandWidth: WorkbenchContent.bandMin, phone: phoneSize)
+        let min = WorkbenchContent.size(bandWidth: WorkbenchContent.minimumBandWidth(for: c.surface),
+                                        phone: phoneSize, surface: c.surface)
         p.contentMinSize = min
         p.contentMaxSize = CGSize(width: 10000, height: min.height)
         let cur = p.contentRect(forFrameRect: p.frame).size
@@ -367,6 +429,65 @@ final class KioskController {
             p.setFrameOrigin(CGPoint(x: p.frame.minX, y: Swift.max(v.minY, Swift.min(p.frame.minY, v.maxY - p.frame.height))))
         }
         c.layoutSubtreeIfNeeded()
+    }
+
+    /// Keep the sidebar and its bottom approvals on screen even when the native target is oversized.
+    static func centeredOrigin(for size: CGSize, in visible: CGRect) -> CGPoint {
+        CGPoint(x: max(visible.minX, visible.midX - size.width / 2),
+                y: max(visible.minY, visible.midY - size.height / 2))
+    }
+
+    static func clampedOrigin(_ origin: CGPoint, size: CGSize, in visible: CGRect) -> CGPoint {
+        CGPoint(x: max(visible.minX, min(origin.x, visible.maxX - size.width)),
+                y: max(visible.minY, min(origin.y, visible.maxY - size.height)))
+    }
+
+    static func fittedDesktopSize(_ current: CGSize, available: CGSize, frameOverhead: CGSize = .zero) -> CGSize {
+        let margins = WorkbenchContent.size(bandWidth: WorkbenchContent.minimumBandWidth(for: .windows),
+                                             phone: .zero, surface: .windows)
+        let width = available.width - margins.width - frameOverhead.width - 48
+        let height = available.height - margins.height - frameOverhead.height - 48
+        guard current.width.isFinite, current.height.isFinite, current.width > 0, current.height > 0,
+              width.isFinite, height.isFinite, width >= 240, height >= 180 else { return current }
+        let scale = min(1, width / current.width, height / current.height)
+        return CGSize(width: floor(current.width * scale), height: floor(current.height * scale))
+    }
+
+    /// Resize once on an explicit desktop selection, then wait for the native window to settle.
+    private func finishDesktopFit(_ frame: CGRect, id: CGWindowID, panel p: MainPanel,
+                                  content c: WorkbenchContent) -> Bool {
+        guard var pending = desktopFit, surface == .windows,
+              let visible = (p.screen ?? NSScreen.main)?.visibleFrame else { return true }
+        let now = ProcessInfo.processInfo.systemUptime
+        if pending.requestedWindow == nil {
+            let contentSize = p.contentRect(forFrameRect: p.frame).size
+            let overhead = CGSize(width: p.frame.width - contentSize.width, height: p.frame.height - contentSize.height)
+            let desired = Self.fittedDesktopSize(frame.size, available: visible.size, frameOverhead: overhead)
+            if abs(desired.width - frame.width) > 1 || abs(desired.height - frame.height) > 1 {
+                pending.requestedWindow = id
+                pending.originalSize = frame.size
+                pending.deadline = now + 1
+                desktopFit = pending
+                if surface.resize(desired) { return false }
+            }
+        } else if pending.requestedWindow == id, pending.originalSize == frame.size, now < pending.deadline {
+            return false
+        }
+        desktopFit = nil
+        state.windowsSize = frame.size
+        p.contentMinSize = .zero
+        p.contentMaxSize = CGSize(width: 10000, height: 10000)
+        let minimum = WorkbenchContent.size(bandWidth: WorkbenchContent.minimumBandWidth(for: .windows),
+                                            phone: frame.size, surface: .windows)
+        let restored = surfaceFrames[.windows]
+        let oldWidth = restored.map { p.contentRect(forFrameRect: $0).width } ?? minimum.width
+        p.setContentSize(CGSize(width: max(minimum.width, min(oldWidth, visible.width - 48)), height: minimum.height))
+        Self.fitMain(p, content: c, phoneSize: frame.size)
+        p.setFrameOrigin(restored.map { Self.clampedOrigin($0.origin, size: p.frame.size, in: visible) }
+            ?? Self.centeredOrigin(for: p.frame.size, in: visible))
+        lastDock = nil
+        placementRequested = true
+        return true
     }
 
     private func cgRect(_ rect: CGRect) -> CGRect {
@@ -396,22 +517,28 @@ final class KioskController {
         guard wantMain, let p = main, let c = content else { return }
         guard !NSApp.isHidden else { return }
         guard Permissions.accessibility else {
-            p.phoneID = nil; lastDock = nil
-            c.phoneSlot.hint = "미러링 창을 붙이려면\n설정 › 시작하기에서 손쉬운 사용을 허용해 주세요"
+            p.phoneID = nil; lastDock = nil; placedDesktopID = nil
+            c.phoneSlot.hint = "\(surface.displayName) 창을 붙이려면\n설정 › 시작하기에서 손쉬운 사용을 허용해 주세요"
             if !p.isVisible { p.orderFront(nil) }
             return
         }
-        let livePhone = Mirroring.liveWindow()
+        let livePhone = surface.liveWindow()
+        if surface == .windows, state.windowsWindowVisible != (livePhone != nil) {
+            state.windowsWindowVisible = livePhone != nil
+        }
+        if desktopFit != nil, let phone = livePhone, let frame = surface.axFrame(), DockChange.near(frame, phone.rect) {
+            guard finishDesktopFit(frame, id: phone.id, panel: p, content: c) else { return }
+        }
         if awaitingPresentedPhone {
             // A failed/unfinished reveal must leave the workbench accessible on its own, rather than
             // immediately tucking it under the same buried window on the next timer tick.
-            guard let phone = livePhone, Mirroring.isInFrontOfOtherApplications(phone.id) else {
+            guard let phone = livePhone, surface.isInFrontOfOtherApplications(phone.id) else {
                 if !p.isVisible { p.orderFront(nil) }
                 return
             }
             awaitingPresentedPhone = false
         }
-        let presence = mirrorPresence.observe(appRunning: Mirroring.app() != nil,
+        let presence = mirrorPresence.observe(appRunning: surface.isRunning,
                                                hasLiveWindow: livePhone != nil,
                                                hasAssociation: p.phoneID != nil,
                                                now: ProcessInfo.processInfo.systemUptime)
@@ -419,10 +546,10 @@ final class KioskController {
         if presence == .transient { return }
         guard let phone = livePhone else {
             WindowDiagnostics.panel("dock.noLiveWindow", p)
-            p.phoneID = nil; lastDock = nil
-            c.phoneSlot.hint = "iPhone 미러링을 연결해 주세요"
+            p.phoneID = nil; lastDock = nil; placedDesktopID = nil
+            c.phoneSlot.hint = surface == .iphone ? "iPhone 미러링을 연결해 주세요" : "Parallels에서 Windows 창을 열어 주세요"
             // Follow the phone off stage without pulling the user back from another app or Space.
-            if Mirroring.app() != nil, !NSApp.isActive, !p.isKeyWindow,
+            if surface.isRunning, !NSApp.isActive, !p.isKeyWindow,
                ProcessInfo.processInfo.systemUptime >= explicitRevealUntil {
                 WindowDiagnostics.panel("dock.hide", p)
                 p.orderOut(nil)
@@ -430,8 +557,10 @@ final class KioskController {
             else if !p.isVisible { p.orderFront(nil) }
             return
         }
-        guard let frame = Mirroring.axFrame(), DockChange.near(frame, phone.rect) else { return }
+        guard let frame = surface.axFrame(), DockChange.near(frame, phone.rect) else { return }
+        guard finishDesktopFit(frame, id: phone.id, panel: p, content: c) else { return }
         p.phoneID = phone.id
+        p.surfacePID = surface.processIdentifier
         if !p.isVisible { p.orderFront(nil) }
         else if p.needsReorder(under: phone.id) {
             WindowDiagnostics.panel("dock.reorder", p)
@@ -440,9 +569,10 @@ final class KioskController {
         c.phoneSlot.hint = ""
         let current = DockSnapshot(phoneID: phone.id, panel: cgRect(p.frame), phone: frame)
         let change = DockChange.between(lastDock, and: current, explicitLayout: placementRequested)
-        let resized = abs(frame.width - state.phoneSize.width) > 1 || abs(frame.height - state.phoneSize.height) > 1
+        if change != .alignPhone { placedDesktopID = nil }
+        let resized = abs(frame.width - surfaceSize.width) > 1 || abs(frame.height - surfaceSize.height) > 1
         if resized {
-            state.phoneSize = frame.size
+            if surface == .iphone { state.phoneSize = frame.size } else { state.windowsSize = frame.size }
             c.phoneSize = frame.size
             if !up { Self.fitMain(p, content: c, phoneSize: frame.size) }
         }
@@ -451,8 +581,14 @@ final class KioskController {
             c.followedPhone = nil
             c.layoutSubtreeIfNeeded()
             let target = phoneTarget(p, c)
-            if abs(frame.minX - target.minX) > 1 || abs(frame.minY - target.minY) > 1 {
-                Mirroring.place(target.origin)
+            let alreadyPlaced = placedDesktopID == phone.id
+            placedDesktopID = nil
+            if !alreadyPlaced && (abs(frame.minX - target.minX) > 1 || abs(frame.minY - target.minY) > 1) {
+                surface.place(target.origin)
+                if surface == .windows {
+                    placedDesktopID = phone.id
+                    return
+                }
             }
         } else if change == .followPhone || resized {
             c.layoutSubtreeIfNeeded()
@@ -460,7 +596,7 @@ final class KioskController {
         }
         placementRequested = false
         // Record the actual result (including any OS position constraint), never repeatedly force an unattainable point.
-        let actual = change == .alignPhone ? (Mirroring.axFrame() ?? frame) : frame
+        let actual = change == .alignPhone ? (surface.axFrame() ?? frame) : frame
         if change == .alignPhone, !DockChange.near(actual, phoneTarget(p, c)) { followPhone(actual, panel: p, content: c) }
         lastDock = DockSnapshot(phoneID: phone.id, panel: cgRect(p.frame), phone: actual)
     }

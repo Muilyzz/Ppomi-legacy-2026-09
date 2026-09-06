@@ -1,4 +1,4 @@
-// The normal workbench surface behind iPhone Mirroring. Its views are lent to immersive covers while expanded.
+// The normal workbench behind a native iPhone Mirroring or Windows window. Its views are lent to immersive covers.
 import AppKit
 
 final class WorkbenchContent: WorkbenchSurface {
@@ -7,7 +7,17 @@ final class WorkbenchContent: WorkbenchSurface {
     let phoneSlot = DockView()
     let band = PhoneBand()
     private let exitButton = WorkbenchButton(title: "창으로 돌아가기", target: nil, action: nil)
+    private let surfaceLabel = WorkbenchLabel(labelWithString: "Windows · Parallels")
     weak var workbench: NSView?
+    var surface: WorkSurface = .iphone {
+        didSet {
+            guard surface != oldValue else { return }
+            phoneSlot.surface = surface
+            phoneSlot.hint = ""
+            surfaceLabel.isHidden = surface != .windows
+            needsLayout = true
+        }
+    }
     var layoutSuspended = false
     var onExitExpanded: (() -> Void)?
     var expanded = false { didSet { needsLayout = true; exitButton.isHidden = !expanded } }
@@ -17,27 +27,42 @@ final class WorkbenchContent: WorkbenchSurface {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        [phoneSlot, workbenchArea, band, exitButton].forEach(addSubview)
+        [phoneSlot, workbenchArea, band, exitButton, surfaceLabel].forEach(addSubview)
         exitButton.target = self; exitButton.action = #selector(exitExpanded)
         exitButton.bezelStyle = .rounded; exitButton.controlSize = .small
         exitButton.isHidden = true
+        surfaceLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        surfaceLabel.textColor = NSColor(white: 1, alpha: 0.55)
+        surfaceLabel.isHidden = true
     }
     required init?(coder: NSCoder) { fatalError() }
     override var isOpaque: Bool { true }
     @objc private func exitExpanded() { onExitExpanded?() }
 
-    static func size(bandWidth: CGFloat, phone: CGSize) -> CGSize {
-        CGSize(width: bandWidth + phone.width + rimRight, height: phone.height + rimTop + rimBottom)
+    static func minimumBandWidth(for surface: WorkSurface) -> CGFloat {
+        surface == .windows ? 380 : bandMin
+    }
+
+    private static func insets(for surface: WorkSurface) -> (top: CGFloat, bottom: CGFloat, right: CGFloat) {
+        surface == .windows ? (48, 32, 24) : (rimTop, rimBottom, rimRight)
+    }
+
+    static func size(bandWidth: CGFloat, phone: CGSize, surface: WorkSurface = .iphone) -> CGSize {
+        let inset = insets(for: surface)
+        return CGSize(width: bandWidth + phone.width + inset.right, height: phone.height + inset.top + inset.bottom)
     }
 
     override func layout() {
         super.layout()
         guard !layoutSuspended else { return }
         let b = bounds
-        let y = expanded ? max(0, (b.height - phoneSize.height) / 2) : Self.rimBottom
-        let h = followedPhone ?? CGRect(x: b.maxX - Self.rimRight - phoneSize.width,
+        let inset = Self.insets(for: surface)
+        let y = expanded ? max(0, (b.height - phoneSize.height) / 2) : inset.bottom
+        let h = followedPhone ?? CGRect(x: b.maxX - inset.right - phoneSize.width,
                                          y: y, width: phoneSize.width, height: phoneSize.height)
         phoneSlot.frame = h
+        surfaceLabel.frame = CGRect(x: h.minX + 12, y: h.maxY + 14, width: max(0, h.width - 24), height: 18)
+        surfaceLabel.isHidden = surface != .windows || !b.contains(surfaceLabel.frame)
         // Pick the roomier side if the person drags the phone across the expanded workbench.
         let leftWidth = max(0, min(b.width, h.minX))
         let rightX = max(0, min(b.width, h.maxX))
@@ -63,7 +88,9 @@ final class WorkbenchContent: WorkbenchSurface {
         default: (NSColor(white: 1, alpha: 0.25), 1)
         }
         color.setStroke()
-        let outline = NSBezierPath(rect: phoneSlot.frame.insetBy(dx: -1, dy: -1))
+        let outline = surface == .windows
+            ? NSBezierPath(roundedRect: phoneSlot.frame.insetBy(dx: -3, dy: -3), xRadius: 10, yRadius: 10)
+            : NSBezierPath(rect: phoneSlot.frame.insetBy(dx: -1, dy: -1))
         outline.lineWidth = width; outline.stroke()
     }
 }
@@ -181,14 +208,49 @@ final class PhoneBand: WorkbenchSurface {
     }
 }
 
-/// A placeholder behind the real phone window, visible while it is disconnected.
+/// Native labels behind the selected external window, visible while it is disconnected.
 final class DockView: WorkbenchSurface {
-    var hint = "" { didSet { if hint != oldValue { needsDisplay = true } } }
+    var surface: WorkSurface = .iphone { didSet { if surface != oldValue { updateContent() } } }
+    var hint = "" { didSet { if hint != oldValue { updateContent() } } }
+    private let icon = NSImageView()
+    private let title = WorkbenchLabel(labelWithString: "")
+    private let instruction = WorkbenchLabel(wrappingLabelWithString: "")
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        [icon, title, instruction].forEach(addSubview)
+        icon.contentTintColor = NSColor(white: 1, alpha: 0.45)
+        icon.imageScaling = .scaleProportionallyUpOrDown
+        title.font = .systemFont(ofSize: 14, weight: .medium)
+        title.textColor = NSColor(white: 1, alpha: 0.7)
+        instruction.font = .systemFont(ofSize: 13)
+        instruction.textColor = NSColor(white: 1, alpha: 0.5)
+        instruction.maximumNumberOfLines = 4
+        [title, instruction].forEach { $0.alignment = .center }
+        updateContent()
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func updateContent() {
+        icon.image = NSImage(systemSymbolName: surface.symbolName, accessibilityDescription: nil)
+        title.stringValue = surface.displayName
+        instruction.stringValue = hint.isEmpty
+            ? (surface == .windows ? "Parallels에서 Windows를 창 모드로 열면\n그 창이 여기에 붙습니다"
+                                   : "iPhone 미러링을 실행하면\n그 창이 여기에 붙습니다")
+            : hint
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        let center = bounds.midY
+        let width = max(0, bounds.width - 32)
+        icon.frame = CGRect(x: bounds.midX - 18, y: center + 24, width: 36, height: 36)
+        title.frame = CGRect(x: 16, y: center - 4, width: width, height: 20)
+        instruction.frame = CGRect(x: 16, y: center - 80, width: width, height: 64)
+    }
+
     override func draw(_ dirty: NSRect) {
         NSColor.black.setFill(); bounds.fill()
-        let p = NSMutableParagraphStyle(); p.alignment = .center
-        let a: [NSAttributedString.Key: Any] = [.foregroundColor: NSColor(white: 1, alpha: 0.5), .font: NSFont.systemFont(ofSize: 13), .paragraphStyle: p]
-        let t = (hint.isEmpty ? "iPhone 미러링을 실행하면\n그 창이 여기에 붙습니다" : hint) as NSString, h = t.size(withAttributes: a).height
-        t.draw(in: NSRect(x: 0, y: (bounds.height - h) / 2, width: bounds.width, height: h), withAttributes: a)
     }
 }

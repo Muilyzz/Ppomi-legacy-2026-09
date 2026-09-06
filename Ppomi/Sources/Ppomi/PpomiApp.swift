@@ -96,6 +96,10 @@ private struct MenuContent: View {
     var body: some View {
         Text(state.statusLine)
         Divider()
+        ForEach(WorkSurface.allCases) { surface in
+            Button("\(surface.displayName) 작업 화면") { state.selectSurface(surface) }
+        }
+        Divider()
         Button("타임라인") { show(.timeline) }
         Button("증빙·전표") { show(.evidence) }
         Button("절차") { show(.playbooks) }
