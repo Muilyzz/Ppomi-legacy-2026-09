@@ -18,6 +18,7 @@ final class WorkbenchContent: WorkbenchSurface {
             needsLayout = true
         }
     }
+    var fullWindow = false { didSet { needsLayout = true } }
     var layoutSuspended = false
     var onExitExpanded: (() -> Void)?
     var expanded = false { didSet { needsLayout = true; exitButton.isHidden = !expanded } }
@@ -57,7 +58,7 @@ final class WorkbenchContent: WorkbenchSurface {
         guard !layoutSuspended else { return }
         let b = bounds
         let inset = Self.insets(for: surface)
-        let y = expanded ? max(0, (b.height - phoneSize.height) / 2) : inset.bottom
+        let y = (expanded || fullWindow) ? max(0, (b.height - phoneSize.height) / 2) : inset.bottom
         let h = followedPhone ?? CGRect(x: b.maxX - inset.right - phoneSize.width,
                                          y: y, width: phoneSize.width, height: phoneSize.height)
         phoneSlot.frame = h

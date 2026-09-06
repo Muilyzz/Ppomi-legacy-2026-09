@@ -103,6 +103,7 @@ private struct MenuContent: View {
         Button("타임라인") { show(.timeline) }
         Button("증빙·전표") { show(.evidence) }
         Button("절차") { show(.playbooks) }
+        Button("몸과 생활") { show(.health) }
         Button(state.voiceOn ? "음성 끄기" : "음성 켜기 (뽀미야)") { state.voiceOn.toggle() }
         Button(state.listening ? "그만 말하기" : "지금 말하기") { state.talk() }.keyboardShortcut(.space, modifiers: .option)   // VoiceSession's ⌥Space monitors do the real work
         Toggle("도착 인사", isOn: Binding(get: { state.greetOnArrival }, set: { _ in state.toggleGreet() }))

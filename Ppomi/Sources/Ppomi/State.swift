@@ -39,7 +39,7 @@ final class AppState: ObservableObject {
     @Published var ledgerVersion = 0                    // bumps on every (re)load, so pages built from the ledger rebuild
     @Published var selectedDay: Date = Calendar.current.startOfDay(for: Date())
     @Published var evidenceFocus: EvidenceFocus? = nil   // the 증빙·전표 window; nil until first open
-    enum Tab { case timeline, evidence, playbooks }
+    enum Tab { case timeline, evidence, playbooks, health }
     @Published var tab: Tab = .timeline                  // what the workbench shows in either size mode
     @Published var voiceOn = false                       // the "뽀미야" listener (menu switch; this session only, not saved)
     @Published var listening = false                     // a voice conversation is open (after 뽀미야, until 그만 or 25 s quiet)

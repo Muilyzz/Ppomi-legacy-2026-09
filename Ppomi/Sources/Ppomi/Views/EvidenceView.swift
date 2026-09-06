@@ -62,6 +62,7 @@ struct Workbench: View {
             HStack(spacing: 32) {
                 HStack(spacing: 12) { tab("타임라인", .timeline); tab("증빙·전표", .evidence) }
                 tab("절차", .playbooks)
+                tab("몸과 생활", .health)
                 Spacer()
             }
             .font(.system(size: 12))
@@ -74,6 +75,7 @@ struct Workbench: View {
                 case .playbooks: PlaybooksView()
                 case .evidence: EvidenceView()
                 case .timeline: TimelineView()
+                case .health: HealthView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

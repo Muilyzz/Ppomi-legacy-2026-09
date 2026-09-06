@@ -139,7 +139,6 @@ final class KioskController {
     private var explicitRevealUntil: TimeInterval = 0
     private var placementRequested = false
     private var displayedSurface: WorkSurface = .iphone
-    private var surfaceFrames: [WorkSurface: CGRect] = [:]
     private struct DesktopFit {
         var requestedWindow: CGWindowID?
         var originalSize: CGSize?
@@ -211,6 +210,17 @@ final class KioskController {
             }
             displayObservers.append((center, token))
         }
+        let screenToken = NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
+                                                                    object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, !self.up, let p = self.main, let c = self.content else { return }
+                Self.fitMain(p, content: c, phoneSize: self.surfaceSize)
+                c.followedPhone = nil
+                self.placementRequested = true
+                if self.surface == .windows { self.desktopFit = DesktopFit() }
+            }
+        }
+        displayObservers.append((NotificationCenter.default, screenToken))
         let dialogToken = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification,
                                                                    object: nil, queue: .main) { [weak self] note in
             MainActor.assumeIsolated {
@@ -246,7 +256,6 @@ final class KioskController {
     /// Target changes are explicit user actions. Polling and ordinary workbench clicks never enter here.
     private func switchSurface() {
         if up { revealPhoneOnExit = false; setExpanded(false) }
-        if let main { surfaceFrames[surface] = main.frame }
         displayedSurface = state.workSurface
         desktopFit = displayedSurface == .windows ? DesktopFit() : nil
         placedDesktopID = nil
@@ -262,21 +271,7 @@ final class KioskController {
         if let size = surface.axFrame()?.size {
             if surface == .iphone { state.phoneSize = size } else { state.windowsSize = size }
         }
-        p.contentMinSize = .zero
-        p.contentMaxSize = CGSize(width: 10000, height: 10000)
-        let restored = surfaceFrames[surface]
-        if let frame = restored { p.setFrame(frame, display: true) }
-        else {
-            p.setContentSize(WorkbenchContent.size(bandWidth: WorkbenchContent.minimumBandWidth(for: surface),
-                                                  phone: surfaceSize, surface: surface))
-        }
         Self.fitMain(p, content: c, phoneSize: surfaceSize)
-        if let screen = p.screen ?? NSScreen.main {
-            let visible = screen.visibleFrame
-            let origin = restored.map { Self.clampedOrigin($0.origin, size: p.frame.size, in: visible) }
-                ?? Self.centeredOrigin(for: p.frame.size, in: visible)
-            p.setFrameOrigin(origin)
-        }
     }
 
     private func makeMain() -> MainPanel {
@@ -295,7 +290,8 @@ final class KioskController {
         p.title = "뽀미"
         p.titlebarAppearsTransparent = true
         p.titleVisibility = .hidden
-        p.isMovableByWindowBackground = true
+        p.isMovableByWindowBackground = false
+        p.isMovable = false
         p.backgroundColor = .black
         p.isFloatingPanel = false
         p.level = .normal
@@ -328,7 +324,11 @@ final class KioskController {
             updateImmersive()
             return
         }
-        if first { Self.fitMain(p, content: c, phoneSize: surfaceSize); placementRequested = true }
+        if first || stage {
+            Self.fitMain(p, content: c, phoneSize: surfaceSize)
+            c.followedPhone = nil
+            placementRequested = true
+        }
         // A live window can still be buried behind another app. Explicit reopen raises the pair first;
         // ordinary clicks and the docking timer never enter this path.
         if stage {
@@ -415,19 +415,16 @@ final class KioskController {
         c.layoutSubtreeIfNeeded()
     }
 
-    static func fitMain(_ p: NSPanel, content c: WorkbenchContent, phoneSize: CGSize) {
+    static func fitMain(_ p: NSPanel, content c: WorkbenchContent, phoneSize: CGSize, in visible: CGRect? = nil) {
+        c.fullWindow = true
         c.phoneSize = phoneSize
-        let min = WorkbenchContent.size(bandWidth: WorkbenchContent.minimumBandWidth(for: c.surface),
-                                        phone: phoneSize, surface: c.surface)
-        p.contentMinSize = min
-        p.contentMaxSize = CGSize(width: 10000, height: min.height)
-        let cur = p.contentRect(forFrameRect: p.frame).size
-        if cur.height != min.height || cur.width < min.width {
-            p.setContentSize(CGSize(width: Swift.max(cur.width, min.width), height: min.height))
-        }
-        if let v = (p.screen ?? NSScreen.main)?.visibleFrame, p.frame.minY < v.minY || p.frame.maxY > v.maxY {
-            p.setFrameOrigin(CGPoint(x: p.frame.minX, y: Swift.max(v.minY, Swift.min(p.frame.minY, v.maxY - p.frame.height))))
-        }
+        guard let frame = visible ?? (p.screen ?? NSScreen.main)?.visibleFrame else { return }
+        p.contentMinSize = .zero
+        p.contentMaxSize = CGSize(width: 10000, height: 10000)
+        if !DockChange.near(p.frame, frame) { p.setFrame(frame, display: true) }
+        let size = p.contentRect(forFrameRect: frame).size
+        p.contentMinSize = size
+        p.contentMaxSize = size
         c.layoutSubtreeIfNeeded()
     }
 
@@ -475,16 +472,7 @@ final class KioskController {
         }
         desktopFit = nil
         state.windowsSize = frame.size
-        p.contentMinSize = .zero
-        p.contentMaxSize = CGSize(width: 10000, height: 10000)
-        let minimum = WorkbenchContent.size(bandWidth: WorkbenchContent.minimumBandWidth(for: .windows),
-                                            phone: frame.size, surface: .windows)
-        let restored = surfaceFrames[.windows]
-        let oldWidth = restored.map { p.contentRect(forFrameRect: $0).width } ?? minimum.width
-        p.setContentSize(CGSize(width: max(minimum.width, min(oldWidth, visible.width - 48)), height: minimum.height))
         Self.fitMain(p, content: c, phoneSize: frame.size)
-        p.setFrameOrigin(restored.map { Self.clampedOrigin($0.origin, size: p.frame.size, in: visible) }
-            ?? Self.centeredOrigin(for: p.frame.size, in: visible))
         lastDock = nil
         placementRequested = true
         return true
@@ -500,16 +488,10 @@ final class KioskController {
     }
 
     private func followPhone(_ frame: CGRect, panel p: MainPanel, content c: WorkbenchContent) {
-        if up {
-            // In expanded mode the backing stays screen-sized; its layout follows the user's phone position.
-            let local = c.convert(p.convertFromScreen(cgRect(frame)), from: nil)
-            c.followedPhone = local
-            c.layoutSubtreeIfNeeded()
-        } else {
-            let target = phoneTarget(p, c)
-            p.setFrameOrigin(CGPoint(x: p.frame.minX + frame.minX - target.minX,
-                                    y: p.frame.minY - (frame.minY - target.minY)))
-        }
+        // The normal workbench fills the display. A deliberate target move changes only its slot.
+        let local = c.convert(p.convertFromScreen(cgRect(frame)), from: nil)
+        c.followedPhone = local
+        c.layoutSubtreeIfNeeded()
     }
 
     /// Maintain relative order without raising/activating the phone. Ignore transient Stage Manager animation frames.

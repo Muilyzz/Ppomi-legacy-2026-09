@@ -16,7 +16,9 @@
 
 그 밖에 미러링 바로 뒤에 놓이는 검은 작업대 창과 음성("뽀미야", ⌥Space, `--voice`)이 있습니다. 절차와 장부는 옆에서 보고, 상태 안내와 승인 버튼은 작업대 하단에서 확인합니다.
 
-초록 버튼이나 `⌃⌘F`로 키오스크를 켜면 같은 창이 현재 화면의 사용 가능한 영역만큼 커집니다. 초록 버튼·`⌃⌘F`·**창으로 돌아가기**로 원래 크기에 복귀합니다. Dock의 뽀미 아이콘은 현재 모드를 유지한 채 같은 창을 다시 엽니다. 미러링 창을 직접 옮기면 뽀미의 배경과 배치가 따라갑니다.
+일반 모드는 현재 디스플레이의 사용 가능한 영역을 채우는 고정 크기 창입니다. iPhone·Windows를 바꿔도 배경 창의 크기는 유지하고 작업 화면 옆에 장부와 승인 버튼을 배치합니다. 초록 버튼이나 `⌃⌘F`는 다른 창과 메뉴 막대를 가리는 키오스크로 전환합니다. 키를 누르면 나가기 버튼이 나타나며 일반 창으로 돌아올 수 있습니다. Dock의 뽀미 아이콘은 현재 모드를 유지한 채 작업 화면과 함께 다시 엽니다. 미러링 창을 직접 옮기면 옆 콘텐츠의 배치가 바뀝니다.
+
+**몸과 생활** 탭은 인바디 결과 화면·이미지, 식사·운동·컨디션을 비공개 기록으로 모읍니다. 발생·수집 시각, 단위, 측정 기기, 원본 증빙과 수정 이력을 함께 저장합니다. 외부 에이전트와 음성도 같은 기록을 사용하고, Schema.org JSON-LD를 내보낼 수 있습니다. 인바디 API 자동 동기화는 포함하지 않습니다. [사용법과 공통 데이터 규격](docs/life-records.md)을 참고하세요.
 
 ## 요구사항
 
@@ -90,7 +92,7 @@ args = ["--mcp"]
 
 소스로 쓸 때는 경로를 `Ppomi/.build/debug/Ppomi` 로 바꾸면 됩니다.
 
-내놓는 도구: `phone_screen` `phone_tap` `phone_type` `phone_key` `phone_scroll` `phone_open` `phone_installed` `pay_preference` `confirm_payment` `record_spend` `ask_choice` `balances` `today_spending` `transactions` `sql`(읽기 전용) `list_playbooks` `read_playbook` `note_footprint` `run_combo`.
+내놓는 도구: `phone_screen` `phone_tap` `phone_type` `phone_key` `phone_scroll` `phone_open` `phone_installed` `pay_preference` `confirm_payment` `record_spend` `ask_choice` `balances` `today_spending` `transactions` `sql`(읽기 전용) `list_playbooks` `read_playbook` `note_footprint` `run_combo` `health_records` `record_health` `inbody_capture`.
 
 ## 첫 사용
 

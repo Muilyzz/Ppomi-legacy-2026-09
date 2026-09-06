@@ -19,6 +19,12 @@ final class Tools {
     var lastWords: [OCR.Word] = []
     var lastPNG: URL? = nil
     var footprintDir = Playbooks.dir
+    // Kept lazy: ordinary phone/ledger calls need not open the private health store.
+    var healthStorePath = LifeStore.defaultPath
+    var captureInBody: (LifeStore) throws -> String = { try InBodyImport.capture(to: $0) }
+    // Tests can check the real gate branching without querying TCC or touching the phone.
+    var phoneGateStatus: (() -> (permissions: Bool, state: String))? = nil
+    var wakePhone: () throws -> Void = { try Phone.wake() }
     private var scrolled: [OCR.Word]? = nil            // the screen before the brain's last phone_scroll: a text tap next is one ↓ step from there
     /// Test hook, a fake phone: `screen` replaces Phone.screen, `hand` swallows tap/key/type/scroll/open, the gate skips the mirror check.
     static var fake: (screen: () throws -> [OCR.Word], hand: ([String]) throws -> Void)? = nil
@@ -323,7 +329,7 @@ final class Tools {
           ["summary": ("string", "예: 여기어때 디럭스 더블 9/5–9/7 2박"), "amount": ("integer", "원"), "method": ("string", "예: 토스페이")], ["summary", "amount", "method"]),
         T("record_spend", "결제 완료 화면을 읽은 뒤 장부에 적는다(보조 기록; 은행 앱 수집이 확정 행을 가져온다).",
           ["merchant": ("string", nil), "amount": ("integer", nil), "memo": ("string", "예약번호·취소 조건")], ["merchant", "amount"]),
-    ]
+    ] + HealthTools.specs
 
     /// Where the money usually leaves from, and which pay apps are there — the facts behind "이걸로 결제할까요?".
     func payPreference() -> String {
@@ -393,15 +399,24 @@ final class Tools {
         guard Self.consented(currentText) else {
             return refuse("consent", "실행 안 함: 폰 조작은 아이폰이 잠긴 채 Mac 옆에 있어야 하고 시간이 걸린다. 사용자에게 '지금 폰 잠겨 있어?' 한 줄로 물어라.")
         }
-        if Self.fake != nil { return nil }                   // tests: no mirror to check
-        if !Permissions.ready {                               // first phone action: the console opens 설정 › 시작하기 (State.pollAsk)
+        if Self.fake != nil && phoneGateStatus == nil { return nil } // tests: no mirror to check
+        let supplied = phoneGateStatus?()
+        if !(supplied?.permissions ?? Permissions.ready) {    // first phone action: the console opens 설정 › 시작하기 (State.pollAsk)
             try? db.setState("setup:needed", "1")
             return refuse("permissions", "실행 안 함: Mac에서 뽀미에게 손쉬운 사용·화면 기록 권한이 아직 없다. 뽀미 설정 창(시작하기)이 열렸으니 사용자에게 거기서 두 권한을 켜 달라고 한 줄로 부탁하고 멈춰라.")
         }
-        let state = ((try? Phone.run(["state"])) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let state = (supplied?.state ?? ((try? Phone.run(["state"])) ?? "")).trimmingCharacters(in: .whitespacesAndNewlines)
         if state == "IN_USE" { return refuse("in_use", "실행 안 함: 폰이 사용 중(잠금 해제)이라 미러링이 끊겨 있다. 사용자에게 '폰 잠그고 Mac 옆에 둬줘' 한 줄로 부탁하고 멈춰라.") }
         if state == "NONE" { return refuse("mirror", "실행 안 함: iPhone 미러링 창이 없다. 사용자에게 iPhone 미러링 앱을 켜 달라고 한 줄로 부탁하고 멈춰라.") }
-        do { try Phone.wake() }                              // paused / disconnected: click through 재개·다시 시도
+        if tool == "inbody_capture" {
+            // wake() checks with Phone.screen(), whose legacy archive lives under ledger/shots.
+            // Health captures must go straight to their private store, without that extra exposure.
+            guard state == "CONNECTED" else {
+                return refuse("mirror", "실행 안 함: 건강 화면은 미러링 연결이 완료된 뒤에만 저장합니다. 미러링 창에서 재개·다시 연결을 먼저 완료하고 본인 인바디 결과를 연 뒤 다시 호출하세요.")
+            }
+            return nil
+        }
+        do { try wakePhone() }                              // paused / disconnected: click through 재개·다시 시도
         catch { return refuse("mirror", "실행 안 함: \(error)") }
         return nil
     }
@@ -489,6 +504,13 @@ final class Tools {
             case "today_spending": return plain(todayText())
             case "balances": return plain(balanceText())
             case "weekly_review": return String((String(data: try JSONSerialization.data(withJSONObject: summary()), encoding: .utf8) ?? "{}").prefix(3800))
+            case "health_records": return try HealthTools.records(a, store: LifeStore(path: healthStorePath))
+            case "record_health": return try HealthTools.record(a, store: LifeStore(path: healthStorePath))
+            case "inbody_capture":
+                try HealthTools.validateCaptureArguments(a)
+                if let g = gate(name) { return g }
+                // A refused capture does not open the health database or touch a screenshot.
+                return try captureInBody(LifeStore(path: healthStorePath))
             case "collect_now":
                 if let g = gate(name) { return g }
                 return plain(Self.snapshotSub(str("app").isEmpty ? [] : [str("app")]))

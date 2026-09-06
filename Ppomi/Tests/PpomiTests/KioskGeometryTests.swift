@@ -23,7 +23,7 @@ final class KioskGeometryTests: XCTestCase {
     }
 
     /// Configure an unshown native panel: the first layout must already provide room for content and approvals.
-    @MainActor func testInitialWorkbenchGetsMinimumSizeAndNonzeroPhoneSlotWithoutShowingAWindow() {
+    @MainActor func testFullWindowStaysFixedAcrossPhoneSizesWithoutShowingAWindow() {
         _ = NSApplication.shared
         let content = WorkbenchContent(frame: NSRect(x: 0, y: 0, width: 100, height: 80))
         let panel = makePanel(content)
@@ -32,10 +32,12 @@ final class KioskGeometryTests: XCTestCase {
         content.workbench = workbench
         content.workbenchArea.addSubview(workbench)
 
-        KioskController.fitMain(panel, content: content, phoneSize: CGSize(width: 348, height: 766))
+        let display = CGRect(x: 40, y: 30, width: 1440, height: 980)
+        KioskController.fitMain(panel, content: content, phoneSize: CGSize(width: 348, height: 766), in: display)
         XCTAssertFalse(panel.isVisible)
-        XCTAssertEqual(panel.contentMinSize, CGSize(width: 940, height: 894))
-        XCTAssertEqual(panel.contentMaxSize.height, 894)
+        XCTAssertEqual(panel.frame, display)
+        XCTAssertEqual(panel.contentMinSize, display.size)
+        XCTAssertEqual(panel.contentMaxSize, display.size)
         XCTAssertEqual(content.phoneSlot.bounds.size, CGSize(width: 348, height: 766))
         XCTAssertGreaterThanOrEqual(workbench.frame.width, 536)
         XCTAssertGreaterThan(workbench.frame.height, 600)
@@ -43,8 +45,9 @@ final class KioskGeometryTests: XCTestCase {
         XCTAssertFalse(content.band.frame.intersects(content.phoneSlot.frame))
         XCTAssertTrue(content.bounds.contains(content.band.frame))
 
-        KioskController.fitMain(panel, content: content, phoneSize: CGSize(width: 300, height: 650))
-        XCTAssertEqual(panel.contentMinSize, CGSize(width: 892, height: 778))
+        KioskController.fitMain(panel, content: content, phoneSize: CGSize(width: 300, height: 650), in: display)
+        XCTAssertEqual(panel.frame, display)
+        XCTAssertEqual(panel.contentMinSize, display.size)
         XCTAssertEqual(content.phoneSlot.bounds.size, CGSize(width: 300, height: 650))
         XCTAssertGreaterThan(workbench.frame.height, 500)
         XCTAssertTrue(content.bounds.contains(content.band.frame))
@@ -60,7 +63,7 @@ final class KioskGeometryTests: XCTestCase {
         content.workbench = workbench
         content.workbenchArea.addSubview(workbench)
         let phone = CGSize(width: 446, height: 978)
-        KioskController.fitMain(panel, content: content, phoneSize: phone)
+        KioskController.fitMain(panel, content: content, phoneSize: phone, in: CGRect(x: 0, y: 30, width: 1440, height: 1000))
         let savedFrame = panel.frame
         let panelIdentity = ObjectIdentifier(panel)
         let smallerDisplay = CGRect(x: 140, y: 60, width: 960, height: 720)
@@ -82,7 +85,7 @@ final class KioskGeometryTests: XCTestCase {
         panel.contentMinSize = .zero
         panel.contentMaxSize = CGSize(width: 10000, height: 10000)
         panel.setFrame(savedFrame, display: true)
-        KioskController.fitMain(panel, content: content, phoneSize: phone)
+        KioskController.fitMain(panel, content: content, phoneSize: phone, in: CGRect(x: 0, y: 30, width: 1440, height: 1000))
         XCTAssertEqual(panel.frame, savedFrame)
         XCTAssertFalse(content.expanded)
         XCTAssertEqual(ObjectIdentifier(panel), panelIdentity)

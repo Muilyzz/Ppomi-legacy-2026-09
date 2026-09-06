@@ -1,0 +1,48 @@
+{
+  "formatVersion": 1,
+  "entities": [
+    {
+      "id": "example-person",
+      "kind": "person",
+      "name": "예시 사용자 — 실제 자료 아님"
+    }
+  ],
+  "records": [
+    {
+      "id": "example-measurement-001",
+      "subjectID": "example-person",
+      "kind": "measurement",
+      "occurredAt": "2026-09-06T08:00:00+09:00",
+      "recordedAt": "2026-09-06T08:05:00+09:00",
+      "sourceName": "인바디 결과지 예시",
+      "sourceRecordID": "example-only-001",
+      "method": "manual",
+      "review": "unreviewed",
+      "metrics": [
+        {
+          "code": "weight",
+          "title": "체중",
+          "value": 72.3,
+          "unit": "kg"
+        },
+        {
+          "code": "bodyFatPercent",
+          "title": "체지방률",
+          "value": 20.1,
+          "unit": "%"
+        },
+        {
+          "code": "skeletalMuscleMass",
+          "title": "골격근량",
+          "value": 31.2,
+          "unit": "kg"
+        }
+      ],
+      "device": "예시 기기",
+      "note": "가상의 예시입니다. 실제 값·시각·대상 ID로 바꾸세요.",
+      "evidenceIDs": []
+    }
+  ],
+  "evidence": [],
+  "revisions": []
+}

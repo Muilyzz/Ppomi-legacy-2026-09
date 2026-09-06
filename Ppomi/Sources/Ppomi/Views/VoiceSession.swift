@@ -30,7 +30,7 @@ final class VoiceSession {
         let db = db
         tools.askOwner = { html, opts in Tools.askViaDB(db, html, opts) }   // → AppState.pollAsk → buttons on the ring
         tools.onTool = { [weak self] name in
-            if name.hasPrefix("phone_") || name == "collect_now" { self?.phase(.agent(job: name == "collect_now" ? "수집" : "폰 조작")) }
+            if name.hasPrefix("phone_") || name == "collect_now" || name == "inbody_capture" { self?.phase(.agent(job: name == "collect_now" || name == "inbody_capture" ? "수집" : "폰 조작")) }
         }
         tools.onHuman = { [weak self] r in self?.phase(.humanTurn(reason: r)) }   // Face ID on the physical phone
         subs = [state.$voiceOn.removeDuplicates().dropFirst().receive(on: DispatchQueue.main).sink { [weak self] on in self?.setVoice(on) },   // willSet: closeLive reads voiceOn, so wait for the set
@@ -107,6 +107,7 @@ final class VoiceSession {
         지금은 음성 대화다. 짧게, 한두 문장으로 말한다. 돈이 나가는 결제는 화면 버튼 승인이 필요하다고 말하고 confirm_payment 도구를 쓴다. \
         대화를 끝내자는 말(그만, 끝, 됐어)이 오면 짧게 인사하고 end_conversation 도구를 부른다. \
         폰 앱으로 뭔가 하기 전에는 read_playbook 으로 그 앱의 절차(콤보와 버릇)를 먼저 읽고 그대로 따른다. 사용자 말이 불분명하면 짧게 되묻는다. \
+        식사·운동·컨디션을 기록해 달라면 발생 시각을 확인해 record_health로 저장한다. reported는 사용자가 말한 내용, aiEstimate는 추정이며 섞지 않는다. 모르는 수치는 생략하고 사용자 확인 상태를 부여하지 않는다. 건강 기록 조회는 health_records, 본인 인바디 결과 화면 저장은 inbody_capture를 사용한다. \
         인사 뒤 첫 말이 너에게 한 말이 아니면(옆 사람 대화, TV) 아무 말 없이 end_conversation 을 부른다.
 
         """

@@ -100,7 +100,8 @@ final class MCPServer {
 
     // ---------------------------------------------------------------- tools
     private static let reused = ["phone_screen", "phone_tap", "phone_type", "phone_key", "phone_scroll", "phone_open", "phone_installed", "run_combo",
-                                 "pay_preference", "confirm_payment", "record_spend", "balances", "today_spending", "ask_choice"]
+                                 "pay_preference", "confirm_payment", "record_spend", "balances", "today_spending", "ask_choice",
+                                 "health_records", "record_health", "inbody_capture"]
     static let tools: [ToolSpec] = reused.compactMap { n in Tools.specs.first { $0.name == n } } + [
         Tools.T("transactions", "최근 days 일의 거래(ts, amount, merchant, card, kind, uid, status) JSON 배열, 최신순 최대 300행.", ["days": ("integer", "기본 30")]),
         Tools.T("sql", "장부(SQLite)에 읽기 전용 SQL. SELECT/WITH 만. 결과 {columns, rows}, 200행 상한. 테이블: transactions, snapshots, holdings, state, later, facts.",
@@ -114,7 +115,8 @@ final class MCPServer {
     private var instructions: String {
         (Playbooks.all().first { $0.app == "공통" }?.text ?? "") +
             "\nlist_playbooks 로 앱 ID와 가능한 작업을 확인하고, 폰 앱 작업 전에 read_playbook(앱 ID) 을 읽어라. 새 버릇은 note_footprint 로 남겨라. 결제·구매 버튼은 confirm_payment 승인 뒤에만 phone_tap 된다(코드가 막는다)." +
-            "\n폰 앱 작업은 run_combo 먼저, 멈춘 화면부터 phone_screen/phone_tap."
+            "\n폰 앱 작업은 run_combo 먼저, 멈춘 화면부터 phone_screen/phone_tap." +
+            "\n건강 기록은 health_records/record_health, 본인 인바디 결과는 inbody_capture로 비공개 저장한다. 발생 시각·사람을 확인하고 사용자 보고와 AI 추정은 구분해 별도 기록한다. 추정·미검토·기기 변경을 숨기거나 미기록을 0으로 보지 마라. 검토 완료는 사용자가 앱에서 직접 표시한다."
     }
 
     /// Encode the catalog's actual types so new fields reach MCP without another presentation mapping.
@@ -187,7 +189,9 @@ final class MCPServer {
             return text("절차에 적었다: \(str("app"))")
         default:
             guard Self.reused.contains(name) else { return text("unknown tool \(name)", error: true) }
-            return text(tools.execute(name, a))
+            let result = tools.execute(name, a)
+            return text(result, error: ["health_records", "record_health", "inbody_capture"].contains(name) &&
+                        (result.hasPrefix("오류:") || result.hasPrefix("실행 안 함:")))
         }
     }
 }
