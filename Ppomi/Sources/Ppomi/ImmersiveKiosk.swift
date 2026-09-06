@@ -32,6 +32,33 @@ struct ImmersiveLayout {
     }
 }
 
+/// A second, strictly contained hole replaces only the selected sidebar cover.
+/// Coordinates remain in the screen's AppKit space, including displays with negative origins.
+struct ImmersiveAgentLayout {
+    let sidebar: CGRect
+    let agent: CGRect
+    let bands: [CGRect]                         // top, bottom, left, right
+
+    static func availableArea(in sidebar: CGRect, bandHeight: CGFloat, toolbarHeight: CGFloat) -> CGRect {
+        CGRect(x: sidebar.minX + 12, y: sidebar.minY + bandHeight + 20,
+               width: max(0, sidebar.width - 24),
+               height: max(0, sidebar.height - bandHeight - 20 - toolbarHeight - 12))
+    }
+
+    init?(sidebar: CGRect, agent: CGRect, bandHeight: CGFloat, toolbarHeight: CGFloat) {
+        let available = Self.availableArea(in: sidebar, bandHeight: bandHeight, toolbarHeight: toolbarHeight)
+        guard !available.isEmpty, !agent.isNull, !agent.isEmpty, available.contains(agent) else { return nil }
+        self.sidebar = sidebar
+        self.agent = agent
+        bands = [
+            CGRect(x: sidebar.minX, y: agent.maxY, width: sidebar.width, height: sidebar.maxY - agent.maxY),
+            CGRect(x: sidebar.minX, y: sidebar.minY, width: sidebar.width, height: agent.minY - sidebar.minY),
+            CGRect(x: sidebar.minX, y: agent.minY, width: agent.minX - sidebar.minX, height: agent.height),
+            CGRect(x: agent.maxX, y: agent.minY, width: sidebar.maxX - agent.maxX, height: agent.height),
+        ]
+    }
+}
+
 /// Keys reveal the exit affordance; a deliberate second Escape exits. Repeated Escape never exits by itself.
 struct ImmersiveExitState {
     private(set) var isVisible = false
@@ -69,6 +96,8 @@ final class ImmersiveKiosk: NSObject {
     private let band: PhoneBand
     private let onExit: () -> Void
     private var panels: [ImmersivePanel] = []
+    private var agentPanels: [ImmersivePanel] = []
+    private var agentLayout: ImmersiveAgentLayout?
     private var exitPanel: ImmersivePanel?
     private var exitState = ImmersiveExitState()
     private var exitRequested = false
@@ -81,48 +110,69 @@ final class ImmersiveKiosk: NSObject {
         super.init()
     }
 
-    func show(on screen: NSScreen, phone: CGRect?) {
+    func show(on screen: NSScreen, phone: CGRect?, agent: CGRect? = nil) {
         screenFrame = screen.frame
         exitState.reset()
         exitRequested = false
         makePanelsIfNeeded()
         exitPanel?.orderOut(nil)
-        update(phone: phone)
+        update(phone: phone, agent: agent)
     }
 
-    func update(phone: CGRect?) {
+    func update(phone: CGRect?, agent: CGRect? = nil) {
         guard let screenFrame else { return }
         let layout = ImmersiveLayout(screen: screenFrame, phone: phone)
         guard let host = panels[layout.sidebarIndex].contentView else { return }
-        let remounted = workbench.superview !== host || band.superview !== host
-        if remounted { Self.mount(workbench: workbench, band: band, in: host) }
-        for (panel, frame) in zip(panels, layout.bands) {
-            if panel.frame != frame {
-                panel.setFrame(frame, display: true)
-                panel.contentView?.needsLayout = true
-                WindowDiagnostics.panel("immersive.cover", panel, fields: [
-                    "frame": [frame.minX, frame.minY, frame.width, frame.height], "level": panel.level.rawValue])
+        let sidebar = workbench as? AgentSidebar
+        let footer = band.preferredHeight(for: max(0, layout.sidebar.width - 24))
+        agentLayout = sidebar.flatMap { _ in agent.flatMap {
+            ImmersiveAgentLayout(sidebar: layout.sidebar, agent: $0, bandHeight: footer,
+                                 toolbarHeight: AgentSidebar.toolbarHeight)
+        } }
+
+        if let sidebar, let agentLayout {
+            makeAgentPanelsIfNeeded()
+            if workbench.superview !== host {
+                workbench.removeFromSuperview()
+                host.addSubview(workbench)
             }
-            if remounted, panel.contentView === host { host.needsLayout = true }
-            panel.contentView?.layoutSubtreeIfNeeded()
-            if frame.isEmpty {
-                if panel.isVisible { panel.orderOut(nil) }
-            } else if !panel.isVisible {
-                panel.orderFrontRegardless()
+            let top = agentPanels[0].contentView!, bottom = agentPanels[1].contentView!
+            let remounted = sidebar.toolbar.superview !== top || band.superview !== bottom
+            for (index, panel) in panels.enumerated() {
+                updateCover(panel, frame: layout.bands[index], visible: index != layout.sidebarIndex)
             }
+            // Set all host bounds before lending controls; no visible full-sidebar cover remains above the agent.
+            for (panel, frame) in zip(agentPanels, agentLayout.bands) {
+                updateCoverFrame(panel, frame: frame)
+            }
+            Self.mountAgentControls(toolbar: sidebar.toolbar, band: band, top: top, bottom: bottom,
+                                    toolbarHeight: AgentSidebar.toolbarHeight)
+            for (panel, frame) in zip(agentPanels, agentLayout.bands) { updateCover(panel, frame: frame) }
+            if remounted { top.window?.orderFrontRegardless(); bottom.window?.orderFrontRegardless() }
+        } else {
+            let remounted = workbench.superview !== host || band.superview !== host || agentPanels.contains { $0.isVisible }
+            if remounted { Self.mount(workbench: workbench, band: band, in: host) }
+            for (panel, frame) in zip(panels, layout.bands) {
+                if remounted, panel.contentView === host { host.needsLayout = true }
+                updateCover(panel, frame: frame)
+            }
+            agentPanels.forEach { if $0.isVisible { $0.orderOut(nil) } }
+            // Present the actual controls ahead of the otherwise empty covers for accessibility.
+            if remounted { host.window?.orderFrontRegardless() }
         }
-        // Present the actual controls ahead of the otherwise empty cover windows for accessibility.
-        if remounted { host.window?.orderFrontRegardless() }
         if let exitPanel, exitPanel.frame != layout.exitFrame { exitPanel.setFrame(layout.exitFrame, display: true) }
         if layout.phone == nil { revealExit() }
         else { updateExitVisibility() }
     }
 
     func hide() {
-        panels.forEach { $0.orderOut(nil) }
+        let covers = panels + agentPanels
+        covers.forEach { $0.orderOut(nil) }
         exitPanel?.orderOut(nil)
-        if panels.contains(where: { $0.contentView === workbench.superview }) { workbench.removeFromSuperview() }
-        if panels.contains(where: { $0.contentView === band.superview }) { band.removeFromSuperview() }
+        (workbench as? AgentSidebar)?.reclaimToolbar()
+        if covers.contains(where: { $0.contentView === workbench.superview }) { workbench.removeFromSuperview() }
+        if covers.contains(where: { $0.contentView === band.superview }) { band.removeFromSuperview() }
+        agentLayout = nil
         screenFrame = nil
         exitState.reset()
         exitRequested = false
@@ -143,11 +193,17 @@ final class ImmersiveKiosk: NSObject {
 
     func contains(_ window: NSWindow?) -> Bool {
         guard let window else { return false }
-        return panels.contains { $0 === window } || exitPanel === window
+        return (panels + agentPanels).contains { $0 === window } || exitPanel === window
+    }
+
+    static func agentAvailableArea(in sidebar: CGRect, bandHeight: CGFloat) -> CGRect {
+        ImmersiveAgentLayout.availableArea(in: sidebar, bandHeight: bandHeight,
+                                          toolbarHeight: AgentSidebar.toolbarHeight)
     }
 
     /// Kept separate from window creation so mounting and layout can be verified without showing any UI.
     static func mount(workbench: NSView, band: PhoneBand, in host: NSView) {
+        (workbench as? AgentSidebar)?.reclaimToolbar()
         if workbench.superview !== host { workbench.removeFromSuperview(); host.addSubview(workbench) }
         if band.superview !== host { band.removeFromSuperview(); host.addSubview(band) }
         layoutContent(workbench: workbench, band: band, in: host.bounds)
@@ -162,19 +218,70 @@ final class ImmersiveKiosk: NSObject {
         band.needsLayout = true
     }
 
+    /// Reparents the same toolbar and approval band. No duplicate state or native windows are needed for testing.
+    static func mountAgentControls(toolbar: NSView, band: PhoneBand, top: NSView, bottom: NSView,
+                                   toolbarHeight: CGFloat) {
+        if toolbar.superview !== top { toolbar.removeFromSuperview(); top.addSubview(toolbar) }
+        if band.superview !== bottom { band.removeFromSuperview(); bottom.addSubview(band) }
+        layoutAgentControls(toolbar: toolbar, band: band, top: top, bottom: bottom, toolbarHeight: toolbarHeight)
+    }
+
+    private static func layoutAgentControls(toolbar: NSView, band: PhoneBand, top: NSView, bottom: NSView,
+                                            toolbarHeight: CGFloat) {
+        let toolbarFrame = CGRect(x: top.bounds.minX + 12, y: top.bounds.maxY - toolbarHeight - 12,
+                                  width: max(0, top.bounds.width - 24), height: toolbarHeight)
+        if toolbar.frame != toolbarFrame { toolbar.frame = toolbarFrame }
+        let width = max(0, bottom.bounds.width - 24)
+        let bandFrame = CGRect(x: bottom.bounds.minX + 12, y: bottom.bounds.minY + 8,
+                               width: width, height: band.preferredHeight(for: width))
+        if band.frame != bandFrame { band.frame = bandFrame; band.needsLayout = true }
+    }
+
+    private func updateCover(_ panel: ImmersivePanel, frame: CGRect, visible: Bool = true) {
+        updateCoverFrame(panel, frame: frame)
+        if !visible || frame.isEmpty {
+            if panel.isVisible { panel.orderOut(nil) }
+        } else if !panel.isVisible { panel.orderFrontRegardless() }
+    }
+
+    private func updateCoverFrame(_ panel: ImmersivePanel, frame: CGRect) {
+        if panel.frame != frame {
+            panel.setFrame(frame, display: true)
+            panel.contentView?.needsLayout = true
+            WindowDiagnostics.panel("immersive.cover", panel, fields: [
+                "frame": [frame.minX, frame.minY, frame.width, frame.height], "level": panel.level.rawValue])
+        }
+        panel.contentView?.layoutSubtreeIfNeeded()
+    }
+
+    private func makeAgentPanelsIfNeeded() {
+        guard agentPanels.isEmpty else { return }
+        agentPanels = (0..<4).map { _ in makeCoverPanel() }
+    }
+
+    private func makeCoverPanel() -> ImmersivePanel {
+        let panel = Self.makePanel()
+        let view = ImmersiveBandView()
+        view.onPress = { [weak self] in self?.revealExit() }
+        view.onLayout = { [weak self, weak view] in
+            guard let self, let view else { return }
+            if self.workbench.superview === view, self.band.superview === view {
+                Self.layoutContent(workbench: self.workbench, band: self.band, in: view.bounds)
+            } else if self.agentLayout != nil, let sidebar = self.workbench as? AgentSidebar,
+                      let top = self.agentPanels.first?.contentView,
+                      let bottom = self.agentPanels.dropFirst().first?.contentView,
+                      view === top || view === bottom {
+                Self.layoutAgentControls(toolbar: sidebar.toolbar, band: self.band, top: top, bottom: bottom,
+                                         toolbarHeight: AgentSidebar.toolbarHeight)
+            }
+        }
+        panel.contentView = view
+        return panel
+    }
+
     private func makePanelsIfNeeded() {
         guard panels.isEmpty else { return }
-        panels = (0..<4).map { _ in
-            let panel = Self.makePanel()
-            let view = ImmersiveBandView()
-            view.onPress = { [weak self] in self?.revealExit() }
-            view.onLayout = { [weak self, weak view] in
-                guard let self, let view, self.workbench.superview === view else { return }
-                Self.layoutContent(workbench: self.workbench, band: self.band, in: view.bounds)
-            }
-            panel.contentView = view
-            return panel
-        }
+        panels = (0..<4).map { _ in makeCoverPanel() }
         let exit = Self.makePanel()
         exit.level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1)
         let button = NSButton(title: "×", target: self, action: #selector(exitPressed))

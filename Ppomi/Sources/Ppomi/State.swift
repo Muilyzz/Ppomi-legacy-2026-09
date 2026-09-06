@@ -23,6 +23,21 @@ final class AppState: ObservableObject {
     @Published var workSurface: WorkSurface = .iphone
     @Published var windowsSize = CGSize(width: 900, height: 620)
     @Published var windowsWindowVisible = false
+    @Published var agentVisible = UserDefaults.standard.object(forKey: "workbench.agentVisible") as? Bool ?? true
+    @Published var agentApp = AgentApp.defaultApp
+    @Published var agentDockMessage = "대화창을 여기에 배치합니다"
+    @Published var agentLayoutRequest = 0
+
+    func selectAgent(_ app: AgentApp) {
+        agentApp = app
+        showAgent(true)
+    }
+    func showAgent(_ visible: Bool) {
+        guard agentVisible != visible || visible else { return }
+        agentVisible = visible
+        UserDefaults.standard.set(visible, forKey: "workbench.agentVisible")
+        agentLayoutRequest += 1
+    }
     @Published var shown = 0                    // bumps when a menu item wants the 뽀미 window up (the controller owns it)
 
     func reveal() { shown += 1 }
@@ -88,9 +103,13 @@ final class AppState: ObservableObject {
     }
 
     /// Switch the workbench's tab (증빙 goes through showEvidence so it lands on a day that has 전표).
-    func show(_ t: Tab) { if t == .evidence { showEvidence() } else { tab = t } }
+    func show(_ t: Tab) {
+        showAgent(false)
+        if t == .evidence { showEvidence() } else { tab = t }
+    }
 
     func showEvidence(day: Date? = nil, uid: String? = nil) {
+        if agentVisible { showAgent(false) }
         // No day named: the timeline's day, unless it has no 전표 (today, usually) — then the newest day that has some.
         var d = day ?? selectedDay
         if day == nil, let L = ledger, !L.lines.contains(where: { (d..<KST.day(d, 1)).contains($0.ts) }),

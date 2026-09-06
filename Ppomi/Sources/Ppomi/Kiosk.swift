@@ -7,6 +7,14 @@ import CoreGraphics
 
 /// Navigation leaves the mirroring app active; every explicit raise stays directly behind its window.
 final class MainPanel: NSPanel {
+    var agentWindowID: CGWindowID?
+    var hasDockedWindow: Bool { phoneID != nil || agentWindowID != nil }
+    private var lowestDockedWindow: CGWindowID? {
+        let ids = Set([phoneID, agentWindowID].compactMap { $0 })
+        guard !ids.isEmpty else { return nil }
+        let windows = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]) ?? []
+        return windows.compactMap { $0[kCGWindowNumber as String] as? CGWindowID }.last(where: ids.contains)
+    }
     var surfacePID: pid_t? {
         didSet {
             if oldValue != surfacePID { diagnosticSampler?.updateMirrorPID(surfacePID) }
@@ -63,29 +71,30 @@ final class MainPanel: NSPanel {
     override func order(_ place: NSWindow.OrderingMode, relativeTo otherWin: Int) {
         WindowDiagnostics.panel("order.before", self, fields: ["mode": place.rawValue,
             "relativeTo": phoneID.map { Int($0) == otherWin } == true ? "phone" : otherWin == 0 ? "default" : "other"])
-        if place == .above, let p = phoneID { super.order(.below, relativeTo: Int(p)) }
+        if place == .above, let p = lowestDockedWindow { super.order(.below, relativeTo: Int(p)) }
         else { super.order(place, relativeTo: otherWin) }
         WindowDiagnostics.panel("order.after", self)
     }
     override func orderFront(_ sender: Any?) {
         WindowDiagnostics.panel("orderFront", self)
-        if let p = phoneID { order(.below, relativeTo: Int(p)) } else { super.orderFront(sender) }
+        if let p = lowestDockedWindow { order(.below, relativeTo: Int(p)) } else { super.orderFront(sender) }
     }
     override func orderFrontRegardless() {
         WindowDiagnostics.panel("orderFrontRegardless", self)
-        if let p = phoneID { order(.below, relativeTo: Int(p)) } else { super.orderFrontRegardless() }
+        if let p = lowestDockedWindow { order(.below, relativeTo: Int(p)) } else { super.orderFrontRegardless() }
     }
     override func makeKeyAndOrderFront(_ sender: Any?) { makeKey(); orderFront(sender) }
     /// True when this panel is not directly under the phone: drawn above it, or another app's window slid in between
     /// (Stage Manager re-layers on a stage switch). CGWindowList is front-to-back.
     func needsReorder(under phone: CGWindowID) -> Bool {
+        let anchor = lowestDockedWindow ?? phone
         let l = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]) ?? []
         let me = ProcessInfo.processInfo.processIdentifier
         var belowPhone = false
         for w in l {
             let id = w["kCGWindowNumber"] as? Int ?? 0
             if id == windowNumber { return !belowPhone }                       // reached us: fine only if the phone came first
-            if id == Int(phone) { belowPhone = true; continue }
+            if id == Int(anchor) { belowPhone = true; continue }
             if belowPhone, (w["kCGWindowLayer"] as? Int) == 0, (w["kCGWindowOwnerPID"] as? pid_t) != me { return true }   // someone in between
         }
         return false
@@ -122,6 +131,8 @@ enum DockChange: Equatable {
 final class KioskController {
     private let state: AppState
     private let workbench: NSView
+    private let sidebar: AgentSidebar
+    private let agentDock: AgentDockCoordinator
     private var sub: AnyCancellable?
     private var main: MainPanel?
     private var content: WorkbenchContent?
@@ -156,6 +167,8 @@ final class KioskController {
         let rootView = Workbench().environmentObject(state)
         workbench = WindowDiagnostics.enabled ? DiagnosticHostingView(rootView: rootView) : WorkbenchHostingView(rootView: rootView)
         workbench.autoresizingMask = [.width, .height]
+        sidebar = AgentSidebar(records: workbench, state: state)
+        agentDock = AgentDockCoordinator(state: state)
         sub = state.objectWillChange.sink { [weak self] _ in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.sync() } }
         }
@@ -217,6 +230,7 @@ final class KioskController {
                 Self.fitMain(p, content: c, phoneSize: self.surfaceSize)
                 c.followedPhone = nil
                 self.placementRequested = true
+                self.agentDock.requestLayout(reveal: false)
                 if self.surface == .windows { self.desktopFit = DesktopFit() }
             }
         }
@@ -235,6 +249,11 @@ final class KioskController {
             }
         }
         displayObservers.append((NotificationCenter.default, dialogToken))
+        let terminateToken = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
+                                                                    object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.agentDock.restore() }
+        }
+        displayObservers.append((NotificationCenter.default, terminateToken))
         sync()
     }
 
@@ -245,6 +264,8 @@ final class KioskController {
     }
 
     private func sync() {
+        agentDock.syncSelection()
+        if !state.agentVisible { main?.agentWindowID = nil }
         let switched = displayedSurface != state.workSurface
         if switched { switchSurface() }
         content?.phase = state.phase
@@ -281,8 +302,8 @@ final class KioskController {
         c.surface = surface
         c.phoneSize = surfaceSize
         c.phase = state.phase; c.band.state = state; c.band.sync()
-        c.workbench = workbench
-        c.workbenchArea.addSubview(workbench)
+        c.workbench = sidebar
+        c.workbenchArea.addSubview(sidebar)
         c.onExitExpanded = { [weak self] in self?.state.toggleKiosk() }
         let p = MainPanel(contentRect: c.frame,
                           styleMask: [.titled, .closable, .resizable, .nonactivatingPanel, .fullSizeContentView],
@@ -305,7 +326,7 @@ final class KioskController {
         p.surfacePID = surface.processIdentifier
         p.startWindowDiagnostics()
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: p, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.wantMain = false }
+            MainActor.assumeIsolated { self?.wantMain = false; self?.agentDock.restore() }
         }
         content = c
         return p
@@ -318,6 +339,7 @@ final class KioskController {
         guard let p = main, let c = content else { return }
         if up {
             if stage {
+                agentDock.requestLayout()
                 NSApp.unhideWithoutActivation()
                 if Permissions.accessibility { _ = surface.revealWindow() }
             }
@@ -325,6 +347,7 @@ final class KioskController {
             return
         }
         if first || stage {
+            agentDock.requestLayout()
             Self.fitMain(p, content: c, phoneSize: surfaceSize)
             c.followedPhone = nil
             placementRequested = true
@@ -362,18 +385,20 @@ final class KioskController {
             p.orderOut(nil)
             up = true
             if immersive == nil {
-                immersive = ImmersiveKiosk(workbench: workbench, band: c.band) { [weak self] in
+                immersive = ImmersiveKiosk(workbench: sidebar, band: c.band) { [weak self] in
                     guard let self, self.state.kioskOn else { return }
                     self.state.toggleKiosk()
                 }
             }
             if Permissions.accessibility { _ = surface.revealWindow() }
+            agentDock.requestLayout()
             immersive?.show(on: screen, phone: immersivePhoneFrame())
             WindowDiagnostics.panel("immersive.enter", p)
         } else {
             immersive?.hide()
             up = false
-            c.workbenchArea.addSubview(workbench)
+            sidebar.reclaimToolbar()
+            c.workbenchArea.addSubview(sidebar)
             c.addSubview(c.band)
             c.layoutSuspended = false
             c.expanded = false
@@ -396,14 +421,45 @@ final class KioskController {
     /// The opening is only for a visible phone, never a different app that has covered it.
     private func immersivePhoneFrame() -> CGRect? {
         guard Permissions.accessibility, let phone = surface.liveWindow(),
-              surface.isInFrontOfOtherApplications(phone.id),
+              isSurfacePresented(phone.id),
               let frame = surface.axFrame(), DockChange.near(frame, phone.rect) else { return nil }
         return cgRect(frame)
     }
 
     private func updateImmersive() {
         guard up, !NSApp.isHidden else { return }
-        immersive?.update(phone: immersivePhoneFrame())
+        let phone = immersivePhoneFrame()
+        guard let screen = immersive?.screenFrame, let c = content else { return }
+        let layout = ImmersiveLayout(screen: screen, phone: phone)
+        let footer = c.band.preferredHeight(for: max(0, layout.sidebar.width - 24))
+        let area = ImmersiveKiosk.agentAvailableArea(in: layout.sidebar, bandHeight: footer)
+        let agent = agentDock.update(available: cgRect(area), allowing: pairedPIDs)
+        let presented = agent.flatMap { state.agentApp.isInFront($0.id, allowing: pairedPIDs) ? cgRect($0.rect) : nil }
+        immersive?.update(phone: phone, agent: presented)
+    }
+
+    private var pairedPIDs: Set<pid_t> {
+        Set([ProcessInfo.processInfo.processIdentifier, surface.processIdentifier].compactMap { $0 })
+    }
+    private func isSurfacePresented(_ id: CGWindowID) -> Bool {
+        guard state.agentVisible, let pid = surface.processIdentifier else { return surface.isInFrontOfOtherApplications(id) }
+        let windows = ((CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]) ?? []).compactMap { w -> MirroringOrder.Window? in
+            guard let id = w[kCGWindowNumber as String] as? CGWindowID,
+                  let owner = w[kCGWindowOwnerPID as String] as? pid_t,
+                  let layer = w[kCGWindowLayer as String] as? Int else { return nil }
+            return .init(id: id, owner: owner, layer: layer)
+        }
+        var allowed = pairedPIDs
+        if let agent = state.agentApp.processIdentifier { allowed.insert(agent) }
+        return AgentWindowPolicy.isInFront(id: id, pid: pid, allowedPIDs: allowed, windows: windows)
+    }
+
+    private func updateAgentDock(panel p: MainPanel) {
+        sidebar.layoutSubtreeIfNeeded()
+        let available = cgRect(p.convertToScreen(sidebar.convert(sidebar.agentArea, to: nil)))
+        let agent = agentDock.update(available: available, allowing: pairedPIDs)
+        p.agentWindowID = agent?.id
+        if let anchor = agent?.id ?? p.phoneID, p.needsReorder(under: anchor) { p.orderFront(nil) }
     }
 
     static func fitExpanded(_ p: NSPanel, content c: WorkbenchContent, in frame: CGRect) {
@@ -498,6 +554,7 @@ final class KioskController {
     private func dock() {
         guard wantMain, let p = main, let c = content else { return }
         guard !NSApp.isHidden else { return }
+        defer { updateAgentDock(panel: p) }
         guard Permissions.accessibility else {
             p.phoneID = nil; lastDock = nil; placedDesktopID = nil
             c.phoneSlot.hint = "\(surface.displayName) 창을 붙이려면\n설정 › 시작하기에서 손쉬운 사용을 허용해 주세요"
@@ -514,7 +571,7 @@ final class KioskController {
         if awaitingPresentedPhone {
             // A failed/unfinished reveal must leave the workbench accessible on its own, rather than
             // immediately tucking it under the same buried window on the next timer tick.
-            guard let phone = livePhone, surface.isInFrontOfOtherApplications(phone.id) else {
+            guard let phone = livePhone, isSurfacePresented(phone.id) else {
                 if !p.isVisible { p.orderFront(nil) }
                 return
             }
@@ -531,7 +588,7 @@ final class KioskController {
             p.phoneID = nil; lastDock = nil; placedDesktopID = nil
             c.phoneSlot.hint = surface == .iphone ? "iPhone 미러링을 연결해 주세요" : "Parallels에서 Windows 창을 열어 주세요"
             // Follow the phone off stage without pulling the user back from another app or Space.
-            if surface.isRunning, !NSApp.isActive, !p.isKeyWindow,
+            if surface.isRunning, !NSApp.isActive, !p.isKeyWindow, !state.agentVisible,
                ProcessInfo.processInfo.systemUptime >= explicitRevealUntil {
                 WindowDiagnostics.panel("dock.hide", p)
                 p.orderOut(nil)
@@ -546,7 +603,7 @@ final class KioskController {
         if !p.isVisible { p.orderFront(nil) }
         else if p.needsReorder(under: phone.id) {
             WindowDiagnostics.panel("dock.reorder", p)
-            p.order(.below, relativeTo: Int(phone.id))
+            p.orderFront(nil)
         }
         c.phoneSlot.hint = ""
         let current = DockSnapshot(phoneID: phone.id, panel: cgRect(p.frame), phone: frame)
