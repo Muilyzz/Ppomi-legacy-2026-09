@@ -68,9 +68,13 @@ final class MainPanel: NSPanel {
     /// True when this panel is the frontmost real window on screen (Stage Manager strip thumbnails are ignored).
     var isFrontmostOnScreen: Bool {
         let l = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]) ?? []
+        // The control windows this app docks (a mirror already on the stage) sit above the panel without making
+        // another app the front one.
+        let controlPIDs = Set(WorkSurface.allCases.flatMap(\.processIdentifiers))
         for w in l where (w["kCGWindowLayer"] as? Int) == 0 {
             let b = w["kCGWindowBounds"] as? [String: CGFloat] ?? [:]
             guard (b["Width"] ?? 0) >= 200, (b["Height"] ?? 0) >= 200 else { continue }
+            if let owner = w["kCGWindowOwnerPID"] as? pid_t, controlPIDs.contains(owner) { continue }
             return (w["kCGWindowNumber"] as? Int ?? 0) == windowNumber
         }
         return false
@@ -161,6 +165,7 @@ final class KioskController {
     private var lastRaiseReveal: TimeInterval = 0
     private var stagePullInFlight = false
     private var stagePullAttempted = false
+    private var activateRevealFailedFor: CGWindowID?
     private var lastPointer = NSEvent.mouseLocation
     private var restoredFrame = false
     static let frameAutosaveName = "workbench"
@@ -322,9 +327,13 @@ final class KioskController {
                     // Another Ppomi window (settings, a picker) that was activated keeps its key status.
                     guard let self, !self.up, !self.state.recordsFocused, !self.revealingOnActivate, NSApp.isActive,
                           let p = self.main, p.isVisible, NSApp.keyWindow == nil || NSApp.keyWindow === p, Permissions.accessibility,
-                          let phone = self.surface.liveWindow(), !self.isSurfacePresented(phone.id) else { return }
+                          let phone = self.surface.liveWindow(), !self.isSurfacePresented(phone.id),
+                          self.activateRevealFailedFor != phone.id else { return }
                     self.revealingOnActivate = true
                     let revealed = self.surface.revealWindow()
+                    // A reveal that hands the stage to the control app without presenting it would repeat on every
+                    // re-activation below (뽀미 ↔ 미러링 flapping); one failure per window until it is seen presented.
+                    self.activateRevealFailedFor = revealed ? nil : phone.id
                     // Revealing can hand activation to the control app; take it back so typing stays in the chat.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         MainActor.assumeIsolated {
@@ -615,7 +624,10 @@ final class KioskController {
             NSApp.unhideWithoutActivation()
             if p.isMiniaturized { p.deminiaturize(nil) }
             launchSurfaceIfNeeded()
-            let presented = Permissions.accessibility && surface.revealWindow()
+            // A window parked on another stage cannot be revealed: activating its app would hand the stage over.
+            // The docking tick's thumbnail pull brings it here instead.
+            let parked = surface.liveWindow() == nil && surfaceThumbnail != nil
+            let presented = Permissions.accessibility && !parked && surface.revealWindow()
             p.surfacePID = surface.processIdentifier
             awaitingPresentedPhone = !presented
             if !presented { lastDock = nil }
@@ -755,13 +767,24 @@ final class KioskController {
         stagePullAttempted = true
         placementRequested = false
         let target = phoneTarget(p, c)
-        WindowDiagnostics.panel("dock.stagePull", p, fields: ["thumbnail": [thumbnail.minX, thumbnail.minY, thumbnail.width, thumbnail.height]])
-        StageDrag.perform(from: CGPoint(x: thumbnail.midX, y: thumbnail.midY), to: CGPoint(x: target.midX, y: target.midY)) { [weak self] in
+        // Stage Manager puts the dropped window's top-left corner 100 pt up and left of the pointer, whatever part of
+        // the thumbnail was grabbed (measured 2026-09-10 with iPhone Mirroring and Parallels; a drop at the slot's centre
+        // therefore landed the window down and right of it). Grab the thumbnail's middle, where its image certainly is,
+        // and release 100 pt inside the slot's corner; the alignment below only corrects what the app itself shifts.
+        let carry = CGPoint(x: 100, y: 100)
+        WindowDiagnostics.panel("dock.stagePull", p, fields: [
+            "thumbnail": [thumbnail.minX, thumbnail.minY, thumbnail.width, thumbnail.height], "target": [target.minX, target.minY]])
+        StageDrag.perform(from: CGPoint(x: thumbnail.midX, y: thumbnail.midY),
+                          to: CGPoint(x: target.minX + carry.x, y: target.minY + carry.y)) { [weak self] in
             // Stage Manager animates the drop for about a second; only then does one explicit alignment put the
             // window exactly on the slot instead of the slot following wherever the drop landed.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                 MainActor.assumeIsolated {
                     guard let self else { return }
+                    if let landed = self.surface.axFrame() {
+                        WindowDiagnostics.log("dock.stagePull.landed", [
+                            "frame": [landed.minX, landed.minY, landed.width, landed.height], "target": [target.minX, target.minY]])
+                    }
                     self.stagePullInFlight = false
                     self.lastDock = nil
                     self.placementRequested = true
@@ -925,7 +948,15 @@ final class KioskController {
             // A failed/unfinished reveal must leave the workbench accessible on its own, rather than
             // immediately tucking it under the same buried window on the next timer tick.
             guard let phone = livePhone, isSurfacePresented(phone.id) else {
-                if livePhone == nil { c.phoneSlot.hint = state.connectionHint(for: surface) }
+                if livePhone == nil {
+                    // A reveal cannot present a window parked on another stage; only the pull brings it over.
+                    if let thumbnail = surfaceThumbnail {
+                        c.phoneSlot.hint = "다른 스테이지에 있음"
+                        pullThumbnail(thumbnail, panel: p, content: c)
+                    } else {
+                        c.phoneSlot.hint = state.connectionHint(for: surface)
+                    }
+                }
                 if !p.isVisible { p.orderFront(nil) }
                 return
             }
@@ -950,6 +981,7 @@ final class KioskController {
             return
         }
         stagePullAttempted = false
+        if stagePullInFlight { return }   // the drop is still animating: measure and align after it lands
         guard let frame = surface.axFrame(), DockChange.near(frame, phone.rect) else { return }
         guard finishSurfaceFit(available: c.controlAvailableArea) else { return }
         if c.phoneSize != frame.size {
@@ -974,6 +1006,7 @@ final class KioskController {
         }
         p.phoneID = phone.id
         p.surfacePID = surface.processIdentifier
+        if activateRevealFailedFor != nil, isSurfacePresented(phone.id) { activateRevealFailedFor = nil }
         if !p.isVisible { p.orderFront(nil) }
         else if p.isAbove(phone.id), !isSurfacePresented(phone.id) {
             // Another app's window sits between this one and the control window, so the hole shows that app instead of
@@ -996,10 +1029,11 @@ final class KioskController {
             if !up { Self.fitMain(p, content: c, phoneSize: frame.size) }
         }
         if change == .alignPhone {
-            WindowDiagnostics.panel("dock.alignPhone", p, fields: ["explicitLayout": placementRequested])
             c.followedPhone = nil
             c.layoutSubtreeIfNeeded()
             let target = phoneTarget(p, c)
+            WindowDiagnostics.panel("dock.alignPhone", p, fields: ["explicitLayout": placementRequested,
+                "frame": [frame.minX, frame.minY, frame.width, frame.height], "target": [target.minX, target.minY]])
             let alreadyPlaced = placedDesktopID == phone.id
             placedDesktopID = nil
             if !alreadyPlaced && (abs(frame.minX - target.minX) > 1 || abs(frame.minY - target.minY) > 1) {

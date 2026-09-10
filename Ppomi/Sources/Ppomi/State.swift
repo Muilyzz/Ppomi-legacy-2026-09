@@ -20,13 +20,13 @@ final class AppState: ObservableObject {
     @Published var mirror: MirrorState = .none
     @Published var pendingJob: String? = nil    // an agent job interrupted by the human picking the phone up; resumes on CONNECTED
     @Published var kioskOn = false              // the same workbench expanded to the screen's usable area
-    @Published var phoneSize = Mirroring.defaultSize   // the mirroring window's size: the dock pane in the 뽀미 window is this big
+    @Published var phoneSize = AppState.storedSize("iphone") ?? Mirroring.defaultSize { didSet { AppState.store(phoneSize, "iphone") } }   // the mirroring window's size: the dock pane in the 뽀미 window is this big
     @Published var workSurface: WorkSurface = .iphone
-    @Published var androidSize = AndroidWindow.defaultSize
+    @Published var androidSize = AppState.storedSize("android") ?? AndroidWindow.defaultSize { didSet { AppState.store(androidSize, "android") } }
     @Published var androidWindowVisible = false
     @Published var androidLaunching = false
     @Published var androidLaunchError: String?
-    @Published var windowsSize = CGSize(width: 900, height: 620)
+    @Published var windowsSize = AppState.storedSize("windows") ?? CGSize(width: 900, height: 620) { didSet { AppState.store(windowsSize, "windows") } }
     @Published var windowsWindowVisible = false
     /// The records page is showing (the control window is parked). Only the controller flips it.
     @Published private(set) var recordsFocused = false
@@ -323,5 +323,18 @@ final class AppState: ObservableObject {
         case (.connected, .humanTurn): phase = pendingJob.map { .agent(job: $0) } ?? .idle; pendingJob = nil
         default: break
         }
+    }
+}
+
+extension AppState {
+    /// The last measured control-window size per surface ("w h" under `surfaceSize.<surface>`), so the slot and the
+    /// stage pull's drop point fit the window before it is on stage again instead of a default it then corrects.
+    static func storedSize(_ surface: String) -> CGSize? {
+        let parts = (UserDefaults.standard.string(forKey: "surfaceSize." + surface) ?? "").split(separator: " ").compactMap { Double($0) }
+        guard parts.count == 2, parts[0] > 0, parts[1] > 0 else { return nil }
+        return CGSize(width: parts[0], height: parts[1])
+    }
+    static func store(_ size: CGSize, _ surface: String) {
+        UserDefaults.standard.set("\(Int(size.width)) \(Int(size.height))", forKey: "surfaceSize." + surface)
     }
 }
