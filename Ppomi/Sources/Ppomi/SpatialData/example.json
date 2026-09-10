@@ -1,0 +1,65 @@
+{
+  "formatVersion": 1,
+  "unit": "m",
+  "assets": [
+    {
+      "id": "example:spatial:v2",
+      "entityID": "example:entity:shared-space",
+      "title": "가상 건축물 예시 · 실제 자산 아님",
+      "accountIDs": [],
+      "isSynthetic": true,
+      "ownerships": [
+        {
+          "ownerID": "example:owner:one",
+          "shareBasisPoints": 10000,
+          "sourceRecordID": "example:synthetic-ownership:v1",
+          "note": "개인 소유와 사업 사용을 구분하는 가상 예시입니다. 실제 소유 정보가 아닙니다."
+        }
+      ],
+      "usages": [
+        {
+          "id": "example:usage:personal",
+          "scope": {"kind": "personal", "ownerID": "example:owner:one"},
+          "allocationBasisPoints": 4000,
+          "sourceRecordID": "example:synthetic-use:v1",
+          "note": "같은 가상 공간의 40%를 개인 용도로 배분한 예시입니다. 실제 면적이나 회계 배분이 아닙니다.",
+          "accountLinks": []
+        },
+        {
+          "id": "example:usage:business",
+          "scope": {"kind": "business", "ownerID": "example:owner:one", "businessID": "example:business:one"},
+          "allocationBasisPoints": 6000,
+          "sourceRecordID": "example:synthetic-use:v1",
+          "note": "동일한 개인 소유 공간의 60%를 사업에 사용하는 가상 예시입니다. 사업 ID는 앱 내부 참조이고 사업자등록번호가 아닙니다.",
+          "accountLinks": []
+        }
+      ],
+      "parts": [
+        {
+          "id": "example:part:base",
+          "title": "하부 형상",
+          "footprint": [{"x": 0, "y": 0}, {"x": 24, "y": 0}, {"x": 24, "y": 10}, {"x": 14, "y": 10}, {"x": 14, "y": 18}, {"x": 0, "y": 18}],
+          "height": 6,
+          "elevation": 0,
+          "provenance": {
+            "kind": "schematic",
+            "sourceRecordID": "example:synthetic-geometry:v1",
+            "note": "형식과 3D 조작을 확인하기 위해 임의로 정한 치수입니다. 실제 건축물이나 소유 자산을 나타내지 않습니다."
+          }
+        },
+        {
+          "id": "example:part:upper",
+          "title": "상부 형상",
+          "footprint": [{"x": 2, "y": 2}, {"x": 12, "y": 2}, {"x": 12, "y": 14}, {"x": 2, "y": 14}],
+          "height": 15,
+          "elevation": 6,
+          "provenance": {
+            "kind": "schematic",
+            "sourceRecordID": "example:synthetic-geometry:v1",
+            "note": "입력한 높이를 사용하는 가상 형상입니다. 층수로 높이를 추정하지 않았습니다."
+          }
+        }
+      ]
+    }
+  ]
+}

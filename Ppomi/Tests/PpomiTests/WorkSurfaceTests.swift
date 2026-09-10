@@ -6,10 +6,39 @@ final class WorkSurfaceTests: XCTestCase {
     private let rect = CGRect(x: 130, y: 70, width: 900, height: 620)
 
     @MainActor func testSurfaceIdentityAndFallbackSizesDoNotRequireLaunchingApplications() {
-        XCTAssertEqual(WorkSurface.allCases.map(\.id), ["iphone", "windows"])
+        XCTAssertEqual(WorkSurface.allCases.map(\.id), ["iphone", "android", "windows"])
         XCTAssertEqual(WorkSurface.iphone.defaultSize, Mirroring.defaultSize)
+        XCTAssertEqual(WorkSurface.android.defaultSize, AndroidWindow.defaultSize)
+        XCTAssertEqual(WorkSurface.android.displayName, "Android")
         XCTAssertEqual(WorkSurface.windows.defaultSize, CGSize(width: 900, height: 620))
         XCTAssertEqual(WorkSurface.windows.displayName, "Windows")
+    }
+
+    func testCompactDesktopSizeKeepsAspectRatioInsideTheReservedArea() throws {
+        let current = CGSize(width: 1276, height: 853)
+        for available in [CGSize(width: 696, height: 484), CGSize(width: 540, height: 620)] {
+            let target = try XCTUnwrap(WorkSurfaceCompactLayout.size(current: current, available: available))
+            XCTAssertLessThanOrEqual(target.width, available.width - 16)
+            XCTAssertLessThanOrEqual(target.height, available.height - 16)
+            XCTAssertEqual(target.width / target.height, current.width / current.height, accuracy: 0.001)
+            XCTAssertLessThanOrEqual(target.width, current.width)
+            XCTAssertLessThanOrEqual(target.height, current.height)
+        }
+    }
+
+    func testCompactDesktopSizeDoesNotEnlargeAnAlreadySmallWindow() {
+        let small = CGSize(width: 320, height: 220)
+        XCTAssertEqual(WorkSurfaceCompactLayout.size(current: small, available: CGSize(width: 700, height: 620)), small)
+    }
+
+    func testCompactDesktopSizeRejectsImpossibleOrInvalidAreas() {
+        let current = CGSize(width: 900, height: 620)
+        for available in [CGSize.zero, CGSize(width: 255, height: 200), CGSize(width: -1, height: 700),
+                          CGSize(width: CGFloat.infinity, height: 700)] {
+            XCTAssertNil(WorkSurfaceCompactLayout.size(current: current, available: available))
+        }
+        XCTAssertNil(WorkSurfaceCompactLayout.size(current: CGSize(width: CGFloat.nan, height: 620), available: current))
+        XCTAssertNil(WorkSurfaceCompactLayout.size(current: current, available: current, margin: -1))
     }
 
     func testExactInstalledExecutableIdentityRejectsNamesakesAndMacGuests() {
@@ -31,12 +60,34 @@ final class WorkSurfaceTests: XCTestCase {
         XCTAssertEqual(ParallelsWindowPolicy.select([host], preferredID: vm.id)?.id, host.id)
     }
 
-    func testStableVMSelectionSurvivesFrontOrderAndFocusChanges() {
+    func testLargestStandardWindowWinsAndMemoryOnlyBreaksTies() {
         let chosen = candidate(20)
-        let second = candidate(21, main: true, frame: rect.insetBy(dx: -50, dy: -30))
-        XCTAssertEqual(ParallelsWindowPolicy.select([second, chosen], preferredID: chosen.id)?.id, chosen.id)
-        XCTAssertEqual(ParallelsWindowPolicy.select([chosen, second], preferredID: chosen.id)?.id, chosen.id)
-        XCTAssertEqual(ParallelsWindowPolicy.select([second], preferredID: chosen.id)?.id, second.id)
+        let larger = candidate(21, main: true, frame: rect.insetBy(dx: -50, dy: -30))
+        let twin = candidate(22, main: true)
+        XCTAssertEqual(ParallelsWindowPolicy.select([larger, chosen], preferredID: chosen.id)?.id, larger.id)
+        XCTAssertEqual(ParallelsWindowPolicy.select([chosen, twin], preferredID: chosen.id)?.id, chosen.id)
+        XCTAssertEqual(ParallelsWindowPolicy.select([chosen, twin], preferredID: nil)?.id, twin.id)
+        XCTAssertEqual(ParallelsWindowPolicy.select([larger], preferredID: chosen.id)?.id, larger.id)
+    }
+
+    func testExplicitCompactDesktopDoesNotBecomeAConfigurationDialogAfterShrinking() {
+        let desktop = candidate(681, kind: .host, frame: CGRect(x: 100, y: 200, width: 600, height: 401))
+        let config = candidate(677, kind: .host, main: true, frame: CGRect(x: 150, y: 150, width: 628, height: 538))
+        XCTAssertEqual(ParallelsWindowPolicy.select([config, desktop], preferredID: desktop.id, compactID: desktop.id)?.id, desktop.id)
+        let realVM = candidate(700)
+        XCTAssertEqual(ParallelsWindowPolicy.select([config, desktop, realVM], preferredID: desktop.id,
+                                                    vmWindowPresent: true, compactID: desktop.id)?.id, realVM.id)
+    }
+
+    /// Measured on the App Store edition (2026-09-07): the host process owns the 1276x853 display, the 628x538 구성 dialog
+    /// and 제어 센터, all AXStandardWindow; prl_vm_app owns nothing. The dialog was the last clicked (main) window.
+    func testAppStoreEditionHostPeersSelectTheDisplayNotTheClickedConfigDialog() {
+        let display = candidate(681, kind: .host, main: false, frame: CGRect(x: 428, y: 149, width: 1276, height: 853))
+        let config = candidate(677, kind: .host, main: true, frame: CGRect(x: 554, y: 302, width: 628, height: 538))
+        let control = candidate(673, kind: .host, main: false, frame: CGRect(x: 218, y: 33, width: 540, height: 164))
+        XCTAssertEqual(ParallelsWindowPolicy.select([config, control, display], preferredID: nil)?.id, display.id)
+        XCTAssertEqual(ParallelsWindowPolicy.select([config, display], preferredID: config.id)?.id, display.id)
+        XCTAssertEqual(ParallelsWindowPolicy.select([config, control], preferredID: nil)?.id, config.id)
     }
 
     func testVMDialogAndSmallPopupCannotReplaceDesktopButHostLoginCanBeShown() {

@@ -44,6 +44,18 @@ export function validateManifest(manifest, directoryID = manifest?.id) {
     requireValue(['http:', 'https:'].includes(url?.protocol) && url.hostname, 'iconSource must be a web URL');
   }
   requireValue(object(manifest.launch) && nonempty(manifest.launch.search), 'launch.search');
+  const target = manifest.launch.target;
+  requireValue(target == null || target === 'browser' || target === 'windows', 'launch.target must be browser, windows or omitted');
+  if (target != null) {
+    const value = manifest.launch.search;
+    let url;
+    try { url = new URL(value); } catch { /* validation below */ }
+    requireValue(!/[\s\\\p{Cc}]/u.test(value) && /^https?:\/\//i.test(value) &&
+      ['http:', 'https:'].includes(url?.protocol) && url.hostname &&
+      !url.username && !url.password && !value.slice(value.indexOf('://') + 3).split(/[/?#]/, 1)[0].includes('@'),
+    `${target} launch.search must be an HTTP(S) URL without credentials`);
+    requireValue(manifest.collection == null, `${target} packages cannot use phone collection`);
+  }
   requireValue(Array.isArray(manifest.humanSteps) && manifest.humanSteps.every(nonempty), 'humanSteps');
   requireValue(Array.isArray(manifest.capabilities) && manifest.capabilities.length > 0, 'capabilities');
   const capabilityIDs = new Set();

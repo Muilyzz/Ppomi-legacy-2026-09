@@ -54,8 +54,13 @@ final class Voice {
         }
         self.engine = engine; self.analyzer = analyzer; self.input = cont
         results = Task { [weak self] in
-            do { for try await r in transcriber.results { let t = String(r.text.characters); if r.isFinal { print("Voice: heard \(t)") }; self?.handle(t, final: r.isFinal) } }
-            catch { print("Voice: results ended: \(error)") }
+            do {
+                for try await r in transcriber.results {
+                    guard let self, self.gen == g, !Task.isCancelled else { break }
+                    self.handle(String(r.text.characters), final: r.isFinal)
+                }
+            }
+            catch { /* Recognition text and errors must not become durable conversation logs. */ }
         }
         try await analyzer.start(inputSequence: stream)
         guard gen == g else { throw CancellationError() }      // stop() ran during the analyzer start and already tore this down

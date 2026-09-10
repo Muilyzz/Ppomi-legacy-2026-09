@@ -130,6 +130,8 @@ struct Replay {
     var act: (Footprint) throws -> Void
     var wait: (Double) -> Void
     var settle = 1.5
+    /// Only execution phases and ordinals leave the replay engine; footprints and targets stay here.
+    var onEvent: ((RuntimeEvent.Kind, Int?) -> Void)? = nil
 
     func run(maxSteps: Int = 12) throws -> Result {
         var r = Result(); r.lastWords = try screen()
@@ -140,20 +142,32 @@ struct Replay {
                 .map { ($0, Fingerprint.similarity(now, $0.fingerprintBefore)) }
                 .filter { $0.1 >= Fingerprint.threshold }
                 .max { ($0.1, $0.0.verified.ok) < ($1.1, $1.0.verified.ok) }
-            guard let fp = best?.0 else { r.outcome = r.steps.isEmpty ? .stopped("아는 화면이 아님") : .done; return r }
-            if let why = fp.handoff { r.outcome = .handoff(why, at: fp); return r }
+            guard let fp = best?.0 else {
+                r.outcome = r.steps.isEmpty ? .stopped("아는 화면이 아님") : .done
+                onEvent?(.handedOff, r.steps.count)
+                return r
+            }
+            let step = r.steps.count + 1
+            if let why = fp.handoff { r.outcome = .handoff(why, at: fp); onEvent?(.handedOff, step); return r }
             // the regex may land on a pay button on this screen even when its text does not say so ("." or "하기")
             if fp.glyph == "⊙" || fp.glyph == "↓" {
                 let re = Re(fp.target)
-                if r.lastWords.contains(where: { re.search($0.text) != nil && Footprint.isPayTarget($0.text) }) { r.outcome = .handoff("승인 필요 지점", at: fp); return r }
+                if r.lastWords.contains(where: { re.search($0.text) != nil && Footprint.isPayTarget($0.text) }) {
+                    r.outcome = .handoff("승인 필요 지점", at: fp); onEvent?(.handedOff, step); return r
+                }
             }
-            try act(fp); wait(settle)
+            onEvent?(.acting, step)
+            try act(fp)
+            onEvent?(.acted, step)
+            wait(settle)
+            onEvent?(.verifying, step)
             r.lastWords = try screen()
             let ok = Fingerprint.similarity(Fingerprint.words(from: r.lastWords), fp.fingerprintAfter) >= Fingerprint.threshold
             r.steps.append((fp, ok))
-            if !ok { r.outcome = .stopped("화면이 예상과 다름"); return r }
+            onEvent?(ok ? .verified : .mismatch, step)
+            if !ok { r.outcome = .stopped("화면이 예상과 다름"); onEvent?(.handedOff, step); return r }
             last = fp.id
         }
-        r.outcome = .stopped("최대 걸음 수"); return r
+        r.outcome = .stopped("최대 걸음 수"); onEvent?(.handedOff, r.steps.count); return r
     }
 }

@@ -40,3 +40,4 @@ Ppomi/Tests/PpomiTests/parse-parity.json
 Ppomi/Tests/PpomiTests/column-parity.json
 Ppomi/Tests/PpomiTests/timeline-parity.json
 Ppomi/Tests/PpomiTests/stitch-parity.json
+storybook/storybook-static/

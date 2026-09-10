@@ -245,9 +245,11 @@ final class LifeStore {
 
     private func locked<T>(_ action: () throws -> T) rethrows -> T { lock.lock(); defer { lock.unlock() }; return try action() }
     private func transaction<T>(readOnly: Bool = false, _ action: () throws -> T) throws -> T {
-        try db.run(readOnly ? "BEGIN DEFERRED" : "BEGIN IMMEDIATE")
-        do { let result = try action(); try db.run("COMMIT"); return result }
-        catch { try? db.run("ROLLBACK"); throw error }
+        try db.withLockedAccess {
+            try db.run(readOnly ? "BEGIN DEFERRED" : "BEGIN IMMEDIATE")
+            do { let result = try action(); try db.run("COMMIT"); return result }
+            catch { try? db.run("ROLLBACK"); throw error }
+        }
     }
     private func canonical<T: Codable>(_ value: T) throws -> T { try LifeJSON.decoder().decode(T.self, from: LifeJSON.encoder().encode(value)) }
     private func json<T: Encodable>(_ value: T) throws -> String { String(decoding: try LifeJSON.encoder().encode(value), as: UTF8.self) }

@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "id": "joint-certificate",
+  "name": "사업자 공동인증서 발급",
+  "version": "0.2.2",
+  "aliases": ["공동인증서 발급", "공동인증서 발행", "사업자 인증서 발급", "사업자 공동인증서"],
+  "launch": { "search": "https://www.signgate.com/entprsUntact/entprsOgcrAply/main.sg", "target": "browser" },
+  "capabilities": [
+    {
+      "id": "issue-business-certificate",
+      "title": "사업자 공동인증서 발급 준비·이어가기와 원래 업무 복귀",
+      "description": "현재 인증서와 진행 중 신청을 먼저 확인하고, 사용 중인 사업자 인터넷뱅킹의 공식 인증센터를 우선 검토합니다. KB 경로에서는 기존 공동인증서의 용도·유효 상태와 저장 위치를 확인해 복사·가져오기를 먼저 준비합니다. 재발급은 다른 PC의 기존 인증서도 폐기할 수 있으므로 임의로 진행하지 않습니다. 연결된 은행 경로가 없으면 발급기관의 자격·용도·비용을 비교해 선택된 절차를 준비합니다. 기본 안내 URL은 한국정보인증의 개인사업자 비대면 안내이며 발급기관이나 유료 상품의 자동 선택이 아닙니다. 세움터 사업자인증의 허용 인증서 정책 OID는 아직 확인하지 않았으므로 은행용·범용 모두 세움터 호환을 단정하지 않습니다. 사용자가 지정한 Parallels Windows에서 가능한 준비를 이어가고 실제 본인 인증·OTP·새 인증서 비밀번호·승인 범위 밖의 동의와 결제만 해당 화면에서 당사자가 처리합니다. 2026-09-09 Windows에서 한국정보인증 공개 안내와 KB 기업 인증센터 진입을 확인했으며 복사·신청·발급·세움터 인증 성공은 미검증입니다.",
+      "inputs": [
+        { "name": "requesterContext", "label": "이번 사업자와 신청 권한·대표 형태(실제 이름·번호 제외)", "required": true },
+        { "name": "existingBusinessBank", "label": "사용 중인 사업자 인터넷뱅킹 은행명 또는 미이용 여부", "required": false },
+        { "name": "certificateState", "label": "기존 인증서·진행 중 발급 신청 여부와 현재 단계(비밀 제외)", "required": false },
+        { "name": "returnTask", "label": "발급 후 이어갈 업무와 요구 인증서 용도", "required": false }
+      ],
+      "steps": [
+        { "id": "inspect-context", "title": "당사자·원래 업무·기존 인증서의 용도와 저장 위치·진행 중 신청을 확인하고 복사 가능성을 먼저 검토", "kind": "read" },
+        { "id": "choose-route", "title": "기존 사업자 인터넷뱅킹을 우선 확인하고 없으면 발급기관의 현재 공식 경로를 비교", "kind": "choice" },
+        { "id": "verify-purpose", "title": "사업자 공동인증서의 용도·지원 정책·수수료·유효기간을 확인하고 호환 미확인은 그대로 표시", "kind": "read" },
+        { "id": "open-official-route", "title": "선택된 공식 관리·복사·발급 또는 신청 이어가기 화면을 기존 Parallels Windows에서 열기", "kind": "open" },
+        { "id": "read-eligibility", "title": "기관별 대표 형태·본인 신청 요건과 실제 필요한 인증·서류 확인", "kind": "read" },
+        { "id": "prepare-application", "title": "새 화면의 필수·선택 항목을 구분하고 이미 제공·허용된 일반 신청 정보를 준비", "kind": "input" },
+        { "id": "human-new-consent", "title": "기존 요청·승인 범위에 포함되지 않은 동의·민감 권한만 실제 화면에서 당사자가 처리", "kind": "human" },
+        { "id": "human-identity", "title": "준비된 공식 화면의 휴대폰·계좌·신분증 본인 확인과 OTP를 당사자가 수행", "kind": "human" },
+        { "id": "prepare-payment", "title": "실제 상품·기간·부가세 포함 금액·결제수단을 확인한 뒤 기존 결제 승인 경계로 진행", "kind": "payment" },
+        { "id": "prepare-documents", "title": "선택한 기관의 발급일·서류 종류·전자문서 제출처와 신청 이어가기 위치를 준비", "kind": "read" },
+        { "id": "human-sensitive-documents", "title": "주민번호 전체가 포함된 증명서·신분증과 실제 전자문서 제출은 당사자가 공식 화면에서 처리", "kind": "human" },
+        { "id": "resume-issuance", "title": "사용자 완료 알림 뒤 현재 신청의 서류 접수·심사·발급 가능 상태를 확인하고 이어가기", "kind": "read" },
+        { "id": "human-certificate-secret", "title": "발급 화면과 저장 매체를 준비한 뒤 새 인증서 비밀번호·전자서명은 당사자가 처리", "kind": "human" },
+        { "id": "verify-certificate", "title": "공식 발급 완료와 선택한 Windows 저장소의 인증서 표시·유효기간·용도를 구분해 확인", "kind": "read" },
+        { "id": "return-to-task", "title": "원래 업무의 새 세션으로 복귀해 인증서 선택·인증 결과를 별도로 검증", "kind": "read" }
+      ]
+    },
+    {
+      "id": "kb-issue-or-reissue",
+      "title": "KB 사업자 공동인증서 발급·재발급 이어가기",
+      "description": "KB 경로와 발급·재발급 선택을 현재 세션에서 이어받습니다. 기존 인증서 폐기 영향까지 이미 설명되고 재발급이 명시적으로 허용되었다면 같은 허가를 다시 묻거나 복사 비교로 되돌리지 않습니다. 공식 기업 인증센터와 현재 발급·재발급 화면에서 일반 준비를 진행하고, 실제 본인 인증·OTP·새 인증서 비밀번호만 준비된 화면에서 당사자가 처리합니다. 저장 매체를 확인하고 USB가 없으면 현재 지원되는 Windows PC 저장을 준비해 이후 USB 복사로 이어갑니다. 실제 새 발급·재발급과 세움터 인증 성공은 아직 검증하지 않았습니다.",
+      "inputs": [
+        { "name": "requesterContext", "label": "해당 사업자와 신청 권한(실제 이름·번호 제외)", "required": true },
+        { "name": "issuanceDecision", "label": "세션에서 확정한 발급·재발급 선택과 기존 인증서 폐기 영향의 승인 범위", "required": true },
+        { "name": "storagePreference", "label": "선택한 PC·USB 저장 방식과 현재 장치 연결 여부", "required": false },
+        { "name": "returnTask", "label": "발급 뒤 이어갈 업무 또는 USB 복사", "required": false }
+      ],
+      "steps": [
+        { "id": "resume-approved-decision", "title": "KB 선택·기존 인증서 영향·이미 허용된 발급 범위를 이어받고 같은 허가를 반복하지 않음", "kind": "read" },
+        { "id": "open-kb-issuance", "title": "기존 Windows에서 KB 기업 공동인증서 발급·재발급 공식 화면 열기", "kind": "open" },
+        { "id": "inspect-current-form", "title": "현재 인증서 종류·신청 단계·필수 입력·오류를 읽고 일반 준비 진행", "kind": "read" },
+        { "id": "prepare-application", "title": "허용된 일반 정보와 기존 승인 범위의 동의를 처리하고 새 항목만 구분", "kind": "input" },
+        { "id": "human-authentication", "title": "준비된 화면의 비밀번호·본인 인증·OTP·OS 관리자 인증과 기존 승인 범위 밖 민감 권한만 당사자가 처리", "kind": "human" },
+        { "id": "verify-fee", "title": "선택 상품·용도·최종 수수료를 확인하고 비용 발생 시 기존 결제 승인 경계 적용", "kind": "payment" },
+        { "id": "prepare-storage", "title": "현재 발급 화면이 지원하는 Windows PC·연결 USB 저장 매체 확인", "kind": "read" },
+        { "id": "human-new-password", "title": "저장 화면을 준비한 뒤 새 인증서 비밀번호·전자서명은 당사자가 처리", "kind": "human" },
+        { "id": "verify-issued-certificate", "title": "발급 완료와 선택 저장소의 새 인증서 주체·용도·유효기간을 구분해 확인", "kind": "read" },
+        { "id": "continue-copy-or-task", "title": "USB가 있으면 복사·검증, 없으면 PC 보관 상태에서 나중에 USB 복사 재개", "kind": "read" }
+      ]
+    },
+    {
+      "id": "copy-certificate-to-usb",
+      "title": "새 공동인증서를 USB에 복사하고 대상 저장소에서 확인",
+      "description": "기존 Parallels Windows에서 사용자가 선택한 USB의 실제 연결·마운트를 확인하고 KB 공식 인증서 관리의 정상 복사 기능으로 새 인증서를 복사합니다. 원본과 대상의 주체·용도·유효기간을 확인하며, 암호는 실제 화면이 준비된 뒤 당사자가 입력합니다. 포맷·삭제·기존 인증서 덮어쓰기는 자동 수행하지 않습니다. USB가 없으면 현재 PC 저장 상태에서 나중에 이어갑니다. 복사 성공 안내와 USB 쪽 인증서 목록 확인을 구분하고, USB의 실제 전달은 사용자가 담당합니다. 실제 USB 복사 성공은 아직 검증하지 않았습니다.",
+      "inputs": [
+        { "name": "sourceContext", "label": "복사할 새 인증서와 원본 저장소 구분(개인키·암호·원문 제외)", "required": true },
+        { "name": "targetDevice", "label": "사용자가 선택한 USB와 현재 Windows 연결 상태", "required": false }
+      ],
+      "steps": [
+        { "id": "inspect-usb", "title": "Windows에서 실제 USB 마운트와 현재 선택할 대상 장치를 확인", "kind": "read" },
+        { "id": "open-certificate-manager", "title": "KB 공식 인증서 관리의 복사 화면 열기", "kind": "open" },
+        { "id": "verify-source", "title": "원본 저장소에서 새 인증서의 사업자 주체·용도·유효기간 확인", "kind": "read" },
+        { "id": "select-usb-destination", "title": "확인한 USB를 대상 매체로 선택하고 기존 파일·인증서 충돌 여부 확인", "kind": "tap" },
+        { "id": "human-copy-password", "title": "실제 복사 암호 화면이 표시되면 당사자가 직접 입력", "kind": "human" },
+        { "id": "copy-with-official-ui", "title": "KB 공식 복사 절차를 이어가며 포맷·삭제·덮어쓰기 요청은 자동 처리하지 않음", "kind": "tap" },
+        { "id": "verify-usb-certificate", "title": "USB 대상 저장소의 인증서 목록·보기에서 복사한 새 인증서 확인", "kind": "read" },
+        { "id": "handoff-usb", "title": "복사 검증 범위를 알리고 USB 실제 전달은 사용자가 담당하도록 마무리", "kind": "read" }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "사용자가 실제로 처리해야 하는 화면까지 탐색·안내·일반 폼 준비를 먼저 진행합니다. 이미 명확한 은행·사업자 형태·발급 목적·승인 범위는 다시 묻지 않고, 진행에 꼭 필요한 미확인 정보만 질문합니다.",
+    "비밀번호·인증서 암호·OTP·보안매체·생체 인증·CAPTCHA와 신분증·주민등록번호를 이용한 본인 확인은 당사자가 공식 화면에서 직접 처리합니다. 원문을 대화·플레이북·발자국·공개 캡처에 요청하거나 저장하지 않습니다.",
+    "현재 발급 요청과 기존 승인에 포함되는 필수 동의·공식 프로그램 설치·기본 연동 설정은 같은 범위에서 이어갑니다. 새 화면이나 설치 확인 버튼이 나타났다는 이유만으로 다시 허가를 묻지 않습니다. 실제 OS 관리자 암호·본인 인증과 기존 범위를 벗어난 민감 권한만 해당 화면에서 당사자에게 넘깁니다. 다른 업무의 승인을 유료 상품·민감 증명서 제출의 승인으로 확대하지 않으며 선택 개인정보·마케팅은 자동 동의하지 않습니다.",
+    "수수료가 있는 상품은 실제 용도·기간·최종 금액을 확인합니다. Windows 자동 결제는 confirm_payment의 유효한 승인 1회와 결제 클릭 1회의 기존 경계를 따르며, 결제 인증은 당사자가 수행합니다. 은행용 또는 범용 상품을 가격만으로 자동 확정하지 않습니다.",
+    "기존 인증서의 삭제·폐기·재발급은 임의로 진행하지 않습니다. 기존 인증서 폐기 영향이 설명되고 재발급이 이미 명시적으로 허용되었으면 그 결정을 이어받아 같은 허가를 다시 묻지 않습니다. 개인 인증서·다른 가족이나 사업자의 인증서를 대신 사용하지 않습니다.",
+    "정부24 전자문서지갑·신분증·계좌 인증 등 민감 단계는 기관의 실제 화면과 제출처를 준비한 뒤 필요한 한 가지 행동만 당사자에게 넘깁니다. 완료 후 민감값이 없는 새 상태 화면으로 돌아와 이어갑니다.",
+    "profile_fill의 eais_business·eais_pass는 세움터 전용입니다. 발급기관·은행·정부24 양식에 재사용하거나 검증 실패를 일반 입력으로 우회하지 않습니다. 인증서 개인키·PFX/P12·발급 비밀을 에이전트에 전달하지 않습니다.",
+    "USB 복사는 사용자가 선택한 장치를 Windows에서 확인한 뒤 은행 공식 UI로 진행합니다. 개인키·인증서 파일을 대화·공개 산출물·에이전트 저장소로 중계하지 않습니다. USB 포맷·삭제·기존 인증서 덮어쓰기는 자동 수행하지 않으며 실제 USB 전달은 사용자가 담당합니다."
+  ],
+  "guide": "guide.md"
+}

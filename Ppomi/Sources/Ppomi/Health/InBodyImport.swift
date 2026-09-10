@@ -22,13 +22,13 @@ enum InBodyImport {
     static func parse(_ raw: String) throws -> [InBodyReading] {
         let text = raw.replacingOccurrences(of: "\u{00a0}", with: " ")
         guard text.range(of: "인바디|InBody", options: [.regularExpression, .caseInsensitive]) != nil else {
-            throw LifeError.validation("인바디 결과 화면을 확인할 수 없습니다. 결과관리의 목록이나 측정 상세를 열어 주세요.")
+            throw LifeError.validation("인바디 결과 화면 아님 · 결과관리 목록·측정 상세 열기")
         }
         let datePattern = #"(?<!\d)(\d{4}|\d{2})[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})\s*(?:\([^)\n]{1,5}\))?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?(?![\d:])"#
         let re = try NSRegularExpression(pattern: datePattern)
         let ns = text as NSString
         let matches = re.matches(in: text, range: NSRange(location: 0, length: ns.length))
-        guard !matches.isEmpty else { throw LifeError.validation("측정 날짜와 시각이 보이지 않습니다. 날짜가 있는 결과 상세를 열어 주세요.") }
+        guard !matches.isEmpty else { throw LifeError.validation("측정 날짜·시각 없음 · 날짜 있는 상세 열기") }
         var readings: [InBodyReading] = []
         for (i, match) in matches.enumerated() {
             let parts = (1...5).map { Int(ns.substring(with: match.range(at: $0)))! }
@@ -47,7 +47,7 @@ enum InBodyImport {
                 let values = mr.matches(in: section, range: NSRange(location: 0, length: sub.length))
                     .compactMap { Double(sub.substring(with: $0.range(at: 1))) }
                 guard let value = values.first else { continue }
-                guard Set(values).count == 1 else { throw LifeError.validation("\(f.title)에 서로 다른 값이 보입니다. 측정 한 건의 상세 화면을 열어 주세요.") }
+                guard Set(values).count == 1 else { throw LifeError.validation("\(f.title) 값 불일치 · 측정 1건 상세 열기") }
                 let metric = LifeMetric(code: f.code, title: f.title, value: value, unit: f.unit)
                 try metric.validate(); metrics.append(metric)
             }
@@ -58,7 +58,7 @@ enum InBodyImport {
                 .map { "InBody " + sub.substring(with: $0.range(at: 1)).uppercased() }
             readings.append(.init(date: date, metrics: metrics, device: device))
         }
-        guard !readings.isEmpty else { throw LifeError.validation("날짜와 연결된 체중·체성분 수치를 읽지 못했습니다.") }
+        guard !readings.isEmpty else { throw LifeError.validation("날짜 연결 수치 없음") }
         return readings
     }
 
@@ -154,7 +154,7 @@ enum InBodyImport {
                 _ = try store.save(record); inserted += 1
             }
         }
-        return "새 측정 \(inserted)건 · 항목 보완 \(enriched)건 · 기존 기록 \(duplicates)건" + (conflicts > 0 ? " · 값 충돌 \(conflicts)건은 변경하지 않았습니다" : "")
+        return "새 측정 \(inserted)건 · 항목 보완 \(enriched)건 · 기존 기록 \(duplicates)건" + (conflicts > 0 ? " · 값 충돌 \(conflicts)건 유지" : "")
     }
 
     private static func normalizeDevice(_ device: String) -> String {

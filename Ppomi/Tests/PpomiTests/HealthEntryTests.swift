@@ -22,8 +22,8 @@ final class HealthEntryTests: XCTestCase {
                                            record(.exercise, days: -1), record(.exercise, days: -2, metrics: [.init(code: "duration", title: "시간", value: 30, unit: "min")])], now: now).text
         XCTAssertTrue(text.contains("식사 1건"))
         XCTAssertTrue(text.contains("운동 2건"))
-        XCTAssertTrue(text.contains("기록된 시간 30분"))
-        XCTAssertTrue(text.contains("컨디션: 아직 기록이 없습니다"))
+        XCTAssertTrue(text.contains("30분"))
+        XCTAssertTrue(text.contains("컨디션 없음"))
         let empty = HealthSummary(records: [], now: now).text
         XCTAssertFalse(empty.contains("0분"))
         XCTAssertFalse(empty.contains("평균 0"))

@@ -10,14 +10,13 @@ final class WorkbenchPointerTests: XCTestCase {
         defer { panel.close() }
         let host = WorkbenchHostingView(rootView: Text("Records"))
         panel.contentView = host
-        panel.agentWindowID = 52
+        panel.phoneID = 52
         let event = try mouseDown(in: panel)
-        XCTAssertNil(panel.phoneID)
         assertFocusPolicy(host, docked: true)
         XCTAssertTrue(host.shouldDelayWindowOrdering(for: event))
         XCTAssertTrue(host.acceptsFirstMouse(for: event))
         XCTAssertFalse(panel.isVisible)
-        panel.agentWindowID = nil
+        panel.phoneID = nil
         assertFocusPolicy(host, docked: false)
     }
 

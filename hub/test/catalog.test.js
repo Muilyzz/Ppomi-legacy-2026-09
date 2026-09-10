@@ -176,3 +176,26 @@ test('identifiers and versions must match in full, including rejection of a trai
   badValues.push(manifest({ aliases: ['SAMPLE_APP'], collection: { key: 'SAMPLE_APP\n', account: '계좌' } }));
   for (const value of badValues) assert.throws(() => validateManifest(value), /Invalid catalog:/);
 });
+
+test('browser launch metadata preserves legacy packages and validates native navigation URLs', async t => {
+  const { source } = await fixture(t);
+  for (const launch of [{ search: 'sample' }, { search: 'https://example.com/', target: null },
+    { search: 'https://example.com/path?q=public#section', target: 'browser' }]) {
+    const value = manifest({ launch });
+    assert.equal(validateManifest(value), value);
+  }
+  const value = manifest({ launch: { search: 'https://example.com/', target: 'browser' } });
+  await writePackage(source, value);
+  assert.deepEqual((await call(createCatalogHandler(source))).body.playbooks[0].manifest.launch, value.launch);
+  for (const search of ['sample', 'file:///tmp/a', 'javascript:alert(1)', 'https://',
+    'https://user:secret@example.com/', 'https://@example.com/', 'https://example.com/\n',
+    'https://example.com/a b', 'https:example.com', 'https:\\example.com']) {
+    assert.throws(() => validateManifest(manifest({ launch: { search, target: 'browser' } })), /browser launch.search/);
+  }
+  assert.throws(() => validateManifest(manifest({ launch: { search: 'sample', target: 'shell' } })), /launch.target/);
+  const windows = manifest({ launch: { search: 'https://example.com/exe', target: 'windows' } });
+  assert.equal(validateManifest(windows), windows);
+  assert.throws(() => validateManifest(manifest({ launch: { search: 'https://user:secret@example.com/', target: 'windows' } })), /windows launch.search/);
+  assert.throws(() => validateManifest(manifest({ ...windows, collection: { key: 'SAMPLE_APP', account: '계좌' } })), /phone collection/);
+  assert.throws(() => validateManifest(manifest({ ...value, collection: { key: 'SAMPLE_APP', account: '계좌' } })), /phone collection/);
+});

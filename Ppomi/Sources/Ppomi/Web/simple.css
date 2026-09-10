@@ -1,0 +1,73 @@
+/* Web/simple.css — 꾸밈 최소본. 밝은 바탕, 회색 헤어라인, 숫자는 tabular, 색은 '파싱 안 됨' 빨강 하나. theme.css(검은 계기판)와 같은 훅 클래스를 쓰는
+   두 번째 스킨이라 둘 중 하나만 끼워 넣는다. Pretendard 없음(토큰/@font-face를 안 끼우는 시스템 폰트 'plain' 스킨 — 의도). 각 스킨은 혼자서 완결이다(공통 규칙을 나누지 않는다 — 스킨 하나만 보면 되게). */
+:root{color-scheme:light}
+html,body{margin:0;background:#fff;color:#111}
+body{font:14px/1.5 -apple-system,'Apple SD Gothic Neo',sans-serif;max-width:720px;padding:16px 20px 24px;box-sizing:border-box}
+h1,h2,h3{font:inherit;margin:0}
+p{margin:0 0 12px}
+button{font:inherit}
+::selection{background:#ddd}
+
+/* ---- 글자 단 */
+.key{font-size:18px;font-weight:500;font-variant-numeric:tabular-nums}
+.lbl,.meta{font-size:12px;color:#777}
+.mute{color:#777}
+.n{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+.strong{font-weight:500}
+
+/* ---- 섹션 라벨: 회색 글자 + 오른쪽으로 헤어라인 */
+.sec{display:flex;align-items:center;gap:12px;margin:24px 0 8px;font-size:12px;color:#777;white-space:nowrap}
+.sec:first-child{margin-top:0}
+.sec::after{content:'';flex:1;height:1px;background:#e5e5e5;order:1}
+.sec .r{order:2;display:inline-flex;gap:12px;align-items:center}
+.sec .r i{display:inline-block;width:10px;height:10px;box-sizing:border-box;vertical-align:-1px;margin-right:4px}
+
+/* ---- 글자 내비: 선택된 것만 진하게 */
+.nav{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:#777}
+.nav>*{cursor:pointer;background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;white-space:nowrap}
+.nav>.on{color:#111;font-weight:500}
+.nav button:focus-visible,.entry:focus-visible,.ev-box:focus-visible{outline:2px solid #111;outline-offset:2px}
+
+/* ---- 표 · 카드 */
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:5px 8px;border-bottom:1px solid #e5e5e5;text-align:left;vertical-align:top;line-height:18px}
+th{font-weight:500;color:#777;font-size:12px}
+td.n,th.n{text-align:right}
+.card{border:1px solid #e5e5e5;border-radius:6px;padding:10px 12px;margin:8px 0}
+.entry{border:0;background:none;padding:0;color:inherit;font:inherit;text-align:inherit;cursor:pointer}
+tr[data-event],tr[data-record]{cursor:pointer}
+tr[data-event]:hover td,tr[data-record]:hover td,tr[aria-selected="true"] td{background:#f4f4f4}
+
+/* ---- 분개(journal.js) */
+.jtitle{display:flex;align-items:baseline;gap:8px;margin:0 0 4px}
+.jnav{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;margin:8px 0 12px}
+.journal tfoot th{border-top:1px solid #999;border-bottom:0;color:#111;font-size:13px;font-weight:500}
+.journal td:nth-child(3),.journal th:nth-child(3){border-left:1px solid #e5e5e5;padding-left:12px}
+.entries td:first-child{white-space:nowrap}
+
+/* ---- 증거(evidence.js): 종이·근거 상자·깜박임. 위치·크기·잉크색은 inline(자료) */
+.ev{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.ev-paper{flex:none;background:#fff;color:#222;border:1px solid #ddd;box-sizing:content-box;overflow:hidden}
+.ev-word{font-family:-apple-system,'Apple SD Gothic Neo',sans-serif}
+.ev-box{border:1px solid transparent;box-sizing:border-box;cursor:pointer}
+.ev-box.warn{border-style:dashed;border-color:#999}
+.ev-box.bad{border-color:#d33;background:rgba(221,51,51,.10)}
+.ev-box.hit{outline:2px solid #111;outline-offset:2px}
+.ev-peek{border:1px solid #ddd;box-sizing:border-box;background:#fff;animation:blink 1.6s ease-in-out infinite}
+@keyframes blink{0%,40%{opacity:1} 50%,90%{opacity:0} 100%{opacity:1}}
+.ev-records{flex:1;min-width:260px;overflow-x:auto}
+.ev-tags{row-gap:4px}
+.ev-table th,.ev-table td{white-space:nowrap}
+
+/* ---- 값 종류 뷰(facts.js): SVG 기하는 자료(inline), 여기는 꾸밈. 출처 등급은 선 무늬로 겹친다 — 추정은 긴 점선, 개략·AI 추정은 짧은 점선 */
+.fx svg{display:block;width:100%;height:auto;margin:4px 0} .fx svg text{fill:currentColor}
+.fx-node rect,.fx-span,.fx-place{cursor:pointer}
+.fx-node.deeper rect{stroke-width:1.5} .fx-node.hit rect{fill-opacity:.3}
+.fx-span.hit rect,.fx-span.hit circle,.fx-place.hit circle,.fx-place.hit polygon{fill-opacity:.7}
+.prov-estimated rect,.prov-estimated circle,.prov-estimated polygon{stroke-dasharray:4 3}
+.prov-schematic rect,.prov-schematic circle,.prov-schematic polygon,.prov-aiEstimate rect,.prov-aiEstimate circle,.prov-aiEstimate polygon,.prov-derived rect,.prov-derived circle,.prov-derived polygon{stroke-dasharray:1 3}
+small.prov{color:inherit;opacity:.7} small.prov.prov-estimated,small.prov.prov-aiEstimate,small.prov.prov-schematic,small.prov.prov-derived{font-style:italic}
+meter{width:72px;height:10px;vertical-align:middle}
+.fx{overflow-x:auto} .fx-table th,.fx-table td{white-space:nowrap}   /* 넓은 표는 제 칸 안에서 가로 스크롤 */
+/* ---- 절차 뷰(playbook.js): 명세 나무·발자국 그래프. 기하·잉크는 SVG 속성(자료), 여기는 크기·커서·가로 스크롤뿐 */
+.pb svg{display:block;width:100%;height:auto;margin:4px 0} .pb-step,.pb-screen,.pb-walk{cursor:pointer} .pb{overflow-x:auto}

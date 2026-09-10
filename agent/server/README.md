@@ -1,0 +1,25 @@
+# Ephemeral agent backend
+
+`handleRequest(Request): Promise<Response>` implements `../PROTOCOL.md`. Runtime dependencies are only Node's fetch and crypto APIs. `handler.test.ts` runs offline with `tsx --test server/*.test.ts`.
+
+Required server-only environment:
+
+- `SUPABASE_URL`: exact `https://<20-letter-project-ref>.supabase.co`, without a trailing slash.
+- `SUPABASE_ANON_KEY` (or `SUPABASE_PUBLISHABLE_KEY`): project public key. Administrative keys are refused. Every request verifies the caller's Supabase access token with `ppomi_context`, and memory RPCs use that same token.
+- `OPENAI_API_KEY`: ordinary server API key, used only to mint a 60-second Realtime client secret. It is never returned to the client.
+- `PPOMI_AGENT_MEMORY_KEY`: **32 random bytes encoded as canonical base64**, protected as a server deployment secret. Preserve this key in a secure recovery system: replacing or losing it prevents decrypting existing records. Do not rotate it by simply overwriting the environment variable; this initial format needs an explicit re-encryption/key-migration procedure.
+- Optional `OPENAI_REALTIME_MODEL`, default `gpt-realtime-2.1`.
+
+`/v1/session` accepts an optional `mode` (`text` or `voice`); omitted mode is voice. Voice credentials enable input transcription (the call's log shows both sides); text credentials are configured for text output without transcription or turn detection. The API accepts no chat messages or transcripts.
+
+The Vercel function entry is `api/agent.ts`. `vercel.json` routes native `/v1/*` requests to this single function with the original path. No browser CORS access is enabled; the native host adds the device token and the page never receives that token. The bundled page must set tracing disabled as well: ephemeral Realtime session configuration can be changed by the client. Ending a session closes the client transport; credential expiry alone does not terminate an already connected session.
+
+Apply `supabase/migrations/20260909130000_ephemeral_agent_memory.sql` before using memory endpoints. The separate `memory-regression.sql` is a rollback-only integration test for existing Supabase auth roles and the shared-device schema. It creates isolated synthetic accounts; it does not print memory ciphertext or plaintext. The app server uses no `service_role` key.
+
+Only distilled memory payloads are durable. `kind`, `text`, epistemic `source`, `confidence`, and `selection: automatic` are inside AES-256-GCM ciphertext. Workspace, record, replacement IDs and record times remain database metadata. A keyed HMAC over the bound canonical payload permits exact same-ID retries despite fresh random GCM nonces, while changed input conflicts. GCM authenticated data binds workspace, record and replacement IDs. The server can decrypt; this is **not E2EE**. Existing client-encrypted accounting/record vault data is untouched.
+
+Replacement creates a new row and retains the old row. The current list returns at most 50 live revision heads. Explicit deletion clears the selected record's ciphertext and every ancestor revision's ciphertext atomically, retaining only opaque tombstone metadata and keyed digests. It never restores its predecessor. This removes payloads from the live table, not guaranteed physical erasure from infrastructure backups. Current RPCs are workspace scoped; active member devices can create replacements or delete memories in their own workspace.
+
+No voice-session, conversation or transcript table is created. The handler has no filesystem persistence, conversation API, request/error body logging, or tracing calls. All responses use `Cache-Control: no-store`. The server calls OpenAI with `tracing: null`; voice sessions transcribe input so the call log can show what was said (text sessions do not). This does not assert zero data retention by OpenAI or deployment providers; provider retention/account settings remain separate. Infrastructure access logs must not be configured to capture headers or request/response bodies.
+
+The memory API rejects known credential formats, credential assignments, obvious transcript blocks, unknown fields and text over 2,000 characters. These checks cannot classify every secret or validate a model's assertions. The agent must omit casual dialogue and unnecessary sensitive details, label AI inference as inference, and never create accounting observations or postings. Durable memory is untrusted context, not executable instructions. Saving has no effect unless the explicit tool call succeeds; disconnecting does not trigger a save.

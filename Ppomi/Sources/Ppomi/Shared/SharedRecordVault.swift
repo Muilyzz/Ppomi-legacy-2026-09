@@ -1,0 +1,265 @@
+import Foundation
+import CryptoKit
+import Security
+
+enum SharedRecordError: Error, LocalizedError {
+    case unavailable, key, invalid, conflict, sourceChanged, oversized
+    var errorDescription: String? {
+        switch self {
+        case .unavailable: return "서버 기록을 확인하지 못했습니다. 마지막 서버 기록을 유지합니다."
+        case .key: return "이 Mac의 기록 암호화 키를 읽지 못했습니다. 원본 자료는 보존되어 있습니다."
+        case .invalid: return "서버 기록의 암호화·무결성 검증에 실패했습니다."
+        case .conflict: return "서버 기록 버전이 달라졌습니다. 자동으로 덮어쓰지 않았습니다."
+        case .sourceChanged: return "수집 원본 경로가 바뀌었습니다. 기존 서버 기록에 자동 병합하지 않습니다."
+        case .oversized: return "암호화할 기록이 현재 전송 크기 한도를 넘었습니다."
+        }
+    }
+}
+
+/// The server owns committed revisions. Local files contain ciphertext and public
+/// metadata only. A source adapter may publish, but readers never publish on read.
+final class SharedRecordVault {
+    static let names = ["ledger", "evidence", "accounting", "spatial", "health", "playbooks"]
+    static let rpcNames: Set<String> = ["ppomi_record_get", "ppomi_record_put", "ppomi_record_blob_get", "ppomi_record_blob_put"]
+    static let shared = SharedRecordVault()
+    static var enabled: Bool {
+        if CommandLine.arguments.first?.contains(".xctest") == true { return false }
+        return UserDefaults.standard.bool(forKey: "sharedRecordsEnabled.v1")
+    }
+    struct Configuration: Codable, CustomStringConvertible, CustomDebugStringConvertible {
+        var workspaceID: String
+        var deviceID: String
+        var keyID: String
+        var key: Data
+        var records: [String: String]
+        var sourcePath: String
+        var description: String { "SharedRecordVault.Configuration(redacted)" }
+        var debugDescription: String { description }
+    }
+    struct Head: Codable, Equatable {
+        var record_id: String
+        var workspace_id: String
+        var writer_device_id: String
+        var key_id: String
+        var version: Int64
+        var chunk_ids: [String]
+        var updated_at: String
+    }
+    struct Cached: Codable {
+        var head: Head
+        var sourceDigest: String?
+        var confirmedAt: Date
+    }
+    struct Pending: Codable {
+        var operationID: String
+        var expectedVersion: Int64
+        var head: Head
+        var sourceDigest: String
+    }
+    typealias RPC = (String, [String: Any]) throws -> Any
+    private let lock = NSRecursiveLock()
+    private let rpc: RPC
+    private let loadConfiguration: () throws -> Configuration
+    private let directory: URL
+    private var memory: [String: (Head, Data)] = [:]
+    static let defaultDirectory = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/Ppomi/Private/shared-records", isDirectory: true)
+
+    init(directory: URL = defaultDirectory,
+         configuration: @escaping () throws -> Configuration = SharedRecordVault.loadKey,
+         rpc: @escaping RPC = { try SharedServerClient.shared.rpc($0, $1) }) {
+        self.directory = directory; self.loadConfiguration = configuration; self.rpc = rpc
+    }
+    private func exclusive<T>(_ body: () throws -> T) throws -> T {
+        lock.lock(); defer { lock.unlock() }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        // App and CLI may coexist. One private process-shared lock serializes the outbox.
+        let fd = Darwin.open(directory.appendingPathComponent("access.lock").path, O_CREAT | O_RDWR | O_NOFOLLOW, 0o600)
+        guard fd >= 0 else { throw SharedRecordError.unavailable }
+        defer { Darwin.close(fd) }
+        guard flock(fd, LOCK_EX) == 0 else { throw SharedRecordError.unavailable }
+        defer { flock(fd, LOCK_UN) }
+        return try body()
+    }
+    private func verify(_ config: Configuration) throws {
+        guard config.key.count == 32, let value = try rpc("ppomi_context", [:]) as? [String: Any],
+              let workspace = value["workspace"] as? [String: Any], workspace["id"] as? String == config.workspaceID,
+              let device = value["device"] as? [String: Any], device["id"] as? String == config.deviceID else { throw SharedRecordError.key }
+    }
+    func read(_ name: String, refresh: Bool = true) throws -> (data: Data, version: Int64, confirmedAt: Date) {
+        try exclusive {
+            let config = try loadConfiguration(), id = try recordID(name, config)
+            var cached = try readCache(id)
+            if refresh {
+                try verify(config)
+                guard let head = try remoteHead(id) else { throw SharedRecordError.unavailable }
+                try validate(head, id: id, config: config)
+                if let cached, head.version < cached.head.version { throw SharedRecordError.invalid }
+                let data = try plaintext(head, config: config, network: true)
+                let next = Cached(head: head, sourceDigest: cached?.head == head ? cached?.sourceDigest : nil, confirmedAt: Date())
+                try writeMetadata(next, id + ".json")
+                cached = next
+                return (data, head.version, next.confirmedAt)
+            }
+            guard let cached else { throw SharedRecordError.unavailable }
+            try validate(cached.head, id: id, config: config)
+            return (try plaintext(cached.head, config: config, network: false), cached.head.version, cached.confirmedAt)
+        }
+    }
+    /// An uncertain publication retains the exact ciphertext, operation UUID and
+    /// expected version. Retrying transmits data only, never device actions.
+    @discardableResult func publish(_ name: String, data: Data) throws -> Int64 {
+        try exclusive {
+            let config = try loadConfiguration(), id = try recordID(name, config)
+            try verify(config)
+            if let pending: Pending = try readMetadata(id + ".pending") {
+                try commit(pending, config: config)
+            }
+            let previous = try readCache(id), head = try remoteHead(id)
+            if let previous, head?.version != previous.head.version { throw SharedRecordError.conflict }
+            if let head { try validate(head, id: id, config: config) }
+            let digest = Self.digest(data, key: config.key)
+            if let previous, previous.sourceDigest == digest { return previous.head.version }
+            // Existing remote data cannot be initialized or replaced without its confirmed base.
+            if head != nil && previous == nil { throw SharedRecordError.conflict }
+            guard (head?.version ?? 0) < Int64.max else { throw SharedRecordError.invalid }
+            let version = (head?.version ?? 0) + 1
+            let chunks = try Self.seal(data, configuration: config, recordID: id, version: version)
+            let hashes = chunks.map(Self.hash)
+            for (hash, bytes) in zip(hashes, chunks) { try writeBytes(bytes, hash + ".blob") }
+            let pending = Pending(operationID: UUID().uuidString.lowercased(), expectedVersion: version - 1,
+                head: Head(record_id: id, workspace_id: config.workspaceID, writer_device_id: config.deviceID,
+                    key_id: config.keyID, version: version, chunk_ids: hashes, updated_at: ""), sourceDigest: digest)
+            try writeMetadata(pending, id + ".pending")
+            try commit(pending, config: config)
+            return version
+        }
+    }
+    private func commit(_ pending: Pending, config: Configuration) throws {
+        for hash in pending.head.chunk_ids {
+            let bytes = try Data(contentsOf: directory.appendingPathComponent(hash + ".blob"))
+            guard Self.hash(bytes) == hash else { throw SharedRecordError.invalid }
+            _ = try rpc("ppomi_record_blob_put", ["p_hash": hash, "p_data": bytes.base64EncodedString()])
+        }
+        _ = try rpc("ppomi_record_put", ["p_record_id": pending.head.record_id, "p_expected_version": pending.expectedVersion,
+             "p_operation_id": pending.operationID, "p_key_id": pending.head.key_id, "p_chunk_ids": pending.head.chunk_ids])
+        // Always GET and decrypt server-selected chunks before presenting a committed value.
+        guard let current = try remoteHead(pending.head.record_id), current.version == pending.head.version,
+              current.chunk_ids == pending.head.chunk_ids else { throw SharedRecordError.conflict }
+        try validate(current, id: current.record_id, config: config)
+        memory.removeValue(forKey: current.record_id)
+        let verified = try plaintext(current, config: config, network: true, forceDownload: true)
+        guard Self.digest(verified, key: config.key) == pending.sourceDigest else { throw SharedRecordError.invalid }
+        try writeMetadata(Cached(head: current, sourceDigest: pending.sourceDigest, confirmedAt: Date()), current.record_id + ".json")
+        try FileManager.default.removeItem(at: directory.appendingPathComponent(current.record_id + ".pending"))
+    }
+    private func remoteHead(_ id: String) throws -> Head? {
+        guard let value = try rpc("ppomi_record_get", ["p_record_id": id]) as? [String: Any] else { throw SharedRecordError.invalid }
+        guard value["found"] as? Bool == true else { return nil }
+        return try JSONDecoder().decode(Head.self, from: JSONSerialization.data(withJSONObject: value))
+    }
+    private func validate(_ head: Head, id: String, config: Configuration) throws {
+        guard head.record_id == id, head.workspace_id == config.workspaceID, head.writer_device_id == config.deviceID,
+              head.key_id == config.keyID, head.version > 0, (1...1024).contains(head.chunk_ids.count),
+              head.chunk_ids.allSatisfy({ $0.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil }) else { throw SharedRecordError.invalid }
+    }
+    private func plaintext(_ head: Head, config: Configuration, network: Bool, forceDownload: Bool = false) throws -> Data {
+        if !forceDownload, let cached = memory[head.record_id], cached.0 == head { return cached.1 }
+        var chunks: [Data] = []
+        for hash in head.chunk_ids {
+            let path = directory.appendingPathComponent(hash + ".blob")
+            var bytes = !forceDownload ? try? Data(contentsOf: path) : nil
+            if bytes.map(Self.hash) != hash {
+                guard network, let blob = try rpc("ppomi_record_blob_get", ["p_hash": hash]) as? [String: Any],
+                      blob["hash"] as? String == hash, let encoded = blob["data"] as? String,
+                      let downloaded = Data(base64Encoded: encoded), Self.hash(downloaded) == hash else { throw SharedRecordError.invalid }
+                bytes = downloaded
+                try writeBytes(downloaded, hash + ".blob")
+            }
+            guard let bytes, bytes.count <= 409600 else { throw SharedRecordError.invalid }
+            chunks.append(bytes)
+        }
+        let data = try Self.open(chunks, configuration: config, recordID: head.record_id, version: head.version)
+        memory[head.record_id] = (head, data)
+        return data
+    }
+    static func seal(_ data: Data, configuration c: Configuration, recordID: String, version: Int64) throws -> [Data] {
+        guard data.count <= 256 * 1024 * 1024 else { throw SharedRecordError.oversized }
+        let compressed = try (data as NSData).compressed(using: .lzfse) as Data
+        var chunks: [Data] = []
+        for start in stride(from: 0, to: max(compressed.count, 1), by: 400000) {
+            let part = compressed.subdata(in: start..<min(start + 400000, compressed.count))
+            let aad = Self.aad(c, recordID, version, chunks.count)
+            guard let combined = try AES.GCM.seal(part, using: SymmetricKey(data: c.key), authenticating: aad).combined else { throw SharedRecordError.invalid }
+            chunks.append(combined)
+        }
+        guard chunks.count <= 1024 else { throw SharedRecordError.oversized }
+        return chunks
+    }
+    static func open(_ chunks: [Data], configuration c: Configuration, recordID: String, version: Int64) throws -> Data {
+        do {
+            var compressed = Data()
+            for (index, chunk) in chunks.enumerated() {
+                compressed.append(try AES.GCM.open(AES.GCM.SealedBox(combined: chunk), using: SymmetricKey(data: c.key),
+                    authenticating: aad(c, recordID, version, index)))
+            }
+            let result = try (compressed as NSData).decompressed(using: .lzfse) as Data
+            guard result.count <= 256 * 1024 * 1024 else { throw SharedRecordError.oversized }
+            return result
+        } catch { throw SharedRecordError.invalid }
+    }
+    private static func aad(_ c: Configuration, _ id: String, _ version: Int64, _ part: Int) -> Data {
+        Data("ppomi-record-v1|\(c.workspaceID)|\(c.keyID)|\(id)|\(version)|\(part)".utf8)
+    }
+    static func hash(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
+    private static func digest(_ data: Data, key: Data) -> String { HMAC<SHA256>.authenticationCode(for: data, using: SymmetricKey(data: key)).map { String(format: "%02x", $0) }.joined() }
+    private func recordID(_ name: String, _ config: Configuration) throws -> String {
+        guard let id = config.records[name], UUID(uuidString: id) != nil else { throw SharedRecordError.invalid }
+        return id
+    }
+    private func readCache(_ id: String) throws -> Cached? { try readMetadata(id + ".json") }
+    private func readMetadata<T: Decodable>(_ name: String) throws -> T? {
+        let url = directory.appendingPathComponent(name)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return try JSONDecoder().decode(T.self, from: Data(contentsOf: url))
+    }
+    private func writeMetadata<T: Encodable>(_ value: T, _ name: String) throws { try writeBytes(JSONEncoder().encode(value), name) }
+    private func writeBytes(_ data: Data, _ name: String) throws {
+        let url = directory.appendingPathComponent(name)
+        // Class C, not A: the vault is written by background work while the Mac may be locked; class A (complete) refuses
+        // to create files whenever the keybag is locked (EPERM from mktemp). The blob is ciphertext with 0600 permissions.
+        try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+    }
+    static func prepareKey() throws -> Configuration {
+        if let existing = try keyData() { return try JSONDecoder().decode(Configuration.self, from: existing) }
+        guard let context = try SharedServerClient.shared.rpc("ppomi_context", [:]) as? [String: Any],
+              let workspace = context["workspace"] as? [String: Any], let workspaceID = workspace["id"] as? String,
+              let device = context["device"] as? [String: Any], let deviceID = device["id"] as? String else { throw SharedRecordError.key }
+        let config = Configuration(workspaceID: workspaceID, deviceID: deviceID, keyID: UUID().uuidString.lowercased(),
+            key: SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) },
+            records: Dictionary(uniqueKeysWithValues: names.map { ($0, UUID().uuidString.lowercased()) }),
+            sourcePath: URL(fileURLWithPath: AppSettings.dbPath).standardizedFileURL.path)
+        var query = keyQuery
+        query[kSecValueData as String] = try JSONEncoder().encode(config)
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        guard SecItemAdd(query as CFDictionary, nil) == errSecSuccess else { throw SharedRecordError.key }
+        return config
+    }
+    static func loadKey() throws -> Configuration {
+        guard let data = try keyData() else { throw SharedRecordError.key }
+        return try JSONDecoder().decode(Configuration.self, from: data)
+    }
+    private static var keyQuery: [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "com.ppomi.records.vault.v1",
+         kSecAttrAccount as String: NSUserName(), kSecAttrSynchronizable as String: false]
+    }
+    private static func keyData() throws -> Data? {
+        var query = keyQuery; query[kSecReturnData as String] = true; query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess, let data = result as? Data else { throw SharedRecordError.key }
+        return data
+    }
+}

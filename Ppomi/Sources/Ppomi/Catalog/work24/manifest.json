@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "id": "work24",
+  "name": "고용24",
+  "version": "0.1.0",
+  "aliases": ["work24", "고용노동부 고용24", "work24.go.kr", "고용보험", "워크넷", "HRD-Net"],
+  "launch": { "search": "https://www.work24.go.kr/", "target": "browser" },
+  "capabilities": [
+    {
+      "id": "unemployment-recognition",
+      "title": "실업급여 실업인정 인터넷 신청",
+      "description": "Mac Chrome에서 실업급여 → 실업인정 인터넷 신청 진입까지 준비하고 로그인 인증은 당사자에게 넘깁니다. 실업인정일 당일 제출 화면·구직활동 입력·제출 완료는 아직 검증하지 않았으며, 제출은 당사자 확인 뒤 1회만 합니다. 인증서·보안프로그램에 막히면 Parallels Windows로 이어갑니다.",
+      "inputs": [
+        { "name": "recognitionDate", "label": "실업인정일(당일 여부)", "required": true },
+        { "name": "jobActivities", "label": "이번 회차 구직활동 내역 요약", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.work24.go.kr/ (browser_open · Mac Chrome)", "kind": "open" },
+        { "id": "step-2", "title": "⎋서비스 중단 안내·비밀번호 팝업", "kind": "close" },
+        { "id": "step-3", "title": "⊙실업급여 → 실업인정 인터넷 신청", "kind": "tap" },
+        { "id": "step-4", "title": "👤로그인(개인 탭: 아이디|간편인증|공동인증서) 준비 → 인증만 당사자", "kind": "human" },
+        { "id": "step-5", "title": "📝신청 가능 여부·실업인정일·제출 시간창 읽기", "kind": "read" },
+        { "id": "step-6", "title": "⌨구직활동 내역(사용자가 준 내용만)", "kind": "input" },
+        { "id": "step-7", "title": "✋제출 확인(내용 요약 1줄) → 제출 1회", "kind": "human" },
+        { "id": "step-8", "title": "📝접수 결과·다음 실업인정일 보고", "kind": "read" }
+      ]
+    },
+    {
+      "id": "insurance-history",
+      "title": "고용보험 가입이력 조회",
+      "description": "로그인 뒤 피보험자격 이력내역서(가입이력) 조회 화면을 찾아 사업장명·취득일·상실일을 읽어 보고합니다. 공개 홈 메뉴에는 항목이 없어 마이페이지·통합검색·고용보험(ei.work24.go.kr) 개인서비스 경로는 미검증입니다. 무료.",
+      "inputs": [
+        { "name": "period", "label": "조회 기간(기본 전체)", "required": false },
+        { "name": "output", "label": "화면 조회 또는 이력내역서 발급", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.work24.go.kr/ (browser_open · Mac Chrome)", "kind": "open" },
+        { "id": "step-2", "title": "👤로그인 준비 → 인증만 당사자", "kind": "human" },
+        { "id": "step-3", "title": "⌨통합검색 '피보험자격 이력내역서'|마이페이지 (미검증)", "kind": "input" },
+        { "id": "step-4", "title": "⊙피보험자격 이력내역서|가입이력 조회", "kind": "tap" },
+        { "id": "step-5", "title": "↓이력 목록 끝까지", "kind": "scroll" },
+        { "id": "step-6", "title": "📝사업장·취득일·상실일 요약(개인정보 제외)", "kind": "read" }
+      ]
+    },
+    {
+      "id": "learning-card",
+      "title": "국민내일배움카드 발급 신청",
+      "description": "직업 능력 개발 → 국민내일배움카드 → 발급 신청 안내 페이지까지는 공개 화면으로 확인했습니다. 로그인 후 '국민내일배움카드 발급' 신청서·카드사 선택·동의·제출은 미검증이며, 새 동의와 최종 제출은 당사자가 확인합니다.",
+      "inputs": [
+        { "name": "cardIssuer", "label": "희망 카드사(정하지 않으면 화면 기본)", "required": false },
+        { "name": "trainingGoal", "label": "훈련 목적·희망 과정", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.work24.go.kr/ (browser_open · Mac Chrome)", "kind": "open" },
+        { "id": "step-2", "title": "⊙직업 능력 개발 → 국민내일배움카드 → 발급 신청", "kind": "tap" },
+        { "id": "step-3", "title": "📝신청기간·지원자격·신청방법 읽기", "kind": "read" },
+        { "id": "step-4", "title": "⊙국민내일배움카드 발급", "kind": "tap" },
+        { "id": "step-5", "title": "👤로그인 하기 → 인증만 당사자", "kind": "human" },
+        { "id": "step-6", "title": "⌨신청서 일반 항목(허용된 정보만)", "kind": "input" },
+        { "id": "step-7", "title": "👤새 동의·카드사 약관·최종 제출은 당사자", "kind": "human" },
+        { "id": "step-8", "title": "📝접수번호·심사 안내 보고", "kind": "read" }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "자격 증명·비밀번호·인증서 암호·인증용 주민번호·OTP·생체인증·CAPTCHA는 당사자가 직접 처리합니다. 로그인 화면 진입과 사용자가 제공·허용한 일반 폼 정보 작성은 에이전트가 진행하며 실제 값은 패키지·발자국에 남기지 않습니다.",
+    "새 약관 동의·새 민감 권한·실업인정 제출·내일배움카드 신청 확정은 현재 화면에서 당사자가 확인한 뒤 1회만 진행합니다. 중복 제출하지 않습니다.",
+    "고용24 업무는 수수료가 없습니다. 결제 화면이 나타나면 Mac Chrome에서는 당사자가 직접 누르고, Windows에서는 confirm_payment 승인 1회에 windows_click 1회의 코드 경계를 따릅니다."
+  ],
+  "guide": "guide.md"
+}

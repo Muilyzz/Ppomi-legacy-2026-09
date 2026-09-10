@@ -1,88 +1,93 @@
 import AppKit
 import SwiftUI
-import Combine
 
-/// The native agent occupies this view's content rectangle. The toolbar and approval band remain Ppomi controls.
+/// The conversation column: only the embedded shell. Its header and status live inside the shell itself.
 @MainActor
-final class AgentSidebar: WorkbenchSurface {
-    static let toolbarHeight: CGFloat = 40
-    let toolbar: NSView
-    private let records: NSView
+final class AgentSidebar: WorkbenchSurface, ConversationHost {
     private let state: AppState
-    private let hint = WorkbenchLabel(wrappingLabelWithString: "")
-    private var subscription: AnyCancellable?
+    private var conversation: NSView?
+    private let placeholder = WorkbenchLabel(labelWithString: "대화 닫힘")
 
-    init(records: NSView, state: AppState) {
-        self.records = records; self.state = state
-        toolbar = WorkbenchHostingView(rootView: AgentDockToolbar().environmentObject(state))
+    init(state: AppState) {
+        self.state = state
         super.init(frame: .zero)
-        [toolbar, records, hint].forEach(addSubview)
-        hint.alignment = .center
-        hint.textColor = .secondaryLabelColor
-        hint.font = .systemFont(ofSize: 13)
-        hint.maximumNumberOfLines = 5
-        subscription = state.objectWillChange.sink { [weak self] _ in
-            DispatchQueue.main.async { MainActor.assumeIsolated { self?.sync() } }
-        }
-        sync()
+        placeholder.textColor = Palette.fg2
+        placeholder.alignment = .center
+        addSubview(placeholder)
+        applyFonts()
+        NotificationCenter.default.addObserver(self, selector: #selector(applyFonts), name: Fonts.scaleChanged, object: nil)
     }
     required init?(coder: NSCoder) { fatalError() }
 
-    var agentArea: CGRect {
-        CGRect(x: 0, y: 0, width: max(0, bounds.width),
-               height: max(0, bounds.height - Self.toolbarHeight - 12))
-    }
-    func reclaimToolbar() {
-        if toolbar.superview !== self { addSubview(toolbar) }
+    @objc private func applyFonts() { placeholder.font = .ppomi(3); needsLayout = true }
+
+    var agentArea: CGRect { bounds }
+    var hasConversation: Bool { conversation != nil }
+    var placeholderHidden: Bool { placeholder.isHidden }
+
+    /// Ppomi's own chat fills the column; the same rectangle hosts an external agent window otherwise.
+    func mount(conversation view: NSView) {
+        if let conversation, conversation !== view, conversation.superview === self { conversation.removeFromSuperview() }
+        conversation = view
+        if view.superview !== self { addSubview(view) }
         needsLayout = true
     }
-    private func sync() {
-        records.isHidden = state.agentVisible
-        hint.isHidden = !state.agentVisible
-        hint.stringValue = state.agentDockMessage
+
+    func unmount(conversation view: NSView) {
+        guard conversation === view else { return }
+        if view.superview === self { view.removeFromSuperview() }
+        conversation = nil
         needsLayout = true
     }
+
+    func revealConversation() { state.showWorkbench() }
+
     override func layout() {
         super.layout()
-        if toolbar.superview === self {
-            toolbar.frame = CGRect(x: 0, y: max(0, bounds.height - Self.toolbarHeight),
-                                   width: bounds.width, height: min(Self.toolbarHeight, bounds.height))
-        }
-        records.frame = agentArea
-        hint.frame = CGRect(x: 20, y: max(0, agentArea.midY - 50), width: max(0, bounds.width - 40), height: min(100, agentArea.height))
+        let area = agentArea
+        if let conversation, conversation.superview === self { conversation.frame = area }
+        placeholder.isHidden = conversation != nil
+        let height = placeholder.intrinsicContentSize.height
+        placeholder.frame = CGRect(x: area.minX + 16, y: area.midY - height / 2, width: max(0, area.width - 32), height: height)
     }
 }
 
-private struct AgentDockToolbar: View {
-    @EnvironmentObject var state: AppState
+/// 제어 머리띠: the target picker and the 기록 button, nothing else.
+struct ControlTargetToolbar: View {
+    @EnvironmentObject private var state: AppState
+
+    /// Records wait for the person's turn to end and the agent to release the screen.
+    private var recordsAvailable: Bool {
+        if state.ask != nil { return false }
+        if case .agent = state.phase { return false }
+        return true
+    }
+
     var body: some View {
         HStack(spacing: 8) {
-            Button("대화", systemImage: "bubble.left.and.bubble.right") { state.showAgent(true) }
-                .tint(state.agentVisible ? .mint : .secondary)
-                .accessibilityIdentifier("workbench-show-agent")
-            Button("기록", systemImage: "square.stack") { state.showAgent(false) }
-                .tint(state.agentVisible ? .secondary : .mint)
-                .accessibilityIdentifier("workbench-show-records")
-            if state.agentVisible {
-                Menu {
-                    ForEach(AgentApp.allCases, id: \.rawValue) { app in
-                        Button(app.displayName) { state.selectAgent(app) }.disabled(!app.isInstalled)
-                    }
-                    Divider()
-                    Button("대화창 다시 배치") { state.showAgent(true) }
-                } label: { Text(state.agentApp.displayName).lineLimit(1) }
-                .accessibilityIdentifier("workbench-agent-app")
-                Spacer(minLength: 0)
-                Menu {
-                    ForEach(WorkSurface.allCases) { surface in
-                        Button(surface.displayName) { state.selectSurface(surface) }
-                            .disabled(state.ask != nil && surface != .iphone)
-                    }
-                } label: { Label(state.workSurface.displayName, systemImage: state.workSurface.symbolName) }
-                .accessibilityIdentifier("workbench-agent-target")
-            } else { Spacer(minLength: 0) }
+            Picker("제어 화면", selection: Binding(get: { state.workSurface }, set: state.selectSurface)) {
+                ForEach(WorkSurface.allCases) { target in
+                    Text(target.displayName).tag(target)
+                }
+            }
+            .pickerStyle(.menu)       // a dropdown, like the Storybook <select>: the control column is only as wide as the target
+            .labelsHidden()
+            .font(.ppomi(2))
+            .controlSize(.ppomiSmall)
+            .fixedSize(horizontal: true, vertical: false)
+            .disabled(state.ask != nil)
+            .accessibilityIdentifier("workbench-control-target")
+            Spacer(minLength: 8)
+            Button("기록", action: state.toggleRecordsFocus)
+                .controlSize(.ppomiSmall)
+                .disabled(!recordsAvailable)
+                .accessibilityIdentifier("records-open")
         }
-        .buttonStyle(.bordered).controlSize(.small)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .font(.ppomi(2))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: WorkbenchLayout.toolbarHeight)
+        .ppomiTheme()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("제어")
     }
 }

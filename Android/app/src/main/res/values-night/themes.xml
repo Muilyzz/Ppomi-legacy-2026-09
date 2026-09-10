@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark ground from theme_colors.xml (generated). -->
+    <style name="Theme.Ppomi" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:fontFamily">@font/pretendard_variable</item>
+        <item name="android:windowBackground">@color/ppomi_bg_dark</item>
+    </style>
+</resources>

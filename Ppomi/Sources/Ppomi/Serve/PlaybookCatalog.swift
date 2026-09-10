@@ -3,7 +3,27 @@ import Foundation
 /// The package is the shared specification for the app, MCP, collector, and hub.
 /// Local observations and replay evidence live outside the package and survive upgrades.
 struct PlaybookManifest: Codable, Equatable {
-    struct Launch: Codable, Equatable { var search: String }
+    struct Launch: Codable, Equatable {
+        var search: String
+        /// Absent preserves the existing phone/explicit Windows routes. Browser packages open on this Mac.
+        var target: String? = nil
+        var isBrowser: Bool { target == "browser" }
+        /// exe 설치·공동인증서 friendly sites: the URL opens in Parallels Windows (windows_open), never on the phone.
+        var isWindows: Bool { target == "windows" }
+        var browserURL: URL? { isBrowser ? Self.webURL(search) : nil }
+        var windowsURL: URL? { isWindows ? Self.webURL(search) : nil }
+        /// The tool that opens a URL package; nil for phone packages.
+        var openTool: String? { isBrowser ? "browser_open" : isWindows ? "windows_open" : nil }
+        var routeName: String { isWindows ? "Windows" : "Mac 웹" }
+
+        static func webURL(_ value: String) -> URL? {
+            guard !value.unicodeScalars.contains(where: { CharacterSet.whitespacesAndNewlines.union(.controlCharacters).contains($0) }),
+                  !value.contains("\\"), let url = URL(string: value),
+                  ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
+                  let host = url.host, !host.isEmpty, url.user == nil, url.password == nil else { return nil }
+            return url
+        }
+    }
     struct Input: Codable, Equatable { var name: String; var label: String; var required: Bool }
     struct Step: Codable, Equatable { var id: String; var title: String; var kind: String }
     struct Capability: Codable, Equatable {
@@ -186,6 +206,15 @@ enum PlaybookCatalog {
         guard validID(manifest.id), validName(manifest.name), matches(manifest.version, #"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"#),
               manifest.aliases.allSatisfy(validName), !manifest.launch.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw Invalid.package("플레이북 식별자, 이름, 버전 또는 실행 검색어가 올바르지 않습니다.")
+        }
+        guard manifest.launch.target == nil || manifest.launch.openTool != nil else {
+            throw Invalid.package("지원하지 않는 실행 대상입니다. launch.target은 browser, windows 또는 생략이어야 합니다.")
+        }
+        if manifest.launch.openTool != nil {
+            guard PlaybookManifest.Launch.webURL(manifest.launch.search) != nil else {
+                throw Invalid.package("\(manifest.launch.routeName) 실행 주소는 사용자명·비밀번호 없는 HTTP(S) 주소여야 합니다.")
+            }
+            guard manifest.collection == nil else { throw Invalid.package("\(manifest.launch.routeName) 플레이북에는 폰 수집 명세를 사용할 수 없습니다.") }
         }
         guard safePath(manifest.guide), URL(fileURLWithPath: manifest.guide).pathExtension.lowercased() == "md" else {
             throw Invalid.package("사용법 경로는 패키지 내부의 Markdown 파일이어야 합니다.")

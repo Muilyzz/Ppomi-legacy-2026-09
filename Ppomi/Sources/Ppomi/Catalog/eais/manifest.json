@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "id": "eais",
+  "name": "세움터",
+  "version": "0.1.2",
+  "aliases": ["EAIS", "건축행정시스템", "eais.go.kr"],
+  "launch": { "search": "https://www.eais.go.kr/", "target": "browser" },
+  "capabilities": [
+    {
+      "id": "prepare-signup",
+      "title": "일반·사업자 회원가입 준비와 현재 단계에서 재개",
+      "description": "현재 화면과 세션의 회원유형으로 가입 준비를 이어갑니다. 사용자가 Windows를 지정했거나 공식 Windows 실행 파일이 필요한 사실을 확인했으면 기존 Parallels를 재사용합니다. F01 유형선택·F02 약관·F04 사업자인증은 URL과 화면을 함께 읽으며, 유형별로 같은 F02 경로를 쓰므로 일반회원으로 고정하지 않습니다. 이미 승인된 필수 동의와 준비는 재질문 없이 진행하고, 사업자 기본정보는 Windows 전용 profile_fill로 인증 전에 입력합니다. 실제 비밀 입력·본인 인증과 새 동의·최종 가입 확정만 당사자가 처리합니다. 세션 만료 시 기존 승인 범위에서 새 요청을 준비합니다. 2026-09-08 사업자 약관에서 필수 두 항목 처리와 사업자인증 진입, 2026-09-09 공동인증서 창 진입 후 세션 만료를 확인했습니다. 사업자인증 통과·인증 이후 정보입력·가입 완료와 자동 콤보 재생은 검증하지 않았습니다.",
+      "inputs": [
+        { "name": "requesterContext", "label": "세션에서 이어받을 당사자와 기존 계정 여부(민감정보 제외)", "required": true },
+        { "name": "memberType", "label": "세션에서 지정한 가입 유형과 현재 화면의 유형", "required": false }
+      ],
+      "steps": [
+        { "id": "open-site", "title": "지정된 Windows·기존 Parallels 또는 Mac Chrome의 현재 세움터 화면 확인", "kind": "open" },
+        { "id": "inspect-signup-state", "title": "주소·유형·단계·대화상자로 F01·F02·F04·인증 대기·만료를 판별하고 해당 단계에서 재개", "kind": "read" },
+        { "id": "find-signup", "title": "유형 선택이 필요할 때 세션에서 지정한 일반·사업자·외국인 경로 확인", "kind": "read" },
+        { "id": "prepare-form", "title": "해당 유형의 현재 약관을 읽고 이미 승인된 필수 항목만 처리", "kind": "tap" },
+        { "id": "human-consent", "title": "승인 범위 밖의 새 약관·권한만 당사자가 처리, 선택 개인정보 수집은 자동 동의하지 않음", "kind": "human" },
+        { "id": "fill-profile", "title": "사업자인증 전 상호·등록번호 등 허용된 정보를 현재 양식에 입력, profile_fill은 Windows 전용", "kind": "input" },
+        { "id": "prepare-business-auth", "title": "사업자 경로에서 이미 승인된 번호 처리 동의와 공동인증창 열기를 이어감", "kind": "tap" },
+        { "id": "human-identity", "title": "준비된 요청의 인증서 암호·휴대폰 승인 등 실제 본인 인증만 당사자가 수행", "kind": "human" },
+        { "id": "resume-signup", "title": "완료 보고 후 새 화면으로 결과 확인, 명시적 만료면 기존 승인 범위에서 재준비", "kind": "read" },
+        { "id": "fill-signup-details", "title": "인증 이후 사용이 허용된 일반 가입 정보를 입력하고 필요한 미등록 정보만 확인", "kind": "input" },
+        { "id": "human-credentials", "title": "자격 증명·비밀번호 설정 등 실제 인증 입력이 필요하면 당사자가 처리", "kind": "human" },
+        { "id": "human-submit", "title": "현재 화면의 가입 대상·효과를 확인하고 가입 최종 확정은 당사자가 처리", "kind": "human" },
+        { "id": "verify-signup", "title": "새 화면에서 가입 완료 여부 확인 후 원래 작업으로 복귀", "kind": "read" }
+      ]
+    },
+    {
+      "id": "prepare-login",
+      "title": "로그인 경로 준비와 인증 후 복귀",
+      "description": "로그인 화면의 현재 방법·제공자를 찾아 준비합니다. Windows Edge에서 통신사PASS 기본정보 네 항목의 프로필 일치, 사용자 명시 승인에 따른 필수 동의 3개와 인증요청 전송 성공, 만료된 요청을 닫고 새 세션에서 요청을 재개하는 흐름을 확인했습니다. 휴대폰 본인 인증은 당사자가 처리하며, 했어라고 알리면 같은 요청의 현재 화면에서 결과를 확인하고 성공·휴대폰 미완료·만료·응답 미확인·인증 후 회원가입 필요를 구분합니다. 2026-09-08 토큰 만료 후 20:36 KST에 새 요청 전송 성공을 확인했고, 20:37 KST에 사용자의 완료 알림을 받아 해당 요청의 인증 완료를 처리했습니다. Any-ID 선택 등록은 등록 안함으로 닫았으며 세움터 비회원 안내와 회원가입 후 이용하기 버튼을 확인했습니다. 당시 결과는 인증 후 회원가입 필요였고 로그인 성공이 아니었습니다. 가입 필요 결과에서는 추가 PASS 요청 없이 원래 작업의 가입 준비로 이어가며, 재개 시점의 상태는 새 화면으로 확인합니다. Any-ID 선택 등록과 세움터 회원가입을 구분하고 다른 가족의 계정·프로필을 재사용하지 않습니다.",
+      "inputs": [
+        { "name": "requesterContext", "label": "이번 작업 당사자와 사용할 본인 계정 구분(민감정보 제외)", "required": true },
+        { "name": "returnTask", "label": "로그인 후 이어갈 작업", "required": false }
+      ],
+      "steps": [
+        { "id": "inspect-session", "title": "현재 세션과 이번 작업 당사자가 일치하는지 확인", "kind": "read" },
+        { "id": "open-login", "title": "현재 화면에서 로그인 경로 열기", "kind": "tap" },
+        { "id": "inspect-methods", "title": "표시된 로그인 방법·필수 프로그램·오류 확인", "kind": "read" },
+        { "id": "prepare-auth", "title": "사용자가 선택한 최신 방법·제공자를 현재 화면에서 찾아 입력·인증 화면까지 이동", "kind": "tap" },
+        { "id": "verify-auth-method", "title": "제공자 헤더·선택 표시를 확인하고 순번·과거 좌표를 재사용하지 않음", "kind": "read" },
+        { "id": "prepare-identity-profile", "title": "이번 당사자의 프로필 등록 여부 확인, 필요한 항목은 대화 또는 설정에서 등록", "kind": "read" },
+        { "id": "fill-basic-profile", "title": "Windows 통신사PASS 이름·생년월일·휴대폰·통신사를 최신 양식 검증 후 profile_fill로 입력", "kind": "input" },
+        { "id": "request-auth", "title": "명시 승인된 현재 요청의 필수 동의만 선택하고 인증요청 한 번 전송 후 사이트 응답 확인", "kind": "tap" },
+        { "id": "human-auth", "title": "휴대폰 PASS의 OTP·비밀번호·생체 인증은 당사자가 처리하고 했어라는 완료 알림을 기다림", "kind": "human" },
+        { "id": "complete-auth", "title": "했어 이후 새 화면에서 같은 요청의 인증완료 버튼을 찾아 한 번 누름", "kind": "tap" },
+        { "id": "verify-login", "title": "성공·휴대폰 미완료·만료·응답 미확인·인증 후 회원가입 필요를 구분, 가입 필요면 추가 PASS 요청 없이 원래 작업의 가입 준비로 복귀", "kind": "read" }
+      ]
+    },
+    {
+      "id": "acquire-building-plan",
+      "title": "건축물현황도 발급 경로와 평면도 취득 준비",
+      "description": "Chrome에서 건축물현황도 발급 안내를 열고 배치도·본인소유 평면도·그 밖의 신청 경로를 구분합니다. 로그인과 필요한 당사자 인증 이후 대상 건축물 확인·신청 상태·문서 결과를 단계별로 확인합니다. 실제 로그인·신청·발급 완료는 아직 검증하지 않았습니다.",
+      "inputs": [
+        { "name": "requesterContext", "label": "이번 작업 당사자와 소유·신청 권한 구분(민감정보 제외)", "required": true },
+        { "name": "building", "label": "대상 건축물 소재지와 필요한 동·층·호", "required": true },
+        { "name": "planType", "label": "필요한 도면 종류(배치도·평면도 등)", "required": true }
+      ],
+      "steps": [
+        { "id": "open-plan-service", "title": "세움터 홈의 건축물현황도 발급 안내 열기", "kind": "open" },
+        { "id": "read-eligibility", "title": "도면 종류·소유 구분·증빙과 승인 요건 읽기", "kind": "read" },
+        { "id": "prepare-login", "title": "로그인이 필요하면 실제 인증 화면까지 준비", "kind": "tap" },
+        { "id": "human-identity", "title": "자격 증명·인증용 주민번호·본인 인증은 이번 당사자가 수행", "kind": "human" },
+        { "id": "select-building", "title": "사용자가 지정한 건축물과 동·층·호 확인", "kind": "input" },
+        { "id": "prepare-request", "title": "현재 화면에 따른 발급 또는 증빙·승인 신청 준비", "kind": "read" },
+        { "id": "verify-result", "title": "신청 접수·승인 대기·발급 완료를 구분해 확인", "kind": "read" },
+        { "id": "verify-document", "title": "문서가 열리면 대상·도면 종류·읽을 수 있는 결과 확인", "kind": "read" }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "로그인 자격 증명·비밀번호·인증서 암호·인증용 주민(법인)등록번호·OTP·생체 인증은 이번 작업 당사자가 직접 다룹니다. 실제 값은 플레이북·발자국·공개 기록에 남기지 않습니다.",
+    "통신사PASS 이름·생년월일·휴대폰·통신사와 사업자인증 전 상호·사업자등록번호는 이번 당사자가 등록하고 사용을 허용한 키체인 프로필로 입력할 수 있습니다. profile_fill의 eais_pass·eais_business는 Windows 전용이며 가족별 profile_id를 구분합니다. 이미 승인된 필수 동의·번호 처리 동의·인증 요청·인증창 준비는 같은 범위에서 재질문 없이 진행합니다. 휴대폰 PASS의 본인 승인과 인증서 암호는 당사자가 직접 처리합니다. 대화에 남기고 싶지 않은 기본정보는 앱 설정에서 직접 등록합니다.",
+    "CAPTCHA, 승인 범위 밖의 새 약관 동의·새 민감 접근 권한과 가입 최종 확정은 공통 절차에 따라 당사자가 직접 처리합니다. 기존 PASS 동의를 세움터 가입 약관이나 최종 가입 확정의 승인으로 확대하지 않습니다. 선택 개인정보 수집·마케팅은 자동으로 동의하지 않습니다.",
+    "브라우저의 다른 앱·서비스 접근 권한이나 인증 프로그램 설치를 새로 승인해야 하면 구체적인 화면과 이유를 보여 줍니다. 초기화 시간 만료만으로 재설치를 결정하지 않습니다.",
+    "가족이 같은 절차를 사용하더라도 계정·인증·소유 권한은 매 세션의 당사자 기준입니다. 다른 가족의 로그인 세션이나 자격 증명을 재사용하지 않습니다.",
+    "일반 탐색과 허용된 폼 준비는 현재 단계에서 계속하고 필요한 정보가 없을 때만 묻습니다. 완료 보고 후 새 화면에서 같은 요청의 결과를 확인하며, 이미 다음 단계로 이동했다면 확인 버튼을 다시 누르지 않습니다. 세션 만료가 명시되면 기존 승인 범위에서 요청 정리와 재준비를 진행하되 실제 인증은 당사자가 수행합니다. 실제 값·고정 좌표·세션 토큰을 공개 패키지·발자국에 저장하지 않습니다. 가입·로그인 성공이 확인된 뒤 원래 작업을 이어갑니다. 단계 명세는 자동 콤보 재생 성공 증거가 아닙니다."
+  ],
+  "guide": "guide.md"
+}

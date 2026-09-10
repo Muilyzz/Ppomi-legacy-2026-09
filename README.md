@@ -14,11 +14,13 @@
 | **발자국** | 앱마다 알게 된 버릇을 `data/playbooks/*.md` 에 한 줄씩 적습니다. 다음번에 더 잘 합니다. |
 | **MCP** | `Ppomi --mcp` 가 위 전부를 도구로 내놓습니다. 두뇌는 밖(Claude 앱·Claude Code·Codex)에 둡니다. |
 
-그 밖에 미러링 바로 뒤에 놓이는 검은 작업대 창과 음성("뽀미야", ⌥Space, `--voice`)이 있습니다. 절차와 장부는 옆에서 보고, 상태 안내와 승인 버튼은 작업대 하단에서 확인합니다.
+그 밖에 실제 대화창과 제어창 뒤에 놓이는 검은 작업대 창과 음성("뽀미야", ⌥Space, `--voice`)이 있습니다. 기록은 상단에서 보고, 상태 안내와 승인 버튼은 대화 영역 하단에서 확인합니다.
 
-일반 모드는 현재 디스플레이의 사용 가능한 영역을 채우는 고정 크기 창입니다. iPhone·Windows를 바꿔도 배경 창의 크기는 유지하고 작업 화면 옆에 장부와 승인 버튼을 배치합니다. 초록 버튼이나 `⌃⌘F`는 다른 창과 메뉴 막대를 가리는 키오스크로 전환합니다. 키를 누르면 나가기 버튼이 나타나며 일반 창으로 돌아올 수 있습니다. Dock의 뽀미 아이콘은 현재 모드를 유지한 채 작업 화면과 함께 다시 엽니다. 미러링 창을 직접 옮기면 옆 콘텐츠의 배치가 바뀝니다.
+일반 모드는 이동·크기 조절이 되는 보통 창입니다(최소 1040×840pt, 마지막 프레임 기억). **상단 기록**은 요약을 기본으로 표시하고, 펼치면 타임라인·증빙·분개장·부동산 3D·절차·몸과 생활을 볼 수 있습니다. **하단 왼쪽은 대화**(설치된 ChatGPT·Codex 창), **하단 오른쪽은 제어**(iPhone 미러링·Android 에뮬레이터 미러링·Parallels의 Windows 창)로 유지합니다. 기록을 펼치거나 제어창을 직접 옮겨도 좌우 역할은 바뀌지 않습니다. 제어 영역의 iPhone·Android·Windows 선택기로 작업 화면을 고르며, 승인 버튼은 대화 영역 하단에 유지합니다([자세히](docs/agent-workbench.md)). 초록 버튼이나 `⌃⌘F`는 같은 배치를 유지하는 키오스크로 전환합니다. 키를 누르면 나가기 버튼이 나타나며 일반 창으로 돌아올 수 있습니다. Dock의 뽀미 아이콘은 현재 표시 상태를 유지한 채 다시 엽니다.
 
 **몸과 생활** 탭은 인바디 결과 화면·이미지, 식사·운동·컨디션을 비공개 기록으로 모읍니다. 발생·수집 시각, 단위, 측정 기기, 원본 증빙과 수정 이력을 함께 저장합니다. 외부 에이전트와 음성도 같은 기록을 사용하고, Schema.org JSON-LD를 내보낼 수 있습니다. 인바디 API 자동 동기화는 포함하지 않습니다. [사용법과 공통 데이터 규격](docs/life-records.md)을 참고하세요.
+
+**Android**는 iPhone 옆 탭에서 Android 에뮬레이터를 시작하고 scrcpy 미러링 창을 배치합니다. 뽀미 Android 보조 앱의 접근성 서비스가 다른 앱의 UI 트리를 읽고 한글 입력·클릭·제스처를 수행합니다. 현재는 에뮬레이터의 설정·별도 테스트 앱을 지원합니다. 실행과 재현 테스트는 [Android 제어](docs/android-control.md)를 참고하세요.
 
 ## 요구사항
 
@@ -92,7 +94,9 @@ args = ["--mcp"]
 
 소스로 쓸 때는 경로를 `Ppomi/.build/debug/Ppomi` 로 바꾸면 됩니다.
 
-내놓는 도구: `phone_screen` `phone_tap` `phone_type` `phone_key` `phone_scroll` `phone_open` `phone_installed` `pay_preference` `confirm_payment` `record_spend` `ask_choice` `balances` `today_spending` `transactions` `sql`(읽기 전용) `list_playbooks` `read_playbook` `note_footprint` `run_combo` `health_records` `record_health` `inbody_capture`.
+내놓는 도구: `phone_screen` `phone_tap` `phone_type` `phone_key` `phone_scroll` `phone_open` `phone_installed` `pay_preference` `confirm_payment` `record_spend` `ask_choice` `balances` `today_spending` `transactions` `sql`(읽기 전용) `list_playbooks` `read_playbook` `note_footprint` `run_combo` `windows_screen` `windows_click` `windows_type` `windows_key` `windows_scroll` `windows_open` `health_records` `record_health` `inbody_capture`.
+
+PC 전용 웹(대법원 인터넷등기소 등)은 Parallels의 Windows 창에서 같은 방식으로 다룹니다: `windows_open`이 URL을 열고, `windows_screen`이 OCR로 읽고, `windows_click`·`windows_type`(클립보드 붙여넣기라 한글 그대로)·`windows_key`(`ctrl+l`, `alt+f4`, `win+r` 같은 조합)·`windows_scroll`이 손입니다. Windows는 창 모드여야 하고, Parallels 구성 › 하드웨어 › 마우스 및 키보드의 마우스가 “게임용 자동 감지”(SmartMouse)여야 클릭이 게스트 포인터로 전달됩니다. 보안 프로그램 설치·로그인은 사용자 몫이고, 결제 버튼은 `confirm_payment` 승인 뒤에만 눌립니다.
 
 ## 첫 사용
 
@@ -100,7 +104,7 @@ args = ["--mcp"]
 
 > 타니베이 9/5~9/8 3박 예약해줘
 
-뽀미가 앱을 열고, 날짜를 넣고, 객실을 고르고, 결제 화면까지 갑니다. 거기서 멈추고 승인 버튼을 보냅니다 — 클라이언트가 엘리시테이션을 지원하면 그 창에, 아니면 뽀미 작업대의 옆 열 하단에.
+뽀미가 앱을 열고, 날짜를 넣고, 객실을 고르고, 결제 화면까지 갑니다. 거기서 멈추고 승인 버튼을 보냅니다 — 클라이언트가 엘리시테이션을 지원하면 그 창에, 아니면 뽀미 작업대의 대화 영역 하단에.
 
 > 💳 결제 승인 요청 · 타니베이 디럭스 9/5–9/8 3박 · 406,600원 · 토스페이
 > [결제 승인 406,600원] [취소]
@@ -129,6 +133,8 @@ args = ["--mcp"]
 
 ## 개발
 
+**범용 분개장**은 돈·시간·수량을 장부와 단위로 구분하고, 계정과목·복수 차변/대변으로 기록합니다. 기록 영역의 **분개장**에서 원본과 관리용 평가를 나란히 비교하며, 자기개발 같은 새 사례는 계정 데이터로 추가합니다. 앱·MCP·음성이 같은 저장소와 검증 엔진을 사용합니다. [구조와 API](docs/accounting.md)를 참고하세요.
+
 ```sh
 cd Ppomi
 swift build
@@ -144,3 +150,9 @@ swift run Ppomi --mcp      # MCP 서버(stdio)
 ---
 
 Muilyzz · [muilyzz.com](https://muilyzz.com)
+
+**기록에 집중**은 선택된 대화·제어 창을 접고 기록을 넓게 보여 줍니다. 하단 **작업으로 돌아가기** 또는 기록 창의 Esc로 같은 창과 이전 배치를 복원합니다. 집중 모드 동안 새 버전 뽀미의 화면 제어는 멈춥니다. [동작과 제어 범위](docs/records-focus.md).
+
+**부동산 3D**는 외곽선·높이·기준면·출처를 담은 공통 공간 JSON을 읽어 건축물을 표시합니다. 회전·확대·윤곽선 보기와 저장되지 않는 가상 예시를 제공합니다. 특정 건축물 전용 코드는 추가하지 않습니다. [공간 자료 규격](docs/spatial-assets.md).
+
+**개인·사업 구분**은 회계 장부와 부동산 사용 기록의 공통 경계입니다. 같은 사람의 개인 기록과 여러 사업을 ID로 구분하고, 부동산의 소유·사용 근거를 각각 보존합니다. 구분이 없는 이전 자료는 미분류이며 사업자등록번호로 자동 귀속하지 않습니다. [구조와 조회 경계](docs/record-scopes.md).

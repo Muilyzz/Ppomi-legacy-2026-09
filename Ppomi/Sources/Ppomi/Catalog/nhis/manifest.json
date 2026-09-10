@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "id": "nhis",
+  "name": "국민건강보험",
+  "version": "0.1.0",
+  "aliases": [
+    "NHIS",
+    "건강보험공단",
+    "국민건강보험공단",
+    "nhis.or.kr"
+  ],
+  "launch": {
+    "search": "https://www.nhis.or.kr/",
+    "target": "windows"
+  },
+  "capabilities": [
+    {
+      "id": "premium-inquiry-payment",
+      "title": "보험료 조회 · 납부",
+      "description": "Parallels Windows에서 로그인 진입을 준비하고 당사자 인증 뒤 보험료 내역을 읽습니다. 납부는 사람 승인 1회 뒤 결제 클릭 1회이며 결제 인증은 당사자가 마칩니다. 확인한 금액만 보고합니다.",
+      "inputs": [
+        { "name": "person", "label": "조회 당사자(세션 문맥에서 알면 다시 묻지 않음)", "required": false },
+        { "name": "period", "label": "조회 기간(기본 최근분)", "required": false },
+        { "name": "pay", "label": "납부까지 진행 여부(기본 조회만)", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.nhis.or.kr/ (windows_open · Parallels)", "kind": "open" },
+        { "id": "step-2", "title": "⎋공지·팝업", "kind": "close" },
+        { "id": "step-3", "title": "⊙민원서비스|민원여기요 → 개인민원 → 보험료 조회|납부", "kind": "tap" },
+        { "id": "step-4", "title": "👤로그인(간편인증|공동·금융인증서) — 인증·암호는 당사자", "kind": "human" },
+        { "id": "step-5", "title": "📝보험료 내역(건강·장기요양·합계) 읽기", "kind": "read" },
+        { "id": "step-6", "title": "✋승인(납부 금액·수단) — 납부 요청 시에만", "kind": "human" },
+        { "id": "step-7", "title": "⊙납부 (windows_click 1회)", "kind": "payment" },
+        { "id": "step-8", "title": "📝납부 결과 확인 · record_spend", "kind": "read" }
+      ]
+    },
+    {
+      "id": "eligibility-certificate",
+      "title": "자격득실확인서 발급",
+      "description": "로그인 준비 뒤 자격득실 내역을 확인하고 프린트·팩스·전자문서 중 사용자가 정한 방식으로 발급합니다. 발급 완료 화면을 확인한 경우에만 완료로 보고합니다.",
+      "inputs": [
+        { "name": "person", "label": "발급 당사자", "required": false },
+        { "name": "output", "label": "발급 방식(프린트 · 팩스 · 전자문서, 기본 프린트)", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.nhis.or.kr/ (windows_open · Parallels)", "kind": "open" },
+        { "id": "step-2", "title": "⊙민원서비스|민원여기요 → 개인민원 → 자격득실 확인서", "kind": "tap" },
+        { "id": "step-3", "title": "👤로그인(간편인증|공동·금융인증서)", "kind": "human" },
+        { "id": "step-4", "title": "📝자격 득실 내역 확인", "kind": "read" },
+        { "id": "step-5", "title": "⊙프린트발급|팩스전송|전자증명서", "kind": "choice" },
+        { "id": "step-6", "title": "👤미리보기·프린터·팩스번호 확인은 당사자", "kind": "human" },
+        { "id": "step-7", "title": "📝발급 완료 확인", "kind": "read" }
+      ]
+    },
+    {
+      "id": "health-checkup",
+      "title": "건강검진 대상 · 결과 조회",
+      "description": "건강모아의 검진대상 조회와 검진 결과 조회를 로그인 뒤 읽어 보고합니다. 결과 수치는 확인한 화면의 값만 보고하고 저장은 사용자가 요청할 때만 합니다.",
+      "inputs": [
+        { "name": "person", "label": "조회 당사자", "required": false },
+        { "name": "scope", "label": "대상 조회 · 결과 조회 · 둘 다(기본 둘 다)", "required": false },
+        { "name": "year", "label": "결과 연도(기본 최근)", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.nhis.or.kr/ (windows_open · Parallels)", "kind": "open" },
+        { "id": "step-2", "title": "⊙건강모아 → 나의 건강 → 검진대상 조회|건강검진 결과조회", "kind": "tap" },
+        { "id": "step-3", "title": "👤로그인(간편인증|공동·금융인증서)", "kind": "human" },
+        { "id": "step-4", "title": "📝검진 대상(올해 검진 종류·검진기관 안내) 읽기", "kind": "read" },
+        { "id": "step-5", "title": "↓결과 연도 선택 · 검진결과 한번에보기", "kind": "scroll" },
+        { "id": "step-6", "title": "📝검진 결과(판정·주요 수치) 읽기 · 요청 시 record_health", "kind": "read" }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "자격 증명·비밀번호·인증서 암호·인증에 쓰이는 주민번호·OTP·생체인증·CAPTCHA·새 동의는 당사자가 직접 처리합니다. 로그인 페이지 진입·인증 방식 선택 화면 준비와 허용된 일반 폼 작성은 에이전트가 진행하며 실제 값은 공개 패키지나 발자국에 남기지 않습니다.",
+    "보안프로그램(PC 방화벽·키보드보안)은 선택 설치입니다. 공식 안내·다운로드 준비는 진행하고 OS 관리자 인증과 새 민감 권한만 당사자에게 넘깁니다.",
+    "보험료 납부는 Windows에서 confirm_payment 승인 1회에 windows_click 결제 클릭 1회의 코드 경계를 따르고 결제 인증은 당사자가 마칩니다. 이체·송금은 하지 않습니다. 조회만 요청한 경우 납부 단계로 넘어가지 않습니다."
+  ],
+  "guide": "guide.md"
+}

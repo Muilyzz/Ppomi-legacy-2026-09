@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "id": "applyhome",
+  "name": "청약홈",
+  "version": "0.1.0",
+  "aliases": ["청약Home", "청약HOME", "주택청약", "applyhome.co.kr", "한국부동산원 청약"],
+  "launch": { "search": "https://www.applyhome.co.kr/", "target": "windows" },
+  "capabilities": [
+    {
+      "id": "browse-announcements",
+      "title": "청약 공고 조회",
+      "description": "청약일정 및 통계 → 분양정보/경쟁률 → APT 에서 지역·기간의 공고를 읽는다. 로그인 없이 공개. 신청은 하지 않는다.",
+      "inputs": [
+        { "name": "region", "label": "지역(시·도)", "required": false },
+        { "name": "period", "label": "조회 기간(월)", "required": false },
+        { "name": "houseType", "label": "APT | 오피스텔 등 | 잔여세대", "required": false }
+      ],
+      "steps": [
+        { "id": "open", "title": "▶https://www.applyhome.co.kr/ (windows_open · Parallels)", "kind": "open" },
+        { "id": "close-popup", "title": "⎋공지 팝업(닫기)", "kind": "close" },
+        { "id": "menu", "title": "⊙청약일정 및 통계 → 분양정보/경쟁률 → APT", "kind": "tap" },
+        { "id": "filter", "title": "⌨시작년도·월·지역 → 조회", "kind": "input" },
+        { "id": "scroll", "title": "↓공고 목록·공고명", "kind": "scroll" },
+        { "id": "report", "title": "📝공급 유형·접수일·주택형·경쟁률", "kind": "read" }
+      ]
+    },
+    {
+      "id": "check-rank",
+      "title": "청약통장 순위 확인",
+      "description": "청약자격확인 → 청약통장 → 가입내역·순위확인서 발급. 로그인 필요(공동인증서·금융인증서·간편인증). 인증은 당사자 차례. 발급 시 위변조방지 프로그램이 뜰 수 있다.",
+      "inputs": [
+        { "name": "person", "label": "조회 대상(가족 구성원)", "required": true },
+        { "name": "mode", "label": "가입내역 | 순위확인서 발급(기본 가입내역)", "required": false }
+      ],
+      "steps": [
+        { "id": "open", "title": "▶https://www.applyhome.co.kr/ (windows_open · Parallels)", "kind": "open" },
+        { "id": "menu", "title": "⊙청약자격확인 → 청약통장 → 가입내역|순위확인서 발급", "kind": "tap" },
+        { "id": "login-prep", "title": "⊙로그인 방식(공동 인증서|금융 인증서|간편 인증서) 준비", "kind": "tap" },
+        { "id": "human", "title": "👤인증서 암호·본인인증·정보제공 동의", "kind": "human" },
+        { "id": "verify", "title": "새 화면에서 로그인·본인 확인 후 복귀", "kind": "read" },
+        { "id": "report", "title": "📝통장 종류·가입일·납입 회차·순위", "kind": "read" }
+      ]
+    },
+    {
+      "id": "check-winning",
+      "title": "당첨 조회",
+      "description": "청약당첨조회 → APT(또는 유형별)에서 당첨·예비 여부를 읽는다. 로그인 필요. 로그인 없이 보는 APT당첨사실조회(청약소통방)와 구분한다.",
+      "inputs": [
+        { "name": "person", "label": "조회 대상(가족 구성원)", "required": true },
+        { "name": "houseType", "label": "APT | 오피스텔 등 | 공공지원민간임대", "required": false }
+      ],
+      "steps": [
+        { "id": "open", "title": "▶https://www.applyhome.co.kr/ (windows_open · Parallels)", "kind": "open" },
+        { "id": "menu", "title": "⊙청약당첨조회 → APT|오피스텔/생활숙박시설/도시형/민간임대|공공지원민간임대", "kind": "tap" },
+        { "id": "login-prep", "title": "⊙로그인 방식 준비", "kind": "tap" },
+        { "id": "human", "title": "👤인증서 암호·본인인증", "kind": "human" },
+        { "id": "verify", "title": "새 화면에서 로그인 확인 후 복귀", "kind": "read" },
+        { "id": "report", "title": "📝단지·당첨/예비 여부·예비번호·계약 일정", "kind": "read" }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "인증서 암호·본인인증·OTP·CAPTCHA·인증에 쓰이는 주민번호·새 정보제공 동의는 당사자가 직접 처리합니다. 로그인 방식 선택·화면 준비·허용된 일반 폼 작성은 에이전트가 이어갑니다. 실제 값은 패키지·발자국에 남기지 않습니다.",
+    "청약 신청·취소·세대구성원 등록은 이 패키지 범위 밖입니다. 화면에 뜨면 진행하지 않고 보고합니다.",
+    "결제 단계는 없습니다. 있을 경우 Windows의 confirm_payment 승인 1회 · windows_click 1회 코드 경계를 따릅니다."
+  ],
+  "guide": "guide.md"
+}

@@ -3,6 +3,61 @@ import XCTest
 @testable import Ppomi
 
 final class WorkSurfaceStateTests: XCTestCase {
+    @MainActor func testSurfaceSizesRemainIndependentAfterAndroidResizeAndSelection() {
+        let state = AppState()
+        let phone = state.phoneSize, windows = state.windowsSize
+        let android = CGSize(width: 220, height: 464)
+        state.setSize(android, for: .android)
+        state.selectSurface(.android)
+        XCTAssertEqual(state.surfaceSize, android)
+        XCTAssertEqual(state.phoneSize, phone)
+        XCTAssertEqual(state.windowsSize, windows)
+        state.selectSurface(.windows)
+        XCTAssertEqual(state.surfaceSize, windows)
+        state.setSize(CGSize(width: 700, height: 500), for: .windows)
+        state.selectSurface(.android)
+        XCTAssertEqual(state.surfaceSize, android)
+        state.setSize(CGSize(width: CGFloat.nan, height: 500), for: .android)
+        XCTAssertEqual(state.surfaceSize, android)
+    }
+
+    @MainActor func testAndroidStatusReportsLaunchAndWindowStateWithoutPhoneConnectionClaims() {
+        let state = AppState()
+        state.selectSurface(.android)
+        state.androidLaunching = true
+        XCTAssertEqual(state.connectionHint(for: .android), "Android · 시작 중")
+        state.androidLaunching = false
+        state.androidLaunchError = "scrcpy 설치 필요"
+        XCTAssertEqual(state.connectionHint(for: .android), "Android · 시작 실패")
+        XCTAssertEqual(state.connectionHint(for: .iphone), "iPhone · 연결 끊김")
+        state.androidLaunchError = nil
+        state.androidWindowVisible = true
+        XCTAssertEqual(state.size(for: .android), AndroidWindow.defaultSize)
+        XCTAssertFalse(state.windowsWindowVisible)
+    }
+
+    @MainActor func testAndroidPreparationStatusRemainsVisibleWhileMirrorAlreadyRuns() {
+        let state = AppState()
+        state.selectSurface(.android)
+        state.phase = .humanUse(onScreen: true)
+        state.androidWindowVisible = true
+        state.androidLaunching = true
+        XCTAssertEqual(state.statusLine, "Android 에뮬레이터와 미러링을 시작하는 중…")
+        state.androidLaunching = false
+        state.androidLaunchError = "접근성 서비스 연결 실패"
+        XCTAssertEqual(state.statusLine, "Android 시작 실패 · 접근성 서비스 연결 실패")
+        state.androidLaunchError = nil
+        XCTAssertEqual(state.statusLine, "Android 화면 표시 중 · 에뮬레이터 앱 제어")
+    }
+
+    @MainActor func testPendingIPhoneApprovalAlsoRejectsAndroidSelection() {
+        let state = AppState()
+        state.ask = (id: "approval", text: "계속할까요?", options: ["계속", "취소"])
+        state.selectSurface(.android)
+        XCTAssertEqual(state.workSurface, .iphone)
+        XCTAssertEqual(state.ask?.id, "approval")
+    }
+
     @MainActor func testPhoneJobResumesAfterReconnectWhileWindowsIsSelected() {
         let state = AppState()
         state.phase = .agent(job: "테스트 작업")
@@ -42,39 +97,5 @@ final class WorkSurfaceStateTests: XCTestCase {
         XCTAssertEqual(state.pendingJob, "승인 이후 작업")
         XCTAssertEqual(state.ask?.id, "surface-approval")
         XCTAssertEqual(state.ask?.options, ["승인", "취소"])
-    }
-
-    @MainActor func testCenteredOversizedNativeWindowKeepsBottomOnScreen() {
-        let visible = CGRect(x: 0, y: 24, width: 1728, height: 1065)
-        let nativeWorkbench = CGSize(width: 1038, height: 1134)
-        let origin = KioskController.centeredOrigin(for: nativeWorkbench, in: visible)
-
-        XCTAssertEqual(origin.x, visible.midX - nativeWorkbench.width / 2)
-        XCTAssertEqual(origin.y, visible.minY)
-        XCTAssertTrue(visible.contains(CGPoint(x: origin.x, y: origin.y)))
-    }
-
-    @MainActor func testCenteredWindowUsesOffsetDisplayCoordinates() {
-        let visible = CGRect(x: -1728, y: 100, width: 1728, height: 1000)
-        let size = CGSize(width: 1200, height: 800)
-        let origin = KioskController.centeredOrigin(for: size, in: visible)
-
-        XCTAssertEqual(origin, CGPoint(x: -1464, y: 200))
-        XCTAssertTrue(visible.contains(CGRect(origin: origin, size: size)))
-    }
-
-    @MainActor func testRestoredOriginIsPreservedOrClampedToItsDisplay() {
-        let visible = CGRect(x: -1728, y: 100, width: 1728, height: 1000)
-        let size = CGSize(width: 1200, height: 800)
-        let saved = CGPoint(x: -1500, y: 200)
-
-        XCTAssertEqual(KioskController.clampedOrigin(saved, size: size, in: visible), saved)
-        XCTAssertEqual(KioskController.clampedOrigin(CGPoint(x: -2000, y: 0), size: size, in: visible),
-                       CGPoint(x: visible.minX, y: visible.minY))
-        XCTAssertEqual(KioskController.clampedOrigin(CGPoint(x: 100, y: 1400), size: size, in: visible),
-                       CGPoint(x: visible.maxX - size.width, y: visible.maxY - size.height))
-
-        let oversized = CGSize(width: 1900, height: 1134)
-        XCTAssertEqual(KioskController.clampedOrigin(saved, size: oversized, in: visible), visible.origin)
     }
 }

@@ -1,0 +1,31 @@
+{
+  "name": "ppomi-voice-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate:playbooks": "node scripts/generate-playbooks.mjs",
+    "generate:theme": "node scripts/generate-theme.mjs",
+    "build": "npm run generate:theme && npm run generate:playbooks && tsc --noEmit && vite build && node scripts/copy-assets.mjs",
+    "test": "npm run generate:playbooks && node --test scripts/*.test.mjs && tsx --test src/*.test.ts server/*.test.ts && npm run test:browser",
+    "dev": "npm run generate:theme && npm run generate:playbooks && vite --host 127.0.0.1",
+    "test:browser": "node --conditions=browser --import tsx --test src/browser-stop.check.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^4.0.65",
+    "@ai-sdk/react": "^4.0.100",
+    "@openai/agents": "0.17.2",
+    "ai": "^7.0.97",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3",
+    "vite": "7.3.6"
+  }
+}

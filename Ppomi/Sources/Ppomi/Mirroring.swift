@@ -97,6 +97,34 @@ enum Mirroring {
 
     // MARK: placement
 
+    /// iPhone Mirroring owns its size presets. Use its Small menu item once for an explicit layout request.
+    /// A disconnected phone may disable this command; never replace it with an unsupported AX size write.
+    @discardableResult
+    static func requestSmallSize() -> Bool {
+        guard trusted("requestSmallSize"), let running = app(),
+              let value = attr(AXUIElementCreateApplication(running.processIdentifier), kAXMenuBarAttribute),
+              CFGetTypeID(value) == AXUIElementGetTypeID() else { return false }
+        let menuBar = value as! AXUIElement
+        let menus = (attr(menuBar, kAXChildrenAttribute) as? [AXUIElement]) ?? []
+        guard let viewMenu = menus.first(where: { menu in
+            guard let title = attr(menu, kAXTitleAttribute) as? String else { return false }
+            return ["보기", "View"].contains(title)
+        }) else { return false }
+
+        func smallItem(in element: AXUIElement, depth: Int = 0) -> AXUIElement? {
+            if attr(element, kAXRoleAttribute) as? String == kAXMenuItemRole,
+               let title = attr(element, kAXTitleAttribute) as? String,
+               ["작게", "Smaller"].contains(title) { return element }
+            guard depth < 3 else { return nil }
+            for child in (attr(element, kAXChildrenAttribute) as? [AXUIElement]) ?? [] {
+                if let item = smallItem(in: child, depth: depth + 1) { return item }
+            }
+            return nil
+        }
+        guard let item = smallItem(in: viewMenu), attr(item, kAXEnabledAttribute) as? Bool == true else { return false }
+        return AXUIElementPerformAction(item, kAXPressAction as CFString) == .success
+    }
+
     /// The screen a CG rect lies on (AppKit screens have a bottom-left origin; CG has top-left of the main display).
     static func screen(containing rect: CGRect) -> NSScreen? {
         let main = NSScreen.screens.first?.frame ?? .zero
@@ -178,6 +206,7 @@ enum Mirroring {
 
     /// Every value/title/description under `e` (depth ≤ 6). The overlay texts ("연결이 중단됨", "iPhone 사용 중") live here.
     private static func texts(_ e: AXUIElement, depth: Int = 0, into out: inout [String]) {
+        guard attr(e, "AXHidden") as? Bool != true else { return }
         for a in [kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute] {
             if let t = attr(e, a) as? String, !t.isEmpty { out.append(t) }
         }
@@ -185,37 +214,131 @@ enum Mirroring {
         for k in (attr(e, kAXChildrenAttribute) as? [AXUIElement]) ?? [] { texts(k, depth: depth + 1, into: &out) }
     }
 
-    static func state() -> MirrorState {
-        guard let w = axWindow() else { return .none }
-        var ts: [String] = []
-        texts(w, into: &ts)
-        return classify(ts)
+    struct ButtonEvidence: Equatable {
+        let labels: [String]
+        let enabled: Bool
     }
+
+    struct ConnectionSnapshot {
+        let state: MirrorState
+        let connected: Bool
+        let inUse: Bool
+        let needsUnlock: Bool
+        let connecting: Bool
+        let canReconnect: Bool
+    }
+
+    /// These names identify the native app's overlay controls, never OCR text inside the phone image.
+    static let reconnectLabels: Set<String> = ["다시 시도", "재개", "연결", "다시 연결", "재연결", "Try Again", "Resume", "Connect", "Reconnect"]
+    private static func normalized(_ text: String) -> String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private static func mentionsInUse(_ compact: String) -> Bool {
+        compact.contains("iphone사용중") || compact.contains("iphone을사용중") || compact.contains("iphoneinuse") ||
+            compact.contains("iphoneisinuse") || compact.contains("iphone을잠그십시오") || compact.contains("lockyouriphone")
+    }
+
+    static func isReconnectButton(_ button: ButtonEvidence) -> Bool {
+        button.enabled && button.labels.contains { reconnectLabels.contains(normalized($0)) }
+    }
+
+    /// A connected stream has its native Home and App Switcher controls. An empty AX tree or a
+    /// connecting overlay is insufficient evidence to send input, even if no error text is present.
+    static func connectionSnapshot(texts: [String], buttons: [ButtonEvidence], hasWindow: Bool = true) -> ConnectionSnapshot {
+        guard hasWindow else { return .init(state: .none, connected: false, inUse: false, needsUnlock: false, connecting: false, canReconnect: false) }
+        let all = texts.joined(separator: " ").lowercased().filter { !$0.isWhitespace }
+        let inUse = mentionsInUse(all)
+        let needsUnlock = all.contains("iphone잠금해제") || all.contains("unlockyouriphone")
+        let connecting = all.contains("연결중") || all.contains("connecting")
+        let nativeLabels = Set(buttons.filter(\.enabled).flatMap(\.labels).map(normalized))
+        let hasHome = !nativeLabels.isDisjoint(with: ["홈", "Home"])
+        let hasSwitcher = !nativeLabels.isDisjoint(with: ["앱 전환기", "App Switcher"])
+        let hasRecoveryControl = buttons.contains { $0.labels.contains { reconnectLabels.contains(normalized($0)) } }
+        let textState = classify(texts)
+        let ready = !inUse && !needsUnlock && !connecting && !hasRecoveryControl && textState == .connected && hasHome && hasSwitcher
+        let state: MirrorState = ready ? .connected : textState == .connected ? .disconnected : textState
+        return .init(state: state, connected: ready, inUse: inUse, needsUnlock: needsUnlock, connecting: connecting,
+                     canReconnect: !ready && !needsUnlock && buttons.filter(isReconnectButton).count == 1)
+    }
+
+    /// Read native button identity, enablement and labels from this app's window only.
+    private static func buttons(in root: AXUIElement) -> [(AXUIElement, ButtonEvidence)] {
+        var result: [(AXUIElement, ButtonEvidence)] = [], seen: [AXUIElement] = []
+        func walk(_ element: AXUIElement, depth: Int) {
+            guard attr(element, "AXHidden") as? Bool != true else { return }
+            guard !seen.contains(where: { CFEqual($0, element) }) else { return }
+            seen.append(element)
+            if attr(element, kAXRoleAttribute) as? String == kAXButtonRole {
+                let labels = [kAXTitleAttribute, kAXDescriptionAttribute].compactMap { attr(element, $0) as? String }
+                result.append((element, .init(labels: labels, enabled: attr(element, kAXEnabledAttribute) as? Bool == true)))
+            }
+            guard depth < 8 else { return }
+            for child in (attr(element, kAXChildrenAttribute) as? [AXUIElement]) ?? [] { walk(child, depth: depth + 1) }
+        }
+        walk(root, depth: 0)
+        return result
+    }
+
+    static func connectionSnapshot() -> ConnectionSnapshot {
+        guard let window = axWindow() else { return connectionSnapshot(texts: [], buttons: [], hasWindow: false) }
+        var labels: [String] = []
+        texts(window, into: &labels)
+        return connectionSnapshot(texts: labels, buttons: buttons(in: window).map { $0.1 })
+    }
+
+    static func state() -> MirrorState { connectionSnapshot().state }
 
     /// The overlay texts → state. Pure, so it can be checked without a window.
     static func classify(_ ts: [String]) -> MirrorState {
         let all = ts.joined(separator: " ")
-        if all.contains("사용 중") || all.contains("잠그십시오") { return .inUse }
+        let compact = all.lowercased().filter { !$0.isWhitespace }
+        if ts.isEmpty || all.contains("iPhone 잠금 해제") || all.contains("연결 중") || all.localizedCaseInsensitiveContains("connecting") { return .disconnected }
+        if mentionsInUse(compact) { return .inUse }
         if all.contains("중단됨") || all.contains("다시 시도") { return .disconnected }
         if all.contains("일시 정지") || ts.contains("재개") { return .paused }
         return .connected
     }
 
-    /// Press the overlay's 다시 시도 (disconnected) or 재개 (paused) button. False when there is none to press.
+    /// Press one exact, enabled native recovery button. Duplicate candidates and stale/disabled controls stop the attempt.
     @discardableResult
     static func reconnect() -> Bool {
         guard trusted("reconnect"), let w = axWindow() else { return false }
-        func button(in e: AXUIElement, depth: Int) -> AXUIElement? {
-            if attr(e, kAXRoleAttribute) as? String == kAXButtonRole,
-               [attr(e, kAXTitleAttribute), attr(e, kAXDescriptionAttribute)].contains(where: {
-                   guard let t = $0 as? String else { return false }
-                   return t.contains("다시 시도") || t.contains("재개") }) { return e }
-            guard depth < 8 else { return nil }
-            for k in (attr(e, kAXChildrenAttribute) as? [AXUIElement]) ?? [] { if let b = button(in: k, depth: depth + 1) { return b } }
-            return nil
+        var labels: [String] = []
+        texts(w, into: &labels)
+        let observed = buttons(in: w)
+        guard connectionSnapshot(texts: labels, buttons: observed.map { $0.1 }).canReconnect else { return false }
+        let candidates = observed.filter { isReconnectButton($0.1) }
+        guard candidates.count == 1 else { return false }
+        return AXUIElementPerformAction(candidates[0].0, kAXPressAction as CFString) == .success
+    }
+
+    /// The gate and idle watcher share the same exclusive recovery lease and state machine.
+    /// Failure to acquire the lease permits observation only, never an additional press.
+    static func recoverOnce(allowInUse: Bool = true, polls: Int = 6,
+                            ledgerPath: String = AppSettings.dbPath) -> ConnectionSnapshot {
+        guard let lease = try? ScreenControlLease.beginMirroringRecovery(ledgerPath: ledgerPath) else { return connectionSnapshot() }
+        defer { lease.release() }
+        return recoverOnce(observe: { connectionSnapshot() }, press: { reconnect() }, allowInUse: allowInUse, polls: polls)
+    }
+
+    /// One action per attempt, followed only by observation. Explicit work may try a recovery button
+    /// beside an in-use message; the background watcher must leave that same message alone.
+    static func recoverOnce(observe: () -> ConnectionSnapshot,
+                            press: () -> Bool,
+                            settle: () -> Void = { Thread.sleep(forTimeInterval: 0.5) },
+                            allowInUse: Bool = true,
+                            polls: Int = 6) -> ConnectionSnapshot {
+        var snapshot = observe()
+        if snapshot.connected || snapshot.needsUnlock || (!allowInUse && snapshot.inUse) { return snapshot }
+        if snapshot.canReconnect {
+            guard press() else { return observe() }
+        } else if !snapshot.connecting {
+            return snapshot
         }
-        guard let b = button(in: w, depth: 0) else { print("Mirroring.reconnect: no 다시 시도/재개 button"); return false }
-        return AXUIElementPerformAction(b, kAXPressAction as CFString) == .success
+        for _ in 0..<max(1, min(polls, 6)) {
+            settle()
+            snapshot = observe()
+            if snapshot.connected || snapshot.needsUnlock { break }
+        }
+        return snapshot
     }
 }
 
@@ -287,9 +410,18 @@ final class MirrorWatcher {
     private var lastRetry = Date.distantPast
 
     private func check() {
-        let s = Mirroring.state()
-        // 연결이 중단됨 / 일시 정지됨: press the button ourselves, every 20 s, until the phone is back. Waiting is the same thing.
-        if s == .disconnected || s == .paused, Date().timeIntervalSince(lastRetry) > 20 { lastRetry = Date(); Mirroring.reconnect() }
+        var snapshot = Mirroring.connectionSnapshot()
+        // Preserve idle recovery, but never try to reclaim a phone that the native app says is in use.
+        // Each attempt shares the gate's exclusive recovery lock and observes the resulting state.
+        if !snapshot.inUse, !snapshot.needsUnlock, snapshot.canReconnect,
+           snapshot.state == .disconnected || snapshot.state == .paused,
+           Date().timeIntervalSince(lastRetry) > 20,
+           let lease = try? ScreenControlLease.beginControl(ledgerPath: AppSettings.dbPath) {
+            defer { lease.release() }
+            lastRetry = Date()
+            snapshot = Mirroring.recoverOnce(allowInUse: false, polls: 1) // keep the main-thread watcher wait short; its timer observes later progress
+        }
+        let s = snapshot.state
         guard s != last else { return }
         last = s
         onChange(s)

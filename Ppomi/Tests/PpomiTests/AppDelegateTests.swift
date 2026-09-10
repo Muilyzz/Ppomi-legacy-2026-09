@@ -3,8 +3,8 @@ import XCTest
 @testable import Ppomi
 
 final class AppDelegateTests: XCTestCase {
-    /// A visible Settings window must not stop a Dock click from reopening the workbench.
-    @MainActor func testReopenRevealsWorkbenchRegardlessOfVisibleWindows() {
+    /// Settings and workbench windows do not replace the app's default conversation entry.
+    @MainActor func testReopenOpensChatRegardlessOfVisibleWindows() {
         for visible in [false, true] {
             let state = AppState()
             state.show(.playbooks)
@@ -12,13 +12,14 @@ final class AppDelegateTests: XCTestCase {
             delegate.state = state
 
             XCTAssertFalse(delegate.applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: visible))
-            XCTAssertEqual(state.shown, 1)
+            XCTAssertEqual(state.chatOpen, 1)
+            XCTAssertEqual(state.shown, 0)
             XCTAssertEqual(state.tab, .playbooks)
         }
     }
 
-    /// The expanded workbench is the same panel, so a Dock click must reveal it without changing its size mode.
-    @MainActor func testReopenRevealsWorkbenchAndPreservesKiosk() {
+    /// Reopening chat does not change an explicitly selected workbench size or record tab.
+    @MainActor func testReopenOpensChatAndPreservesKiosk() {
         for visible in [false, true] {
             let state = AppState()
             state.show(.playbooks)
@@ -27,7 +28,8 @@ final class AppDelegateTests: XCTestCase {
             delegate.state = state
 
             XCTAssertFalse(delegate.applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: visible))
-            XCTAssertEqual(state.shown, 1)
+            XCTAssertEqual(state.chatOpen, 1)
+            XCTAssertEqual(state.shown, 0)
             XCTAssertTrue(state.kioskOn)
             XCTAssertEqual(state.phase, .humanUse(onScreen: true))
             XCTAssertEqual(state.tab, .playbooks)
@@ -41,6 +43,7 @@ final class AppDelegateTests: XCTestCase {
         AppDelegate.pendingState = state
 
         XCTAssertFalse(AppDelegate().applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: false))
-        XCTAssertEqual(state.shown, 1)
+        XCTAssertEqual(state.chatOpen, 1)
+        XCTAssertEqual(state.shown, 0)
     }
 }

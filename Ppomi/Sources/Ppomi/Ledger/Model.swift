@@ -18,8 +18,8 @@ struct Observation: Hashable {
 }
 
 /// A transaction row as stored by am.py.
-struct Transaction: Hashable, Identifiable {
-    enum Kind: String { case approval, cancel, deposit, withdrawal }
+struct Transaction: Hashable, Identifiable, Codable {
+    enum Kind: String, Codable { case approval, cancel, deposit, withdrawal }
     let id: Int
     let ts: Date
     let kind: Kind
@@ -133,6 +133,14 @@ enum AppSettings {
     }
     static var baseURL: String { get { d.string(forKey: "baseURL") ?? "https://api.openai.com/v1" } set { d.set(newValue, forKey: "baseURL") } }
     static var model: String { get { d.string(forKey: "model") ?? "gpt-5-mini" } set { d.set(newValue, forKey: "model") } }
+    /// Explicit fallback calls only; ordinary OCR captures never cause an API request.
+    static var visionEnabled: Bool { get { d.bool(forKey: "visionEnabled") } set { d.set(newValue, forKey: "visionEnabled") } }
+    static var visionModel: String { env("OPENAI_VISION_MODEL") ?? VisualInspector.defaultModel }
+    /// Whole-UI size (glyphs, spacing, controls) for people who set their text very large; 1 = default, clamped 0.75–3.
+    static var uiScale: Double {
+        get { let v = d.double(forKey: "uiScale"); return v == 0 ? 1 : min(3, max(0.75, v)) }
+        set { d.set(newValue, forKey: "uiScale") }
+    }
 }
 
 /// Days are local (KST) midnights.

@@ -9,8 +9,6 @@ final class ImmersiveKioskTests: XCTestCase {
         let layout = ImmersiveLayout(screen: screen, phone: phone)
         XCTAssertEqual(layout.phone, phone)
         assertCoverage(layout)
-        XCTAssertGreaterThan(layout.sidebar.width, 600)
-        XCTAssertEqual(layout.sidebar, layout.bands[layout.sidebarIndex])
     }
 
     func testClampedTallPhoneWithNegativeScreenOriginKeepsAllMasksOnScreen() {
@@ -20,7 +18,6 @@ final class ImmersiveKioskTests: XCTestCase {
         XCTAssertEqual(layout.phone, phone.intersection(screen))
         assertCoverage(layout)
         XCTAssertEqual(layout.phone?.height, screen.height)
-        XCTAssertGreaterThan(layout.sidebar.width, 900)
     }
 
     func testPartlyOffscreenPhoneOnOffsetDisplayLeavesNoMaskGaps() {
@@ -31,24 +28,98 @@ final class ImmersiveKioskTests: XCTestCase {
         assertCoverage(layout)
     }
 
-    func testAbsentOrEntirelyOffscreenPhoneProducesFullCoverAndUsableSidebar() {
+    func testAbsentOrEntirelyOffscreenPhoneProducesFullCover() {
         let screen = CGRect(x: 300, y: -700, width: 1200, height: 700)
         for phone in [nil, CGRect(x: -900, y: 600, width: 348, height: 720)] as [CGRect?] {
             let layout = ImmersiveLayout(screen: screen, phone: phone)
             XCTAssertNil(layout.phone)
             assertCoverage(layout)
-            XCTAssertEqual(layout.sidebar, screen)
+            XCTAssertEqual(layout.bands[2], screen)
         }
     }
 
-    func testExitTargetRemainsFullSizeWhenGapAbovePhoneIsShort() {
+    @MainActor func testRecordsPageCoversTheWholeScreenWithoutNativeWindowOpenings() {
+        for origin in [CGPoint.zero, CGPoint(x: -1440, y: -180), CGPoint(x: 240, y: 120)] {
+            let screen = CGRect(origin: origin, size: CGSize(width: 1440, height: 1000))
+            let normal = ImmersiveKiosk.layout(screen: screen, phone: nil, controlWidth: 300)
+            let phone = WorkbenchLayout.topAlignedWindow(size: CGSize(width: 300, height: 350), in: normal.controlArea)
+            let focused = ImmersiveKiosk.layout(screen: screen, phone: phone, controlWidth: 300, recordsFocused: true, footerHeight: 116)
+            XCTAssertNil(focused.controls.phone)
+            XCTAssertTrue(focused.controlArea.isEmpty)
+            XCTAssertTrue(focused.sidebar.isEmpty)
+            XCTAssertEqual(focused.recordsCover, screen)
+            XCTAssertTrue(normal.recordsCover.isEmpty)
+            assertCoverage(screen: screen, covers: [focused.recordsCover, focused.sidebar] + focused.controls.bands, holes: [])
+        }
+    }
+
+    @MainActor func testRecordsPageHidesTheConversationWithoutUnmountingIt() {
+        _ = NSApplication.shared
+        let sidebar = AgentSidebar(state: AppState())
+        let host = NSView(frame: CGRect(x: 0, y: 0, width: 700, height: 800))
+        ImmersiveKiosk.mountConversation(workbench: sidebar, in: host)
+        let conversationFrame = sidebar.frame
+        XCTAssertEqual(conversationFrame, WorkbenchLayout.pane(in: host.bounds).content)
+
+        for focused in [true, false, true, false] {
+            ImmersiveKiosk.mountConversation(workbench: sidebar, recordsFocused: focused, in: host)
+            XCTAssertEqual(sidebar.isHidden, focused)
+            XCTAssertTrue(sidebar.superview === host)
+            XCTAssertEqual(sidebar.frame, conversationFrame, "Hidden conversation geometry stays intact until restored")
+            XCTAssertEqual(host.subviews.count, 1)
+        }
+    }
+
+    func testConversationAndControlColumnsCoverTheScreenAroundThePhone() {
+        for origin in [CGPoint.zero, CGPoint(x: -1440, y: -180), CGPoint(x: 240, y: 120)] {
+            let screen = CGRect(origin: origin, size: CGSize(width: 1440, height: 1000))
+            for footer in [CGFloat(0), 116] {
+                let base = ImmersiveDashboardLayout(screen: screen, phone: nil, controlWidth: 300, footerHeight: footer)
+                let phone = WorkbenchLayout.topAlignedWindow(size: CGSize(width: 300, height: 440), in: base.controlArea)
+                let layout = ImmersiveDashboardLayout(screen: screen, phone: phone, controlWidth: 300, footerHeight: footer)
+                XCTAssertEqual(layout.controls.phone, phone)
+                XCTAssertEqual(layout.sidebar.minX, screen.minX)
+                XCTAssertEqual(layout.sidebar.width, screen.width - (300 + WorkbenchLayout.horizontalInset * 2))
+                XCTAssertEqual(layout.controlArea.width, 300)
+                XCTAssertTrue(layout.recordsCover.isEmpty)
+                assertCoverage(screen: screen, covers: [layout.sidebar] + layout.controls.bands, holes: [phone])
+            }
+        }
+    }
+
+    func testMovedOrAbsentPhoneCannotChangeTheConversationColumn() {
+        let screen = CGRect(x: -1280, y: 80, width: 1280, height: 900)
+        let absent = ImmersiveDashboardLayout(screen: screen, phone: nil, controlWidth: 300)
+        let movedPhone = CGRect(x: screen.minX + 20, y: screen.minY + 20, width: 300, height: 700)
+        let moved = ImmersiveDashboardLayout(screen: screen, phone: movedPhone, controlWidth: 300)
+        XCTAssertNil(absent.controls.phone)
+        XCTAssertNil(moved.controls.phone)
+        XCTAssertEqual(moved.sidebar, absent.sidebar)
+        assertCoverage(screen: screen, covers: [moved.sidebar] + moved.controls.bands, holes: [])
+    }
+
+    func testPartlyOutOfAreaSmallPhoneNeverCreatesAPartialHole() {
+        let screen = CGRect(x: -1440, y: 80, width: 1440, height: 1000)
+        let base = ImmersiveDashboardLayout(screen: screen, phone: nil, controlWidth: 300)
+        let area = base.controlArea
+        let outsideFrames = [
+            CGRect(x: area.minX - 20, y: area.minY + 20, width: 300, height: 400),
+            CGRect(x: area.minX + 20, y: area.maxY - 380, width: 300, height: 400),
+        ]
+        for phone in outsideFrames {
+            XCTAssertTrue(area.intersects(phone))
+            let layout = ImmersiveDashboardLayout(screen: screen, phone: phone, controlWidth: 300)
+            XCTAssertNil(layout.controls.phone)
+            XCTAssertEqual(layout.sidebar, base.sidebar)
+            assertCoverage(screen: screen, covers: [layout.sidebar] + layout.controls.bands, holes: [])
+        }
+    }
+
+    func testExitTargetStaysOnScreen() {
         let screen = CGRect(x: 180, y: 220, width: 1280, height: 720)
-        let phone = CGRect(x: 1060, y: 230, width: 348, height: 700)
-        let layout = ImmersiveLayout(screen: screen, phone: phone)
-        XCTAssertLessThan(screen.maxY - phone.maxY, 48)
+        let layout = ImmersiveDashboardLayout(screen: screen, phone: nil, controlWidth: 300)
         XCTAssertEqual(layout.exitFrame.size, CGSize(width: 48, height: 48))
         XCTAssertTrue(screen.contains(layout.exitFrame))
-        assertCoverage(layout)
     }
 
     func testKeyboardRevealsExitAndEscapeRequiresTwoDistinctPresses() {
@@ -70,176 +141,112 @@ final class ImmersiveKioskTests: XCTestCase {
         XCTAssertTrue(state.keyPressed(isEscape: true, isRepeat: false))
     }
 
-    func testAgentBandsCoverOnlyTheSidebarOutsideTheSecondHole() throws {
-        for origin in [CGPoint.zero, CGPoint(x: -1440, y: -180), CGPoint(x: 240, y: 120)] {
-            let screen = CGRect(origin: origin, size: CGSize(width: 1440, height: 900))
-            let phone = CGRect(x: screen.minX + 1050, y: screen.minY + 80, width: 300, height: 740)
-            let phoneLayout = ImmersiveLayout(screen: screen, phone: phone)
-            let available = ImmersiveAgentLayout.availableArea(in: phoneLayout.sidebar, bandHeight: 116, toolbarHeight: 40)
-            let agent = available.insetBy(dx: 20, dy: 30)
-            let agentLayout = try XCTUnwrap(ImmersiveAgentLayout(sidebar: phoneLayout.sidebar, agent: agent,
-                                                                bandHeight: 116, toolbarHeight: 40))
-            XCTAssertEqual(agentLayout.agent, agent)
-            let covers = phoneLayout.bands.enumerated().compactMap { $0.offset == phoneLayout.sidebarIndex ? nil : $0.element }
-                + agentLayout.bands
-            assertCoverage(screen: screen, covers: covers, holes: [phone, agent])
-        }
-    }
-
-    func testAgentCanUseTheFullScreenSidebarWhenThereIsNoPhone() throws {
-        let screen = CGRect(x: -800, y: 240, width: 1200, height: 800)
-        let phoneLayout = ImmersiveLayout(screen: screen, phone: nil)
-        let agent = ImmersiveAgentLayout.availableArea(in: phoneLayout.sidebar, bandHeight: 116, toolbarHeight: 40)
-        let layout = try XCTUnwrap(ImmersiveAgentLayout(sidebar: phoneLayout.sidebar, agent: agent,
-                                                       bandHeight: 116, toolbarHeight: 40))
-        assertCoverage(screen: screen, covers: layout.bands, holes: [agent])
-    }
-
-    @MainActor func testAgentAvailableAreaMatchesToolbarAndApprovalReservations() throws {
-        let sidebar = CGRect(x: -980, y: -120, width: 800, height: 820)
-        let available = ImmersiveKiosk.agentAvailableArea(in: sidebar, bandHeight: 116)
-        XCTAssertEqual(available, CGRect(x: -968, y: 16, width: 776, height: 632))
-        let layout = try XCTUnwrap(ImmersiveAgentLayout(sidebar: sidebar, agent: available,
-                                                       bandHeight: 116, toolbarHeight: AgentSidebar.toolbarHeight))
-        XCTAssertEqual(layout.bands[0].height, 52)
-        XCTAssertEqual(layout.bands[1].height, 136)
-        XCTAssertEqual(layout.bands[2].width, 12)
-        XCTAssertEqual(layout.bands[3].width, 12)
-        assertCoverage(screen: sidebar, covers: layout.bands, holes: [available])
-    }
-
-    func testAgentMustFitEntirelyInsideTheReservedArea() {
-        let sidebar = CGRect(x: 40, y: -600, width: 780, height: 900)
-        let available = ImmersiveAgentLayout.availableArea(in: sidebar, bandHeight: 116, toolbarHeight: 40)
-        for agent in [available.offsetBy(dx: -1, dy: 0), available.offsetBy(dx: 1, dy: 0),
-                      available.offsetBy(dx: 0, dy: -1), available.offsetBy(dx: 0, dy: 1), sidebar,
-                      CGRect(origin: available.origin, size: .zero)] {
-            XCTAssertNil(ImmersiveAgentLayout(sidebar: sidebar, agent: agent, bandHeight: 116, toolbarHeight: 40))
-        }
-    }
-
-    func testExpandedApprovalBandCanInvalidateAnExistingAgentHole() throws {
-        let sidebar = CGRect(x: 0, y: 0, width: 600, height: 800)
-        let agent = ImmersiveAgentLayout.availableArea(in: sidebar, bandHeight: 116, toolbarHeight: 40)
-        XCTAssertNotNil(ImmersiveAgentLayout(sidebar: sidebar, agent: agent, bandHeight: 116, toolbarHeight: 40))
-        XCTAssertNil(ImmersiveAgentLayout(sidebar: sidebar, agent: agent, bandHeight: 180, toolbarHeight: 40))
-        let resizedAgent = ImmersiveAgentLayout.availableArea(in: sidebar, bandHeight: 180, toolbarHeight: 40)
-        let resized = try XCTUnwrap(ImmersiveAgentLayout(sidebar: sidebar, agent: resizedAgent,
-                                                        bandHeight: 180, toolbarHeight: 40))
-        assertCoverage(screen: sidebar, covers: resized.bands, holes: [resizedAgent])
-    }
-
-    func testTooSmallSidebarHasNoAgentOpening() {
-        for sidebar in [CGRect(x: 0, y: 0, width: 24, height: 900), CGRect(x: 0, y: 0, width: 700, height: 188)] {
-            let available = ImmersiveAgentLayout.availableArea(in: sidebar, bandHeight: 116, toolbarHeight: 40)
-            XCTAssertTrue(available.isEmpty)
-            XCTAssertNil(ImmersiveAgentLayout(sidebar: sidebar, agent: available, bandHeight: 116, toolbarHeight: 40))
-        }
-    }
-
-    @MainActor func testAgentToolbarAndApprovalViewsReturnToTheOriginalSidebar() throws {
-        _ = NSApplication.shared
-        let sidebar = AgentSidebar(records: NSView(), state: AppState())
-        let toolbar = sidebar.toolbar
-        let band = PhoneBand()
-        let fullHost = NSView(frame: CGRect(x: 0, y: 0, width: 800, height: 820))
-        ImmersiveKiosk.mount(workbench: sidebar, band: band, in: fullHost)
-        sidebar.layoutSubtreeIfNeeded()
-        let available = ImmersiveKiosk.agentAvailableArea(in: fullHost.bounds, bandHeight: band.preferredHeight(for: 776))
-        let layout = try XCTUnwrap(ImmersiveAgentLayout(sidebar: fullHost.bounds, agent: available,
-                                                       bandHeight: band.preferredHeight(for: 776), toolbarHeight: AgentSidebar.toolbarHeight))
-        let top = NSView(frame: CGRect(origin: .zero, size: layout.bands[0].size))
-        let bottom = NSView(frame: CGRect(origin: .zero, size: layout.bands[1].size))
-
-        for _ in 0..<2 {
-            ImmersiveKiosk.mountAgentControls(toolbar: toolbar, band: band, top: top, bottom: bottom,
-                                              toolbarHeight: AgentSidebar.toolbarHeight)
-            XCTAssertTrue(sidebar.toolbar === toolbar)
-            XCTAssertTrue(toolbar.superview === top)
-            XCTAssertTrue(band.superview === bottom)
-            XCTAssertTrue(top.bounds.contains(toolbar.frame))
-            XCTAssertTrue(bottom.bounds.contains(band.frame))
-            let borrowedToolbarFrame = toolbar.frame
-            sidebar.frame.size = CGSize(width: 480, height: 500)
-            sidebar.layout()
-            XCTAssertEqual(toolbar.frame, borrowedToolbarFrame, "The hidden sidebar must not reposition its lent toolbar")
-
-            ImmersiveKiosk.mount(workbench: sidebar, band: band, in: fullHost)
-            sidebar.layoutSubtreeIfNeeded()
-            XCTAssertTrue(sidebar.superview === fullHost)
-            XCTAssertTrue(toolbar.superview === sidebar)
-            XCTAssertTrue(band.superview === fullHost)
-            XCTAssertFalse(top.subviews.contains { $0 === toolbar })
-            XCTAssertFalse(bottom.subviews.contains { $0 === band })
-            XCTAssertEqual(sidebar.subviews.filter { $0 === toolbar }.count, 1)
-            XCTAssertNil(toolbar.window)
-            XCTAssertNil(band.window)
-        }
-    }
-
-    @MainActor func testMountingRetainsTheSameWorkbenchAndApprovalViewsWithoutShowingWindows() {
+    @MainActor func testMountingRetainsTheSameConversationWithoutShowingWindows() {
         _ = NSApplication.shared
         let workbench = NSView()
-        let band = PhoneBand()
         let originalHost = NSView(frame: CGRect(x: 0, y: 0, width: 620, height: 900))
         let immersiveHost = NSView(frame: CGRect(x: 0, y: 0, width: 780, height: 1000))
 
         for host in [originalHost, immersiveHost, originalHost] {
-            ImmersiveKiosk.mount(workbench: workbench, band: band, in: host)
-            ImmersiveKiosk.layoutContent(workbench: workbench, band: band, in: host.bounds)
+            ImmersiveKiosk.mountConversation(workbench: workbench, in: host)
+            ImmersiveKiosk.layoutConversation(workbench: workbench, in: host.bounds)
             XCTAssertTrue(workbench.superview === host)
-            XCTAssertTrue(band.superview === host)
             XCTAssertEqual(host.subviews.filter { $0 === workbench }.count, 1)
-            XCTAssertEqual(host.subviews.filter { $0 === band }.count, 1)
             XCTAssertTrue(host.bounds.contains(workbench.frame))
-            XCTAssertTrue(host.bounds.contains(band.frame))
-            XCTAssertFalse(workbench.frame.intersects(band.frame))
+            XCTAssertEqual(workbench.frame.minY, WorkbenchLayout.approvalBottom, "No footer under the conversation")
             XCTAssertGreaterThan(workbench.frame.height, 0)
-            XCTAssertGreaterThan(band.frame.height, 0)
             XCTAssertNil(workbench.window)
-            XCTAssertNil(band.window)
         }
-        XCTAssertFalse(immersiveHost.subviews.contains { $0 === workbench || $0 === band })
+        XCTAssertFalse(immersiveHost.subviews.contains { $0 === workbench })
     }
 
-    @MainActor func testSuspendedNormalLayoutCannotResizeViewsLentToImmersiveHost() {
+    @MainActor func testRecordViewReturnsBetweenHostsWithItsSelectionAndPadding() {
+        _ = NSApplication.shared
+        let records = NSTabView()
+        let first = NSTabViewItem(identifier: "timeline")
+        let selected = NSTabViewItem(identifier: "evidence")
+        records.addTabViewItem(first)
+        records.addTabViewItem(selected)
+        records.selectTabViewItem(selected)
+        let normalHost = NSView(frame: CGRect(x: 0, y: 0, width: 720, height: 880))
+        let immersiveHost = NSView(frame: CGRect(x: 0, y: 0, width: 800, height: 1000))
+
+        for host in [normalHost, immersiveHost, normalHost] {
+            ImmersiveKiosk.mountRecords(records, in: host)
+            ImmersiveKiosk.mountRecords(records, in: host)
+            XCTAssertTrue(records.superview === host)
+            XCTAssertEqual(host.subviews.filter { $0 === records }.count, 1)
+            XCTAssertTrue(records.selectedTabViewItem === selected)
+            XCTAssertEqual(records.frame.minX, 12)
+            XCTAssertEqual(records.frame.minY, 8)
+            XCTAssertEqual(host.bounds.maxX - records.frame.maxX, 12)
+            XCTAssertEqual(host.bounds.maxY - records.frame.maxY, 12)
+            XCTAssertTrue(host.bounds.contains(records.frame))
+            XCTAssertNil(records.window)
+        }
+        XCTAssertFalse(immersiveHost.subviews.contains { $0 === records })
+    }
+
+    @MainActor func testNormalParentsCannotResizeLentViewsAndReclaimTheSameContent() {
         _ = NSApplication.shared
         let originalFrame = CGRect(x: 0, y: 0, width: 940, height: 894)
         let content = WorkbenchContent(frame: originalFrame)
-        let workbench = NSView()
-        content.workbench = workbench
-        content.workbenchArea.addSubview(workbench)
+        let workbench = NSView(), records = NSView(), controlToolbar = NSView()
+        content.mount(sidebar: workbench, records: records, controlToolbar: controlToolbar)
         content.needsLayout = true
         content.layoutSubtreeIfNeeded()
         let normalWorkbenchFrame = workbench.frame
         let normalBandFrame = content.band.frame
+        let normalRecordsFrame = records.frame
+        let normalToolbarFrame = controlToolbar.frame
         XCTAssertGreaterThan(normalWorkbenchFrame.height, 0)
 
         let immersiveHost = NSView(frame: CGRect(x: 0, y: 0, width: 780, height: 1000))
-        content.layoutSuspended = true
-        ImmersiveKiosk.mount(workbench: workbench, band: content.band, in: immersiveHost)
+        let recordsHost = NSView(frame: CGRect(x: 0, y: 0, width: 600, height: 1000))
+        let controlTop = NSView(frame: CGRect(x: 0, y: 0, width: 780, height: 64))
+        let controlBottom = NSView(frame: CGRect(x: 0, y: 0, width: 780, height: 200))
+        ImmersiveKiosk.mountConversation(workbench: workbench, in: immersiveHost)
+        ImmersiveKiosk.mountPaneControls(toolbar: controlToolbar, footer: content.band, footerHeight: 116,
+                                        top: controlTop, bottom: controlBottom)
+        ImmersiveKiosk.mountRecords(records, in: recordsHost)
         let immersiveWorkbenchFrame = workbench.frame
         let immersiveBandFrame = content.band.frame
+        let immersiveRecordsFrame = records.frame
+        let immersiveToolbarFrame = controlToolbar.frame
         XCTAssertNotEqual(immersiveWorkbenchFrame, normalWorkbenchFrame)
+        XCTAssertNotEqual(immersiveBandFrame, normalBandFrame)
 
         // A hidden normal host can still receive layout while its existing views belong to another window.
         content.frame.size = CGSize(width: 1240, height: 1080)
         content.layout()
+        content.workbenchArea.layout()
+        content.recordsArea.layout()
+        content.controlToolbarArea.layout()
         XCTAssertTrue(workbench.superview === immersiveHost)
-        XCTAssertTrue(content.band.superview === immersiveHost)
+        XCTAssertTrue(content.band.superview === controlBottom)
+        XCTAssertTrue(controlToolbar.superview === controlTop)
+        XCTAssertTrue(records.superview === recordsHost)
         XCTAssertEqual(workbench.frame, immersiveWorkbenchFrame)
         XCTAssertEqual(content.band.frame, immersiveBandFrame)
+        XCTAssertEqual(records.frame, immersiveRecordsFrame)
+        XCTAssertEqual(controlToolbar.frame, immersiveToolbarFrame)
 
         content.frame = originalFrame
-        content.workbenchArea.addSubview(workbench)
-        content.addSubview(content.band)
-        content.layoutSuspended = false
+        content.reclaimContent()
         content.needsLayout = true
         content.layoutSubtreeIfNeeded()
         XCTAssertTrue(workbench.superview === content.workbenchArea)
         XCTAssertTrue(content.band.superview === content)
+        XCTAssertTrue(records.superview === content.recordsArea)
+        XCTAssertTrue(controlToolbar.superview === content.controlToolbarArea)
         XCTAssertEqual(workbench.frame, normalWorkbenchFrame)
         XCTAssertEqual(content.band.frame, normalBandFrame)
+        XCTAssertEqual(records.frame, normalRecordsFrame)
+        XCTAssertEqual(controlToolbar.frame, normalToolbarFrame)
+        XCTAssertTrue(immersiveHost.subviews.isEmpty)
+        XCTAssertTrue(recordsHost.subviews.isEmpty)
+        XCTAssertTrue(controlTop.subviews.isEmpty)
+        XCTAssertTrue(controlBottom.subviews.isEmpty)
         XCTAssertNil(workbench.window)
         XCTAssertNil(content.band.window)
     }

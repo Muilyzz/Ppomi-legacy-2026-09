@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "id": "nps",
+  "name": "국민연금 전자민원",
+  "version": "0.1.0",
+  "aliases": ["국민연금", "국민연금공단", "NPS", "nps.or.kr", "연금 전자민원"],
+  "launch": { "search": "https://www.nps.or.kr/", "target": "windows" },
+  "capabilities": [
+    {
+      "id": "estimate-pension",
+      "title": "예상연금 조회",
+      "description": "Parallels Windows에서 전자민원 > 개인 > 조회 > 예상연금 화면을 열고 로그인을 준비합니다. 인증은 당사자가 처리하며, 화면에서 확인한 예상 수령액·수령 개시 시점만 보고합니다. 로그인 이후 경로는 2026-09-10 기준 미검증입니다.",
+      "inputs": [
+        { "name": "subject", "label": "조회 당사자(가족 중 누구인지, 실제 이름·번호 제외)", "required": true },
+        { "name": "loginMethod", "label": "로그인 방식(간편인증·공동인증서·금융인증서 등, 문맥에서 알면 다시 묻지 않음)", "required": false }
+      ],
+      "steps": [
+        { "id": "open", "title": "▶https://www.nps.or.kr/ (windows_open · Parallels)", "kind": "open" },
+        { "id": "gate", "title": "⊙개인민원", "kind": "tap" },
+        { "id": "menu", "title": "⊙전자민원 → 조회 → 예상연금", "kind": "tap" },
+        { "id": "login-prepare", "title": "⊙로그인 방식 탭 선택·보안프로그램 안내 확인", "kind": "tap" },
+        { "id": "login-human", "title": "👤인증서 암호·간편인증·OTP", "kind": "human" },
+        { "id": "resume", "title": "⊙로그인 뒤 조회 메뉴 재진입", "kind": "tap" },
+        { "id": "scroll", "title": "↓예상연금 표", "kind": "scroll" },
+        { "id": "report", "title": "📝예상 수령액·개시 시점·산정 기준", "kind": "read" }
+      ]
+    },
+    {
+      "id": "membership-history",
+      "title": "가입내역·납부 조회",
+      "description": "전자민원 > 개인 > 조회 > 가입내역 / 부과·납부내역 화면을 열어 총 가입기간·납부 개월·미납 여부를 읽습니다. 납부·이체는 하지 않습니다. 로그인 이후 화면은 2026-09-10 기준 미검증입니다.",
+      "inputs": [
+        { "name": "subject", "label": "조회 당사자(실제 이름·번호 제외)", "required": true },
+        { "name": "scope", "label": "가입내역 또는 부과·납부내역(기본 둘 다)", "required": false }
+      ],
+      "steps": [
+        { "id": "open", "title": "▶https://www.nps.or.kr/elctcvlcpt/inquiry/getOHAC0001M0.do (windows_open)", "kind": "open" },
+        { "id": "login-prepare", "title": "⊙로그인을 해주세요 → 로그인 방식 탭", "kind": "tap" },
+        { "id": "login-human", "title": "👤인증서 암호·간편인증·OTP", "kind": "human" },
+        { "id": "history", "title": "⊙조회 → 가입내역", "kind": "tap" },
+        { "id": "scroll-history", "title": "↓가입 이력 표", "kind": "scroll" },
+        { "id": "payment", "title": "⊙조회 → 부과·납부내역|납부내역", "kind": "tap" },
+        { "id": "report", "title": "📝총 가입기간·납부 개월·미납·최근 납부월", "kind": "read" }
+      ]
+    },
+    {
+      "id": "issue-membership-certificate",
+      "title": "가입증명서 발급",
+      "description": "전자민원 > 개인 > 증명서 발급 > 가입자 가입증명(국/영문)을 열어 출력·저장을 준비합니다. 수수료 없음으로 안내되나 화면 금액으로 확인합니다. 인쇄·PDF 저장 화면은 2026-09-10 기준 미검증입니다.",
+      "inputs": [
+        { "name": "subject", "label": "발급 당사자(실제 이름·번호 제외)", "required": true },
+        { "name": "language", "label": "국문 또는 영문(기본 국문)", "required": false },
+        { "name": "purpose", "label": "제출처·용도(화면에서 요구할 때만)", "required": false }
+      ],
+      "steps": [
+        { "id": "open", "title": "▶https://www.nps.or.kr/elctcvlcpt/cfdcissu/getOHAC0020M0.do (windows_open)", "kind": "open" },
+        { "id": "login-prepare", "title": "⊙로그인이 필요한 서비스 → 로그인 방식 탭", "kind": "tap" },
+        { "id": "login-human", "title": "👤인증서 암호·간편인증·OTP", "kind": "human" },
+        { "id": "certificate", "title": "⊙증명서 발급 → 가입자 가입증명(국/영문)", "kind": "tap" },
+        { "id": "options", "title": "⌨용도·언어·주민번호 표시 여부(뒷자리 가림 기본)", "kind": "input" },
+        { "id": "close", "title": "⎋출력 프로그램 설치 안내", "kind": "close" },
+        { "id": "print-human", "title": "👤출력 프로그램 관리자 설치·PDF 저장 위치", "kind": "human" },
+        { "id": "report", "title": "📝발급 완료·저장 위치·유효 안내", "kind": "read" }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "자격 증명·인증서 암호·간편인증 승인·OTP·인증용 주민번호·CAPTCHA·새 동의는 당사자가 직접 처리합니다. 로그인 방식 탭 선택, 보안프로그램 안내 확인, 메뉴 진입은 에이전트가 진행합니다. 실제 값은 패키지·발자국에 남기지 않습니다.",
+    "보안·출력 프로그램 설치의 OS 관리자 인증과 브라우저의 새 접근 권한은 대상과 효과를 보여 준 뒤 당사자가 처리합니다. 이미 허용된 공식 다운로드·설치 준비는 반복 확인하지 않습니다.",
+    "이 사이트는 조회·발급 중심이며 이체·보험료 납부는 하지 않습니다. 수수료가 화면에 표시되면 ✋ confirm_payment 승인 1회에 windows_click 결제 클릭 1회의 코드 경계를 따르고 결제 인증은 당사자가 마칩니다."
+  ],
+  "guide": "guide.md"
+}

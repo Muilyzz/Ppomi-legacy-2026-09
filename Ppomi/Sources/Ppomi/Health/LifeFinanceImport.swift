@@ -83,7 +83,7 @@ enum LifeFinanceImport {
                 try save(value, shot: nil)
             }
         }
-        return "금융 관측 \(inserted)건 추가 · 기존 \(duplicates)건 · 값 충돌 \(conflicts)건 · 형식 미확인 \(skipped)건. 소유자·계좌 연결은 추정하지 않았습니다."
+        return "금융 관측 \(inserted)건 추가 · 기존 \(duplicates)건 · 값 충돌 \(conflicts)건 · 형식 미확인 \(skipped)건 · 소유자·계좌 미연결"
     }
 
     static func parseLegacyTimestamp(_ text: String) -> Date? {
