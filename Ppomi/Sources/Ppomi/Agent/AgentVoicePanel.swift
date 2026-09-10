@@ -329,13 +329,21 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let entry, action.targetFrame?.isMainFrame == true,
               AgentNativePolicy.trusted(action.request.url, entry: entry), action.navigationType == .other else {
+            if action.navigationType == .linkActivated { Self.openExternally(action.request.url) }   // 답변 속 링크는 기본 브라우저로; 페이지는 떠나지 않는다
             decisionHandler(.cancel); return
         }
         decisionHandler(.allow)
     }
 
+    /// target=_blank 링크: 새 웹뷰를 만들지 않고 기본 브라우저에 넘긴다.
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
-                 for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? { nil }
+                 for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        Self.openExternally(navigationAction.request.url); return nil
+    }
+    private static func openExternally(_ url: URL?) {
+        guard let url, let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http" else { return }
+        NSWorkspace.shared.open(url)
+    }
 
     func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin,
                  initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType,

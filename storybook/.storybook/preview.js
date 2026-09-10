@@ -18,7 +18,7 @@ const skin = (style, parts = ['theme']) =>
 
 export default {
   globalTypes: {
-    style: {description: '주입 스타일', toolbar: {title: '스타일', items: [{value: 'ppomi', title: '뽀미 테마'}, {value: 'simple', title: '심플'}, {value: 'none', title: '기본 DOM'}], dynamicTitle: true}},
+    style: {description: '주입 스타일', toolbar: {title: '스타일', items: [{value: 'ppomi', title: '뽀미 테마'}, {value: 'simple', title: '심플'}, {value: 'none', title: '없음 · Preflight만'}], dynamicTitle: true}},
     theme: {description: '테마', toolbar: {icon: 'mirror', items: [{value: 'system', title: '시스템'}, {value: 'light', title: '라이트'}, {value: 'dark', title: '다크'}], dynamicTitle: true}},
     scale: {description: '글자 크기', toolbar: {icon: 'zoom', items: ['1', '1.5', '2', '3'], dynamicTitle: true}},
   },

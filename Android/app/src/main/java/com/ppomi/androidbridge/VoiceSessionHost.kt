@@ -201,8 +201,15 @@ internal class VoiceSessionHost private constructor(private val context: Context
                 WebSettingsCompat.setForceDarkStrategy(view.settings, WebSettingsCompat.DARK_STRATEGY_WEB_THEME_DARKENING_ONLY)
         }
         view.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-                !request.isForMainFrame || !VoiceBridgePolicy.trustedEntry(request.url.toString())
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                if (request.isForMainFrame && VoiceBridgePolicy.trustedEntry(request.url.toString())) return false
+                // 답변 속 링크(http/https)는 바깥 브라우저로; 페이지는 떠나지 않는다.
+                val scheme = request.url.scheme?.lowercase()
+                if (request.isForMainFrame && request.hasGesture() && (scheme == "https" || scheme == "http")) {
+                    try { context.startActivity(Intent(Intent.ACTION_VIEW, request.url).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+                }
+                return true
+            }
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val url = request.url.toString()
                 if (VoiceBridgePolicy.bundledAsset(url) && request.method == "GET") {
