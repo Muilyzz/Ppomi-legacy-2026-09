@@ -168,7 +168,7 @@ export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment
       if (!context?.workspace || !UUID.test(context.workspace.id) || !context.device || !UUID.test(context.device.id))
         throw new SafeError(401, 'unauthorized', '등록된 기기의 인증을 확인하지 못했습니다.');
       if (!(request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) invalid();
-      const body = object(await boundedJson(request, path === '/v1/responses' ? 1_000_000 : 16_384));   // a Responses turn carries instructions, tools and history
+      const body = object(await boundedJson(request, path === '/v1/responses' ? 4_000_000 : 16_384));   // a Responses turn carries instructions, tools and history — or the Mac's one screenshot for the VLM
       let result: unknown;
       if (path === '/v1/session') {
         exactFields(body, ['mode'], []);
