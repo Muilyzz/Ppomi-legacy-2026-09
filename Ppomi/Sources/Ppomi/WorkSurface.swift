@@ -83,7 +83,9 @@ enum WorkSurface: String, CaseIterable, Identifiable {
         switch self {
         case .iphone: return Mirroring.requestSmallSize()
         case .android: return AndroidWindow.requestCompactSize(available: available)
-        case .windows: return ParallelsWindow.requestCompactSize(available: available)
+        // Windows keeps its own size: shrinking the guest makes its browser text tiny for OCR and the person alike.
+        // The workbench grows around the measured frame instead (Kiosk.fitMain raises its minimum width).
+        case .windows: return false
         }
     }
     @discardableResult func revealWindow() -> Bool {

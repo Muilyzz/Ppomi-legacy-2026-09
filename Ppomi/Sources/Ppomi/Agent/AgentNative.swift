@@ -67,11 +67,16 @@ final class AgentNativeSession: @unchecked Sendable {
     func setActive(_ value: Bool) {
         lock.withLock { active = value; generation = UUID() }
     }
+    /// Checked before and after the body, never around it: a tool can run for minutes and the main thread reads this lock on
+    /// every bridge message (keystrokes, bootstrap, stop). A result that lands after the session changed is refused.
     func perform<T>(revision: UUID? = nil, _ body: () throws -> T) throws -> T {
-        try lock.withLock {
-            guard active, revision == nil || revision == generation else { throw AgentNativeError.inactive }
-            return try body()
+        let check = { [self] in
+            try lock.withLock { guard active, revision == nil || revision == generation else { throw AgentNativeError.inactive } }
         }
+        try check()
+        let value = try body()
+        try check()
+        return value
     }
 }
 
