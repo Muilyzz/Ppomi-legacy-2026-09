@@ -91,9 +91,9 @@ enum WorkSurface: String, CaseIterable, Identifiable {
         switch self {
         case .iphone: return Mirroring.requestSmallSize()
         case .android: return AndroidWindow.requestCompactSize(available: available)
-        // Windows keeps its own size: shrinking the guest makes its browser text tiny for OCR and the person alike.
-        // The workbench grows around the measured frame instead (Kiosk.fitMain raises its minimum width).
-        case .windows: return false
+        // Windows shrinks only as far as the display forces it (the workbench grows first) and never below a width that
+        // keeps a browser's address bar and forms readable; below that it stays its own size and is not docked.
+        case .windows: return ParallelsWindow.requestCompactSize(available: available, minimumWidth: 1000)
         }
     }
     @discardableResult func revealWindow() -> Bool {
@@ -355,9 +355,10 @@ private enum ParallelsWindow {
         return resize(size, window: window)
     }
 
-    static func requestCompactSize(available: CGSize) -> Bool {
+    static func requestCompactSize(available: CGSize, minimumWidth: CGFloat = 240) -> Bool {
         guard let window = selectedWindow(),
-              let target = WorkSurfaceCompactLayout.size(current: window.candidate.axRect.size, available: available) else { return false }
+              let target = WorkSurfaceCompactLayout.size(current: window.candidate.axRect.size, available: available),
+              target.width >= minimumWidth else { return false }
         let current = window.candidate.axRect.size
         let alreadyFits = abs(target.width - current.width) < 1 && abs(target.height - current.height) < 1
         guard alreadyFits || resize(target, window: window) else { return false }

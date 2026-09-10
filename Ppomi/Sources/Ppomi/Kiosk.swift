@@ -784,9 +784,19 @@ final class KioskController {
 
     /// The workbench is resizable and movable. `initial` fits it to the display once; every other call only keeps the
     /// person's frame at least the minimum size and on the display.
+    /// Stage Manager keeps its strip of other apps' thumbnails along the left edge; a workbench that grows over it hides
+    /// the very thumbnail the person (or the stage pull) needs to drag in. Treat that band as off-limits.
+    static let stageStripWidth: CGFloat = 200
+    static var stageManagerActive: Bool { UserDefaults(suiteName: "com.apple.WindowManager")?.bool(forKey: "GloballyEnabled") ?? false }
+    nonisolated static func usable(_ display: CGRect, stageManager: Bool) -> CGRect {
+        guard stageManager else { return display }
+        return CGRect(x: display.minX + stageStripWidth, y: display.minY, width: max(0, display.width - stageStripWidth), height: display.height)
+    }
+
     static func fitMain(_ p: NSPanel, content c: WorkbenchContent, phoneSize: CGSize, in visible: CGRect? = nil, initial: Bool = false) {
         c.phoneSize = phoneSize
-        guard let display = visible ?? (p.screen ?? NSScreen.main)?.visibleFrame else { return }
+        guard let full = visible ?? (p.screen ?? NSScreen.main)?.visibleFrame else { return }
+        let display = usable(full, stageManager: visible == nil && stageManagerActive)
         var minimum = WorkbenchLayout.minimumContentSize
         minimum.width = max(minimum.width, phoneSize.width + WorkbenchLayout.horizontalInset * 2 + WorkbenchLayout.minimumConversationWidth)
         let displayContent = p.contentRect(forFrameRect: display).size
@@ -815,7 +825,15 @@ final class KioskController {
         guard var pending = surfaceFit else { return true }
         let now = ProcessInfo.processInfo.systemUptime
         if !pending.requested {
-            let accepted = surface.requestCompactSize(available: available.size)
+            // Windows may take everything the display can give beside a full-width conversation (the workbench grows to
+            // match), instead of the slot the previous, smaller surface left behind.
+            var room = available.size
+            if surface == .windows, let full = (main?.screen ?? NSScreen.main)?.visibleFrame {
+                let usable = Self.usable(full, stageManager: Self.stageManagerActive)
+                room.width = max(room.width, usable.width - WorkbenchLayout.horizontalInset * 2 - WorkbenchLayout.minimumConversationWidth)
+                room.height = max(room.height, usable.height - WorkbenchLayout.normalTop - WorkbenchLayout.toolbarHeight - WorkbenchLayout.contentGap * 2 - 60)
+            }
+            let accepted = surface.requestCompactSize(available: room)
             if let panel = main {
                 WindowDiagnostics.panel("dock.surfaceFit.requested", panel, fields: [
                     "surface": surface.rawValue, "availableSize": [available.width, available.height],
