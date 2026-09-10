@@ -37,7 +37,7 @@ final class SharedServerClient: @unchecked Sendable {
     }
 
     func rpc(_ method: String, _ arguments: [String: Any]) throws -> Any {
-        guard SharedTools.rpcNames.contains(method) || SharedRecordVault.rpcNames.contains(method) else { throw SharedServerError.invalidArgument("RPC") }
+        guard SharedTools.rpcNames.contains(method) || SharedRecordVault.rpcNames.contains(method) || PadPairing.rpcNames.contains(method) else { throw SharedServerError.invalidArgument("RPC") }
         lock.lock(); defer { lock.unlock() }
         guard let config = try configuration() else { throw SharedServerError.unconfigured }
         try authenticate(config)

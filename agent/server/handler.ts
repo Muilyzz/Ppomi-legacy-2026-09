@@ -143,12 +143,16 @@ export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment
       const auth = request.headers.get('authorization') ?? '';
       if (!/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(auth) || auth.length > 8192)
         throw new SafeError(401, 'unauthenticated', '등록된 기기의 인증이 필요합니다.');
+      // 구글 계정은 기기가 여럿: 어느 기기인지는 이 헤더가 말하고, 공유 서버(ppomi_private_device)가 그 사람의 기기인지 확인한다.
+      const device = request.headers.get('x-ppomi-device') ?? '';
+      if (device && !UUID.test(device)) throw new SafeError(401, 'unauthenticated', '기기 식별자를 확인해 주세요.');
       const env = dependencies.env ?? process.env, config = settings(env);
       async function rpc(name: string, body: Json): Promise<unknown> {
         let response: Response;
         try {
           response = await transport(`${config.url}/rest/v1/rpc/${name}`, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20_000),
-            headers: { apikey: config.publicKey, Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify(body), cache: 'no-store' });
+            headers: { apikey: config.publicKey, Authorization: auth, 'Content-Type': 'application/json', ...(device ? { 'x-ppomi-device': device.toLowerCase() } : {}) },
+            body: JSON.stringify(body), cache: 'no-store' });
         } catch { throw new SafeError(502, 'server_unavailable', '공유 서버에 연결하지 못했습니다.'); }
         if (!response.ok) {
           await response.body?.cancel();

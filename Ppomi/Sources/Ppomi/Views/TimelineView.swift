@@ -6,12 +6,7 @@ enum Timeline {
     /// The live view keeps this document while its ledger data changes.
     static let template = Web.page("timeline")
     /// The page's data in the shape report.py timeline_data made (Tests/timeline-parity.json), plus uid per line.
-    static func data(_ L: Ledger) -> [String: Any] {
-        ["accounts": L.accounts.map { ["id": $0.id, "app": $0.title] },
-         "series": L.series.mapValues { $0.map { [TS.string($0.ts), $0.value, $0.how.rawValue] as [Any] } },
-         "inside": Array(L.defaultLens.inside).sorted(),
-         "lines": L.lines.map { ["ts": TS.string($0.ts), "memo": $0.memo, "dr": $0.dr, "cr": $0.cr, "amount": $0.amount, "rev": $0.rev, "uid": $0.uid] }]
-    }
+    static func data(_ L: Ledger) -> [String: Any] { LedgerPage.timelineData(L) }
 
     static func html(_ L: Ledger) -> String {
         template.replacingOccurrences(of: "/*TIMELINE*/null", with: json(L))

@@ -231,3 +231,18 @@ final class DB {
 // Column readers; nil for SQL NULL.
 private func text(_ s: OpaquePointer, _ i: Int32) -> String? { sqlite3_column_text(s, i).map { String(cString: $0) } }
 private func int(_ s: OpaquePointer, _ i: Int32) -> Int? { sqlite3_column_type(s, i) == SQLITE_NULL ? nil : Int(sqlite3_column_int64(s, i)) }
+
+extension Ledger {
+    /// Every observation of every account as a step function, plus the journal with its accounts named by balance-sheet
+    /// label: enough to state the balance sheet at any instant and the flows of any range.
+    static func load(dbPath: String, me: String) throws -> Ledger {
+        let db = try DB(path: dbPath)
+        return try load(db: db, me: me)
+    }
+
+    /// A monitor can reuse its read-only connection and hold one read transaction across both tables.
+    static func load(db: DB, me: String) throws -> Ledger {
+        let snaps = try db.snapshots(), txs = try db.transactions()
+        return load(snapshots: snaps, transactions: txs, me: me)
+    }
+}

@@ -64,7 +64,7 @@ struct SharedPlaybooksArchive: Codable {
     func snapshot() -> PlaybooksSnapshot {
         let directory = SharedRecordVault.defaultDirectory.appendingPathComponent("presentation")
         return PlaybooksSnapshot(entries: entries.map { value in
-            let location = directory.appendingPathComponent(SharedRecordVault.hash(Data(value.manifest.id.utf8)))
+            let location = directory.appendingPathComponent(SharedRecordCrypto.hash(Data(value.manifest.id.utf8)))
             return PlaybookEntry(record: PlaybookRecord(manifest: value.manifest, directory: location, guideText: value.guide, iconURL: nil),
                 footprints: value.footprints, installed: value.installed)
         }, common: common, issues: issues.enumerated().map { PlaybookCatalog.Issue(directory: directory.appendingPathComponent("issue-\($0.offset)"), message: $0.element) }, iconData: iconData)

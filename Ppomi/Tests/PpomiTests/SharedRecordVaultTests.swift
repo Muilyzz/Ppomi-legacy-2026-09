@@ -43,18 +43,18 @@ final class SharedRecordVaultTests: XCTestCase {
         var bytes = [UInt8](repeating: 0, count: 900000)
         XCTAssertEqual(SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes), errSecSuccess)
         let data = Data(bytes)
-        let chunks = try SharedRecordVault.seal(data, configuration: config, recordID: id, version: 7)
+        let chunks = try SharedRecordCrypto.seal(data, configuration: config, recordID: id, version: 7)
         XCTAssertGreaterThan(chunks.count, 1)
-        XCTAssertEqual(try SharedRecordVault.open(chunks, configuration: config, recordID: id, version: 7), data)
-        XCTAssertThrowsError(try SharedRecordVault.open(chunks, configuration: config, recordID: UUID().uuidString, version: 7))
-        XCTAssertThrowsError(try SharedRecordVault.open(chunks, configuration: config, recordID: id, version: 8))
-        XCTAssertThrowsError(try SharedRecordVault.open(chunks.reversed(), configuration: config, recordID: id, version: 7))
+        XCTAssertEqual(try SharedRecordCrypto.open(chunks, configuration: config, recordID: id, version: 7), data)
+        XCTAssertThrowsError(try SharedRecordCrypto.open(chunks, configuration: config, recordID: UUID().uuidString, version: 7))
+        XCTAssertThrowsError(try SharedRecordCrypto.open(chunks, configuration: config, recordID: id, version: 8))
+        XCTAssertThrowsError(try SharedRecordCrypto.open(chunks.reversed(), configuration: config, recordID: id, version: 7))
         var wrong = config; wrong.workspaceID = UUID().uuidString
-        XCTAssertThrowsError(try SharedRecordVault.open(chunks, configuration: wrong, recordID: id, version: 7))
+        XCTAssertThrowsError(try SharedRecordCrypto.open(chunks, configuration: wrong, recordID: id, version: 7))
         wrong = config; wrong.key = Data(repeating: 21, count: 32)
-        XCTAssertThrowsError(try SharedRecordVault.open(chunks, configuration: wrong, recordID: id, version: 7))
+        XCTAssertThrowsError(try SharedRecordCrypto.open(chunks, configuration: wrong, recordID: id, version: 7))
         var corrupt = chunks; corrupt[0][30] ^= 1
-        XCTAssertThrowsError(try SharedRecordVault.open(corrupt, configuration: config, recordID: id, version: 7))
+        XCTAssertThrowsError(try SharedRecordCrypto.open(corrupt, configuration: config, recordID: id, version: 7))
     }
     func testLostCommitReplyResumesExactOperationAndReadsServerBeforeConfirmation() throws {
         let config = config(), server = Server(config)

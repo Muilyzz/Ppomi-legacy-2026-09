@@ -11,6 +11,8 @@ struct SettingsView: View {
     @State private var agentEndpoint = UserDefaults.standard.string(forKey: AgentNativePolicy.endpointPreference) ?? ""
     @State private var agentEndpointBad = false
     @State private var visionEnabled = AppSettings.visionEnabled
+    @State private var pairing: String?                  // 아이패드 연결 QR 의 내용(초대 + 기록 키); 시트가 열린 동안만
+    @State private var pairingFailed = false
     @State private var uiScale = AppSettings.uiScale
     @State private var dbPath = AppSettings.dbPath
     @State private var me = AppSettings.me
@@ -80,6 +82,20 @@ struct SettingsView: View {
                         .onSubmit(saveAgentEndpoint)
                     if agentEndpointBad { Text("주소 확인").font(.ppomi(3)).foregroundStyle(.bad) }
                 }
+            }
+            Section("아이패드") {
+                Button("연결 QR 보이기") { pairing = try? PadPairing.payload(); pairingFailed = pairing == nil }
+                if pairingFailed { Text("서버 연결과 기록 암호화 키가 필요합니다").foregroundStyle(.bad) }
+                Text("아이패드 뽀미에서 구글 로그인 → 설정 › QR 읽기. 10분 안에 한 번만 쓸 수 있습니다").font(.ppomi(1)).foregroundStyle(.fg2)
+            }
+            .sheet(isPresented: Binding(get: { pairing != nil }, set: { if !$0 { pairing = nil } })) {
+                VStack(spacing: 16) {
+                    if let text = pairing, let image = PadPairing.qr(text) {
+                        Image(nsImage: image).interpolation(.none).resizable().frame(width: 320, height: 320)
+                        Text("초대는 10분 · 한 번. 기록 키가 들어 있으니 화면을 남기지 마세요").font(.ppomi(1)).foregroundStyle(.fg2)
+                    }
+                    Button("닫기") { pairing = nil }.keyboardShortcut(.cancelAction)
+                }.padding(24)
             }
             SharedServerSettingsView()
             Section("화면 보조") {

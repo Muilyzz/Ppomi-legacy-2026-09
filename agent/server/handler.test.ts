@@ -11,12 +11,12 @@ const NEXT = 'cccccccc-1111-4111-8111-111111111111';
 const environment = () => ({ SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co', SUPABASE_ANON_KEY: 'sb_publishable_test_public_key_only_123456', OPENAI_API_KEY: 'server-only-test-key', AI_GATEWAY_API_KEY: 'gateway-only-test-key', PPOMI_AGENT_MEMORY_KEY: randomBytes(32).toString('base64') });
 type Row = { id: string; workspace_id: string; replaces_id: string | null; created_at: string; deleted_at: string | null; envelope: Record<string, unknown>; request_digest: string };
 function fixture() {
-  const env = environment(), rows = new Map<string, Row>(), calls: { url: string; body: Record<string, unknown>; auth: string; safety: string | null }[] = [];
+  const env = environment(), rows = new Map<string, Row>(), calls: { url: string; body: Record<string, unknown>; auth: string; safety: string | null; device: string | null }[] = [];
   let active = true;
   const transport = (async (url: string | URL | Request, init?: RequestInit) => {
     const address = String(url), body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     const auth = new Headers(init?.headers).get('authorization') ?? '';
-    calls.push({ url: address, body, auth, safety: new Headers(init?.headers).get('OpenAI-Safety-Identifier') });
+    calls.push({ url: address, body, auth, safety: new Headers(init?.headers).get('OpenAI-Safety-Identifier'), device: new Headers(init?.headers).get('x-ppomi-device') });
     assert.equal(init?.redirect, 'error');
     assert.equal(init?.cache, 'no-store');
     const json = (data: unknown, status = 200) => Response.json(data, { status });
@@ -51,6 +51,17 @@ test('missing auth and browser origin fail before any upstream request', async (
   assert.equal((await f.handle(request('/v1/session', {}, { Authorization: '' }))).status, 401);
   assert.equal((await f.handle(request('/v1/session', {}, { Origin: 'https://other.example' }))).status, 403);
   assert.equal(f.calls.length, 0);
+});
+
+test('a Google-account device names itself in a header that reaches the shared server as-is', async () => {
+  const f = fixture();
+  assert.equal((await f.handle(request('/v1/memories/list', {}, { 'X-Ppomi-Device': DEVICE.toUpperCase() }))).status, 200);
+  assert.equal(f.calls.find(call => call.url.endsWith('ppomi_context'))?.device, DEVICE);
+  const before = f.calls.length;
+  assert.equal((await f.handle(request('/v1/memories/list', {}, { 'X-Ppomi-Device': 'not-a-device-id' }))).status, 401);
+  assert.equal(f.calls.length, before);   // a malformed header never reaches the server
+  assert.equal((await f.handle(request('/v1/memories/list'))).status, 200);
+  assert.equal(f.calls.at(-1)?.device ?? null, null);   // legacy devices send no header and none is invented
 });
 
 test('every request rechecks active device; no reused authentication context', async () => {

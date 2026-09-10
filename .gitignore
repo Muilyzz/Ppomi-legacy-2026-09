@@ -41,3 +41,5 @@ Ppomi/Tests/PpomiTests/column-parity.json
 Ppomi/Tests/PpomiTests/timeline-parity.json
 Ppomi/Tests/PpomiTests/stitch-parity.json
 storybook/storybook-static/
+iPad/build/
+iPad/PpomiPad.xcodeproj/

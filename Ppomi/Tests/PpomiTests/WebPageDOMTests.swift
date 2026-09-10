@@ -12,8 +12,8 @@ final class WebPageDOMTests: XCTestCase {
         let archive = SharedLedgerArchive(snapshots: [.init(app: "TEST", account: "server-account", balance: 73519,
              ts: try XCTUnwrap(TS.parse("2026-09-02 10:00")))], transactions: [], me: "", originalTables: Data("{}".utf8))
         let data = try LifeJSON.encoder().encode(archive)
-        let chunks = try SharedRecordVault.seal(data, configuration: config, recordID: id, version: 9)
-        let hashes = chunks.map(SharedRecordVault.hash)
+        let chunks = try SharedRecordCrypto.seal(data, configuration: config, recordID: id, version: 9)
+        let hashes = chunks.map(SharedRecordCrypto.hash)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let vault = SharedRecordVault(directory: directory, configuration: { config }, rpc: { method, args in

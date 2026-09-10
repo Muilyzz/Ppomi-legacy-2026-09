@@ -1,16 +1,7 @@
 import Foundation
 import Darwin
 
-/// A versioned source archive, not a balance computed by a second accounting engine.
-struct SharedLedgerArchive: Codable {
-    struct Snapshot: Codable { let app: String; let account: String; let balance: Int; let ts: Date }
-    var formatVersion = 1
-    var snapshots: [Snapshot]
-    var transactions: [Transaction]
-    var me: String
-    // Exact original rows retain stable source IDs, status, raw observations and provenance.
-    var originalTables: Data
-
+extension SharedLedgerArchive {
     static func capture(path: String, me: String) throws -> Self {
         let db = try DB(path: path)
         try db.run("BEGIN DEFERRED TRANSACTION")
@@ -23,10 +14,6 @@ struct SharedLedgerArchive: Codable {
         return Self(snapshots: try db.snapshots().map { Snapshot(app: $0.app, account: $0.account, balance: $0.balance, ts: $0.ts) },
                     transactions: try db.transactions(), me: me,
                     originalTables: try JSONSerialization.data(withJSONObject: tables, options: [.sortedKeys]))
-    }
-    func ledger() throws -> Ledger {
-        guard formatVersion == 1 else { throw SharedRecordError.invalid }
-        return Ledger.load(snapshots: snapshots.map { ($0.app, $0.account, $0.balance, $0.ts) }, transactions: transactions, me: me)
     }
 }
 
@@ -95,7 +82,7 @@ enum SharedRecordsSource {
     }
     private static func evidenceSignature() throws -> String {
         let dir = URL(fileURLWithPath: AppSettings.dbPath).deletingLastPathComponent().appendingPathComponent("shots")
-        var parts = [SharedRecordVault.hash(try capture("ledger")), SharedRecordVault.hash(Data(Web.page("evidence").utf8))]
+        var parts = [SharedRecordCrypto.hash(try capture("ledger")), SharedRecordCrypto.hash(Data(Web.page("evidence").utf8))]
         let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey]
         if let files = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: keys) {
             for case let file as URL in files {
@@ -103,7 +90,7 @@ enum SharedRecordsSource {
                 if values.isRegularFile == true { parts.append("\(file.path)|\(values.fileSize ?? 0)|\(values.contentModificationDate?.timeIntervalSince1970 ?? 0)") }
             }
         }
-        return SharedRecordVault.hash(Data(parts.sorted().joined(separator: "\n").utf8))
+        return SharedRecordCrypto.hash(Data(parts.sorted().joined(separator: "\n").utf8))
     }
 
     /// Called by the signed app CLI. The feature is enabled only after every dataset has been read back.
