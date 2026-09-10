@@ -26,6 +26,8 @@ const toolFailureLabels: Record<string, string> = {
   session_ended: "대화 종료", bridge_timeout: "시간 초과",
   playbook_not_found: "절차 없음", playbook_ambiguous: "절차 구분 필요",
   playbook_read_required: "절차 확인 필요", browser_environment_required: "Mac 브라우저 연결 필요",
+  invalid_request: "요청 형식 오류", server_auth: "기기 인증 필요", server_rejected: "서버 거부",
+  server_unavailable: "서버 응답 없음", response_invalid: "응답 형식 오류",
 };
 /* 통화 바의 한 마디. */
 const callWords: Record<VoiceState, string> = { idle: "", connecting: "연결 중", listening: "듣는 중", speaking: "말하는 중", working: "진행 중" };

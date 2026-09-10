@@ -84,6 +84,26 @@ const nativeFailures = {
     message: "설정에서 서버 주소",
     recovery: "사용자가 뽀미의 서버 연결 설정을 확인해야 합니다.",
   },
+  invalid_request: {
+    message: "요청 형식 오류",
+    recovery: "네이티브가 요청을 거부했습니다. 같은 요청을 반복하지 마세요.",
+  },
+  server_auth: {
+    message: "기기 인증 필요",
+    recovery: "사용자가 뽀미 서버의 기기 등록을 확인해야 합니다.",
+  },
+  server_rejected: {
+    message: "서버 거부",
+    recovery: "앱 서버가 요청을 처리하지 못했습니다. 잠시 후 한 번만 다시 시도하세요.",
+  },
+  server_unavailable: {
+    message: "서버 응답 없음",
+    recovery: "앱 서버에 연결하지 못했습니다. 네트워크를 확인한 뒤 한 번만 다시 시도하세요.",
+  },
+  response_invalid: {
+    message: "응답 형식 오류",
+    recovery: "앱 서버 응답을 읽지 못했습니다. 같은 요청을 반복하지 마세요.",
+  },
 } as const;
 export type NativeFailureCode = keyof typeof nativeFailures;
 

@@ -3,6 +3,7 @@ import AVFoundation
 import Foundation
 import WebKit
 import UserNotifications
+import os
 
 /// Owns only a trusted bundled document. Neither remote pages nor child frames receive native capabilities.
 @MainActor
@@ -185,7 +186,7 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.name == "ppomiAgent", message.frameInfo.isMainFrame,
               let entry, AgentNativePolicy.trusted(message.frameInfo.request.url, entry: entry),
-              let body = message.body as? String, body.utf8.count <= 256 * 1024,
+              let body = message.body as? String, body.utf8.count <= 1536 * 1024,   // a chat turn carries instructions, tools and history
               let data = body.data(using: .utf8), let request = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let id = request["id"] as? String, UUID(uuidString: id) != nil,
               let method = request["method"] as? String, let args = request["args"] as? [String: Any],
@@ -291,11 +292,34 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
         }
     }
 
+    private static let log = Logger(subsystem: "com.muilyzz.ppomi", category: "agent-bridge")
+    /// The page maps unknown codes to a generic failure; known native/server categories get their own so the banner says why.
+    static func bridgeCode(_ error: Error) -> String {
+        if let native = error as? AgentNativeError {
+            switch native {
+            case .inactive: return "session_ended"
+            case .invalidRequest, .invalidEndpoint: return "invalid_request"
+            case .unavailable: return "native_unavailable"
+            default: return "tool_failed"
+            }
+        }
+        switch SharedServerClient.safe(error) {
+        case .authentication, .permission, .deviceMismatch, .keychain: return "server_auth"
+        case .unconfigured, .configuration, .privateFile: return "server_unconfigured"
+        case .server: return "server_rejected"
+        case .connection: return "server_unavailable"
+        case .invalidResponse: return "response_invalid"
+        default: return "tool_failed"
+        }
+    }
+
     private func reply(_ id: String, result: Any? = nil, error: Error? = nil) {
         var value: [String: Any] = ["id": id]
         if let error {
             let message = (error as? AgentNativeError)?.localizedDescription ?? SharedServerClient.safe(error).description
-            value["error"] = ["code": "native_error", "message": message]
+            let code = Self.bridgeCode(error)
+            Self.log.error("bridge reply \(code, privacy: .public): \(message, privacy: .public)")   // fixed enum descriptions, never page or screen text
+            value["error"] = ["code": code, "message": message]
         } else { value["result"] = result ?? NSNull() }
         guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
               let json = String(data: data, encoding: .utf8) else { return }

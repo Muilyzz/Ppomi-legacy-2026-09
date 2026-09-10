@@ -10,7 +10,7 @@ export function bridgedModel(bridge: NativeBridge, check: () => void, model: str
   const transport: typeof fetch = async (url, init) => {
     check();
     const target = new URL(url instanceof Request ? url.url : String(url));
-    if (target.pathname !== "/v1/responses" || (init?.method ?? "GET").toUpperCase() !== "POST") throw new NativeBridgeError("tool_failed");
+    if (target.pathname !== "/v1/responses" || (init?.method ?? "GET").toUpperCase() !== "POST") throw new NativeBridgeError("invalid_request");
     const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
     const json = await bridge.call<Record<string, unknown>>("request", { path: "/v1/responses", body }, 130_000);   // a flagship turn can take a minute
     check();
