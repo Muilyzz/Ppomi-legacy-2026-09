@@ -12,6 +12,8 @@ final class RuntimeRecorder {
     private let contextKey = "ppomi.runtime." + UUID().uuidString
     private let writeLock = NSRecursiveLock()
     private let write: (RuntimeEvent) throws -> Void
+    /// Live mirror of every event for a UI that wants to show "OCR 읽는 중" while a tool runs; the store stays the record.
+    var onEvent: ((RuntimeEvent) -> Void)?
 
     init(emit: @escaping (RuntimeEvent) throws -> Void) { write = emit }
 
@@ -67,6 +69,7 @@ final class RuntimeRecorder {
         writeLock.lock()
         defer { writeLock.unlock() }
         try? write(event) // Diagnostics must never change the original tool's result or error.
+        onEvent?(event)
     }
 
     private var currentCall: Call? { Thread.current.threadDictionary[contextKey] as? Call }

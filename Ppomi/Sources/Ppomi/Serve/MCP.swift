@@ -7,6 +7,11 @@ import Foundation
 final class MCPServer {
     private let db: DB, ro: DB                     // ro: the read-only handle the sql tool uses (WITH … DELETE would pass a prefix check)
     private let tools: Tools
+    /// Live tool progress (fixed vocabulary) for a host UI; the runtime store stays the record.
+    var onRuntimeEvent: ((RuntimeEvent) -> Void)? {
+        get { tools.runtimeRecorder.onEvent }
+        set { tools.runtimeRecorder.onEvent = newValue }
+    }
     private let out: FileHandle
     private let lock = NSLock()                    // one writer at a time; also guards `pending` and `nextID`
     private let calls = DispatchQueue(label: "ppomi.mcp.tools")   // the phone does one thing at a time; the read loop stays free

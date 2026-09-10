@@ -45,6 +45,13 @@ function failureOf(output: unknown): { code: string; message: string } | null {
       ? { code: parsed.error.code, message: typeof parsed.error.message === "string" ? parsed.error.message : "" } : null;
   } catch { return null; }
 }
+/** RuntimeEvent.Kind / Method (Ppomi/Sources/Ppomi/Runtime/RuntimeEvent.swift) in Korean; unknown words show nothing. */
+const progressWords: Record<string, string> = {
+  started: "시작", reading: "읽는 중", read: "읽음", readFailed: "읽기 실패", acting: "조작 중", acted: "조작함",
+  verifying: "확인 중", verified: "확인함", mismatch: "불일치", observing: "관찰 중", observed: "관찰함", cached: "캐시 사용",
+  waitingForUser: "사용자 대기", userResponded: "응답 받음", handedOff: "넘김", returned: "끝", blocked: "차단", failed: "실패",
+};
+const progressMethods: Record<string, string> = { tool: "", ocr: "OCR", vlm: "VLM", replay: "재생", control: "화면 제어", storage: "저장", human: "사람", agent: "" };
 const progressState = (status: ToolProgress["status"]): ToolPart["state"] =>
   status === "running" ? "input-available" : status === "success" ? "output-available" : "output-error";
 const toolName = (tool: ToolPart) => tool.type === "dynamic-tool" ? tool.toolName : tool.type.slice(5);
@@ -78,6 +85,7 @@ function App() {
   const [incoming, setIncoming] = useState<string | null>(null);
   const [notices, setNotices] = useState<{ id: string; text: string; after: string | null }[]>([]);   // 비서의 톡(네이티브 사람 차례)
   const [queue, setQueue] = useState<string[]>([]);   // 비서가 일하는 동안 보낸 글. 차례가 오면 순서대로 나간다
+  const [progress, setProgress] = useState<{ tool: string; text: string } | null>(null);   // 네이티브가 알리는 도구 내부 진행(OCR 읽는 중 …)
   const lastEntry = useRef<string | null>(null);   // a notice sits after the entry that was last when it arrived
   const missed = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);   // 벨은 45초면 끊는다(부재중)
   const actionEpoch = useRef(0);
@@ -204,6 +212,14 @@ function App() {
       setIncoming(text);
       if (text) missed.current = setTimeout(declineCall, 45_000);
     };
+    // 네이티브 런타임 이벤트(고정 어휘): 실행 중인 도구 카드에 "OCR 읽는 중" 같은 진행 한 마디를 보인다.
+    window.ppomiToolProgress = (event: { tool?: unknown; kind?: unknown; method?: unknown }) => {
+      const tool = typeof event?.tool === "string" ? event.tool : "", kind = typeof event?.kind === "string" ? event.kind : "";
+      const method = typeof event?.method === "string" ? progressMethods[event.method] ?? "" : "";
+      if (!tool || !kind) return;
+      const word = progressWords[kind];
+      setProgress(word ? { tool, text: `${method}${method && word ? " " : ""}${word}`.trim() } : null);
+    };
     window.ppomiNotice = (text: string) => {
       if (typeof text === "string" && text) setNotices((old) => [...old, { id: crypto.randomUUID(), text, after: lastEntry.current }]);
     };
@@ -219,6 +235,7 @@ function App() {
       delete window.ppomiVoiceStop;
       delete window.ppomiIncomingCall;
       delete window.ppomiNotice;
+      delete window.ppomiToolProgress;
       delete window.ppomiAnswerCall;
     };
   }, []);
@@ -279,7 +296,9 @@ function App() {
       const tool = part as ToolPart, name = toolName(tool);
       const failure = failureOf(tool.output);
       const failed = !!failure || tool.state === "output-error";
+      const running = tool.state === "input-available" || tool.state === "input-streaming";
       const card: Entry = { id, node: <ToolCard name={name} label={toolLabel(name)} state={failed ? "output-error" : tool.state} input={tool.input} defaultOpen={failed}
+        progress={running && progress?.tool === name ? progress.text : undefined}
         output={failure ? undefined : tool.output} errorText={failure ? toolFailureLabels[failure.code] || failure.message || "처리 실패" : tool.errorText} /> };
       const procedures = name === "read_playbook" && tool.state === "output-available" ? proceduresOf(tool.output) : [];
       return [card, ...procedures.map((procedure, position) => ({ id: `${id}-${procedure.id}`,

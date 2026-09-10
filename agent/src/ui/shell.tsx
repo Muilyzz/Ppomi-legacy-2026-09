@@ -125,12 +125,14 @@ export function Waiting({ items, onRemove }: { items: string[]; onRemove: (index
 export type ToolCardProps = {
   name: string; label: string; state: ToolPart["state"];
   input?: unknown; output?: unknown; errorText?: string; defaultOpen?: boolean;
+  /** 실행 중인 도구 안의 단계("OCR 읽는 중"): 네이티브 런타임 이벤트가 알린다. */
+  progress?: string;
 };
 /** 도구 카드: 이름(관찰 방식 태그 포함)과 상태 배지. 펼치면 입력·결과. */
-export function ToolCard({ name, label, state, input, output, errorText, defaultOpen }: ToolCardProps) {
+export function ToolCard({ name, label, state, input, output, errorText, defaultOpen, progress }: ToolCardProps) {
   const body = input !== undefined || output !== undefined || errorText;
   return <Tool className="mb-0 max-w-[95%] bg-card" defaultOpen={defaultOpen}>
-    <ToolHeader type={`tool-${name}`} state={state} title={label} className="py-2.5" />
+    <ToolHeader type={`tool-${name}`} state={state} title={progress ? `${label} · ${progress}` : label} className="py-2.5" />
     {body && <ToolContent>
       {input !== undefined && <ToolInput input={input} />}
       <ToolOutput output={output} errorText={errorText} />

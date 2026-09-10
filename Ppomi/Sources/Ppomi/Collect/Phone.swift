@@ -48,7 +48,14 @@ enum Phone {
             }
         }
         do {
-            let (out, err, code) = try process(bin.path, (windows ? ["--windows"] : []) + args, stdin: stdin)
+            var (out, err, code) = try process(bin.path, (windows ? ["--windows"] : []) + args, stdin: stdin)
+            // A Windows window parked in a Stage Manager strip or another Space is invisible to the helper until its app is
+            // activated; do that once and retry, instead of telling the model the window is gone.
+            if windows, code != 0, !privateInput, args.first != "activate", err.contains("no Parallels Windows window") {
+                _ = try? process(bin.path, ["--windows", "activate", "com.parallels.desktop.appstore"])
+                Thread.sleep(forTimeInterval: 1.5)
+                (out, err, code) = try process(bin.path, ["--windows"] + args, stdin: stdin)
+            }
             if (check || privateInput), code != 0 {
                 throw Failure(description: privateInput ? "phone: private input failed" : "phone \(args.first ?? ""): \(err.trimmingCharacters(in: .whitespacesAndNewlines))")
             }

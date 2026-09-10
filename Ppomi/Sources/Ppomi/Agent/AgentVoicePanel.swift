@@ -9,6 +9,8 @@ import os
 @MainActor
 final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     var onActive: ((Bool) -> Void)?
+    /// The surface the assistant just drove (phone_* → iPhone, windows_* → Windows, android_* → Android): the workbench follows it.
+    var onSurfaceHint: ((WorkSurface) -> Void)?
     var onClose: (() -> Void)?
     /// When this returns a host, the conversation is mounted there instead of opening its own window.
     var host: (() -> ConversationHost?)?
@@ -143,6 +145,12 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
         view.navigationDelegate = self; view.uiDelegate = self
         view.underPageBackgroundColor = Palette.bg
         webView = view
+        // Tool-internal steps (fixed vocabulary only) reach the page as one line under the running tool card.
+        mcp?.onRuntimeEvent = { [weak self] event in
+            let payload: [String: String] = ["tool": event.tool, "kind": event.kind.rawValue, "method": event.method.rawValue]
+            guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
+            DispatchQueue.main.async { self?.webView?.evaluateJavaScript("window.ppomiToolProgress?.(\(json))") }
+        }
         let currentEpoch = epoch
         let rules = #"[{"trigger":{"url-filter":"^https?://","resource-type":["script"]},"action":{"type":"block"}}]"#
         WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "ppomi-agent-local-scripts-v1", encodedContentRuleList: rules) { [weak self, weak view] rule, _ in
@@ -263,6 +271,7 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
                     return try server.agentRequest(endpoint: endpoint, path: path, body: payload)
                 case "executeTool":
                     guard let name = args["name"] as? String, let payload = args["args"] as? [String: Any] else { throw AgentNativeError.invalidRequest }
+                    if let surface = Self.surfaceHint(for: name, args: payload) { DispatchQueue.main.async { [weak self] in self?.onSurfaceHint?(surface) } }
                     return try session.perform(revision: nativeRevision) {
                         switch name {
                         case "device_status": return ["platform": "macos", "deviceLabel": "Mac", "accessibility": Permissions.accessibility,
@@ -296,6 +305,15 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
     }
 
     private static let log = Logger(subsystem: "com.muilyzz.ppomi", category: "agent-bridge")
+    /// Which external window a tool is about to drive, from its fixed name (never from model text).
+    static func surfaceHint(for tool: String, args: [String: Any]) -> WorkSurface? {
+        if tool.hasPrefix("windows_") { return .windows }
+        if tool.hasPrefix("android_") { return .android }
+        if tool.hasPrefix("phone_") || tool == "run_combo" || tool == "bank_profile_capture" || tool == "inbody_capture" { return .iphone }
+        if tool == "profile_fill" { return ((args["form"] as? String) ?? "").hasPrefix("kb_enterprise") ? .iphone : .windows }
+        if tool == "screen_inspect" { return (args["surface"] as? String) == "windows" ? .windows : .iphone }
+        return nil
+    }
     /// The page maps unknown codes to a generic failure; known native/server categories get their own so the banner says why.
     static func bridgeCode(_ error: Error) -> String {
         if let native = error as? AgentNativeError {

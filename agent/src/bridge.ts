@@ -151,6 +151,7 @@ declare global {
     ppomiVoiceStop?: () => void;
     /** 비서의 톡: 사람 차례가 오면 네이티브가 먼저 용건을 뽀미 말풍선으로 남긴다. 전화(아래)는 답이 없을 때만 온다. */
     ppomiNotice?: (text: string) => void;
+    ppomiToolProgress?: (event: { tool?: unknown; kind?: unknown; method?: unknown }) => void;
     /** 네이티브가 부른다: 사람 차례(승인·질문)나 예약된 일. 셸은 수신 띠를 띄우고, 받으면 용건으로 통화를 연다. */
     ppomiIncomingCall?: (reason: string) => void;
     /** 네이티브(OS 통화 화면)가 이미 받았다: 띠 없이 바로 통화를 연다. */

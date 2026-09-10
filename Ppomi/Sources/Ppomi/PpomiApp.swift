@@ -80,6 +80,7 @@ struct PpomiApp: App {
         _state = StateObject(wrappedValue: s)
         s.reloadLedger()
         let conversation = AgentVoicePanel()
+        conversation.onSurfaceHint = { [weak s] surface in s?.selectSurface(surface) }   // the workbench docks the window the assistant is driving
         kiosk = KioskController(state: s, conversation: conversation)
         s.watchAsks()                                   // questions from the MCP server / the voice tools → workbench buttons
         s.watchLedger()                                 // committed values appear in the records panel while control continues
