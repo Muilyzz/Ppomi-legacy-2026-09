@@ -1,7 +1,7 @@
 // 대화 셸의 뼈대: AI Elements(shadcn + Tailwind) 위에 뽀미 토큰을 입힌다(index.css 가 Tailwind 색 이름을 토큰에 매핑).
 // 상태·브리지는 App(main.tsx)이 갖고, 여기는 DOM 모양뿐이다. 스토리북은 같은 뼈대에 가짜 서브트리를 꽂아 본다.
 // 대화는 하나다. 음성은 그 안의 통화 한 토막이다(전화처럼 걸고 받고 끊는다). 요구 장부: docs/ui-tree.md.
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { ChatStatus } from "ai";
 import { CheckIcon, CircleIcon, CopyIcon, CornerDownLeftIcon, PhoneIcon, PhoneOffIcon, RefreshCwIcon, SquareIcon, XCircleIcon, XIcon } from "lucide-react";
 import { Conversation, ConversationContent, ConversationEmptyState, ConversationScrollButton } from "@/components/ai-elements/conversation";
@@ -131,7 +131,10 @@ export type ToolCardProps = {
 /** 도구 카드: 이름(관찰 방식 태그 포함)과 상태 배지. 펼치면 입력·결과. */
 export function ToolCard({ name, label, state, input, output, errorText, defaultOpen, progress }: ToolCardProps) {
   const body = input !== undefined || output !== undefined || errorText;
-  return <Tool className="mb-0 max-w-[95%] bg-card" defaultOpen={defaultOpen}>
+  // A card that fails after it was mounted (state flips from running to error) still opens itself; the person can close it.
+  const [open, setOpen] = useState(!!defaultOpen);
+  useEffect(() => { if (defaultOpen) setOpen(true); }, [defaultOpen]);
+  return <Tool className="mb-0 max-w-[95%] bg-card" open={open} onOpenChange={setOpen}>
     <ToolHeader type={`tool-${name}`} state={state} title={progress ? `${label} · ${progress}` : label} className="py-2.5" />
     {body && <ToolContent>
       {input !== undefined && <ToolInput input={input} />}

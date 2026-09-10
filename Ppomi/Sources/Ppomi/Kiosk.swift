@@ -835,6 +835,9 @@ final class KioskController {
         state.setSize(frame.size, for: surface)
         content?.phoneSize = frame.size
         content?.followedPhone = nil
+        // The workbench grows around the measured window (Windows keeps its own size); without this the conversation
+        // column was squeezed to whatever was left beside a 1247-point guest window.
+        if let panel = main, let content { Self.fitMain(panel, content: content, phoneSize: frame.size) }
         content?.layoutSubtreeIfNeeded()
         lastDock = nil
         placementRequested = true
