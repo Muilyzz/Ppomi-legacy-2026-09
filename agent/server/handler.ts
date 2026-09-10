@@ -47,9 +47,9 @@ function containsSecretOrTranscript(text: string): boolean {
     || /\b\d{6}-[1-8]\d{6}\b/.test(text)
     || (text.match(/^(?:user|assistant|system|사용자|어시스턴트)\s*:/gim)?.length ?? 0) >= 2;
 }
-/** Gateway credentials: an explicit key, else the deployment's OIDC token (Vercel injects it at runtime). */
-function gateway(env: Environment): { key: string; base: string; textModel: string } {
-  const key = env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN || '', base = env.AI_GATEWAY_BASE_URL || GATEWAY, textModel = env.AI_TEXT_MODEL || TEXT_MODEL;
+/** Gateway credentials: an explicit key, else the deployment's OIDC token (Vercel injects it as an env var or the invocation header). */
+function gateway(env: Environment, request: Request): { key: string; base: string; textModel: string } {
+  const key = env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN || request.headers.get('x-vercel-oidc-token') || '', base = env.AI_GATEWAY_BASE_URL || GATEWAY, textModel = env.AI_TEXT_MODEL || TEXT_MODEL;
   if (!key || /\s/.test(key) || !/^https:\/\/[^\s?#]+$/.test(base) || !MODEL_ID.test(textModel)) throw new SafeError(503, 'not_configured', '에이전트 서버 설정이 필요합니다.');
   return { key, base: base.replace(/\/+$/, ''), textModel };
 }
@@ -170,7 +170,7 @@ export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment
         exactFields(body, ['mode'], []);
         if (body.mode !== undefined && body.mode !== 'voice' && body.mode !== 'text') invalid();
         // Text chat: the page drives the model loop through its native bridge and this proxy; no secret is minted.
-        if (body.mode === 'text') return new Response(JSON.stringify({ model: gateway(env).textModel }), { status: 200, headers: NO_STORE });
+        if (body.mode === 'text') return new Response(JSON.stringify({ model: gateway(env, request).textModel }), { status: 200, headers: NO_STORE });
         const key = env.OPENAI_API_KEY ?? '', model = env.OPENAI_REALTIME_MODEL ?? 'gpt-realtime-2.1';
         if (!key || /\s/.test(key) || !MODEL_ID.test(model)) throw new SafeError(503, 'not_configured', '에이전트 서버 설정이 필요합니다.');
         const safetyIdentifier = createHmac('sha256', encryptionKey(env)).update('ppomi-voice-safety\0').update(JSON.stringify([context.workspace.id, context.device.id])).digest('hex');
@@ -189,7 +189,7 @@ export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment
         result = { clientSecret: secret.value, model };
       } else if (path === '/v1/responses') {
         // Proxy one non-streaming Responses call to the AI Gateway for the bundled text chat. The key, model and storage policy stay here.
-        const { key, base, textModel } = gateway(env);
+        const { key, base, textModel } = gateway(env, request);
         if (!('input' in body) || body.stream === true) invalid();
         const { model: _clientModel, stream: _stream, store: _store, previous_response_id: _previous, ...rest } = body;
         let response: Response;

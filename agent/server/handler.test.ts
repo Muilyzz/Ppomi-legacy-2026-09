@@ -214,4 +214,8 @@ test('the text proxy relays one turn to the AI Gateway with the server-side key,
   const oidc = createHandler({ env: { ...env, AI_GATEWAY_API_KEY: undefined, VERCEL_OIDC_TOKEN: 'oidc-test-token', AI_TEXT_MODEL: 'openai/gpt-5.6-sol' }, fetch: transport });
   assert.equal((await oidc(request('/v1/responses', { input: [] }))).status, 200);
   assert.equal(calls.at(-1)?.auth, 'Bearer oidc-test-token'); assert.equal(calls.at(-1)?.body.model, 'openai/gpt-5.6-sol');
+  const header = createHandler({ env: { ...env, AI_GATEWAY_API_KEY: undefined }, fetch: transport });
+  assert.equal((await header(request('/v1/responses', { input: [] }, { 'x-vercel-oidc-token': 'header-oidc-token' }))).status, 200);
+  assert.equal(calls.at(-1)?.auth, 'Bearer header-oidc-token');
+  assert.equal((await header(request('/v1/responses', { input: [] }))).status, 503);
 });
