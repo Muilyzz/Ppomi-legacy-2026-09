@@ -142,7 +142,7 @@ public final class ChatImeTest extends InstrumentationTestCase {
         int actualReduction = baseline.getInt("viewHeight") - open.getInt("viewHeight");
         assertTrue("IME/navigation insets must be consumed once", Math.abs(expectedReduction - actualReduction) <= 12);
         assertFalse("Typing must not start an agent/media session", host.getActive());
-        assertEquals(Boolean.TRUE, evaluate("document.querySelector('button.send').disabled === false"));
+        assertEquals(Boolean.TRUE, evaluate("document.querySelector('button[aria-label=\\"메시지 보내기\\"]').disabled === false"));
         assertEquals(0, unexpectedRequests.get());
         assertEquals(Boolean.TRUE, evaluate("document.querySelectorAll('audio,video').length === 0"));
         getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);

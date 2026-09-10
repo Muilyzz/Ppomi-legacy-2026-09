@@ -1,6 +1,1 @@
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+export { cn } from "cn";   // shadcn 의 ui/* 와 같은 엔진 하나만 번들에 싣는다

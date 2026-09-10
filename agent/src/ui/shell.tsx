@@ -3,9 +3,13 @@
 // 대화는 하나다. 음성은 그 안의 통화 한 토막이다(전화처럼 걸고 받고 끊는다). 요구 장부: docs/ui-tree.md.
 import type { ReactNode } from "react";
 import type { ChatStatus } from "ai";
-import { PhoneIcon, PhoneOffIcon } from "lucide-react";
+import { CheckIcon, CircleIcon, CopyIcon, CornerDownLeftIcon, PhoneIcon, PhoneOffIcon, RefreshCwIcon, SquareIcon, XCircleIcon, XIcon } from "lucide-react";
 import { Conversation, ConversationContent, ConversationEmptyState, ConversationScrollButton } from "@/components/ai-elements/conversation";
-import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import { Message, MessageAction, MessageActions, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
+import { Task, TaskContent, TaskItem, TaskTrigger } from "@/components/ai-elements/task";
+import { Queue, QueueItem, QueueItemAction, QueueItemActions, QueueItemContent, QueueItemIndicator, QueueList, QueueSection, QueueSectionContent,
+  QueueSectionLabel, QueueSectionTrigger } from "@/components/ai-elements/queue";
 import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput, type ToolPart } from "@/components/ai-elements/tool";
 import { PromptInput, PromptInputBody, PromptInputButton, PromptInputFooter, PromptInputProvider, PromptInputSubmit, PromptInputTextarea,
   PromptInputTools, usePromptInputController } from "@/components/ai-elements/prompt-input";
@@ -35,7 +39,7 @@ export function Pane({ incoming, log, composer }: { incoming?: ReactNode; log: R
 
 /** 로그(role=log): 글·통화 말풍선·도구 카드·질문 카드가 시간순으로 쌓인다. 바닥 고정 스크롤은 AI Elements(use-stick-to-bottom)가 맡는다. */
 export function Log({ children }: { children?: ReactNode }) {
-  return <Conversation className="min-h-0 flex-1" aria-label="현재 대화">
+  return <Conversation className="min-h-0 flex-1" aria-label="현재 대화" aria-live="polite">
     <ConversationContent className="gap-4 px-0.5 py-3">{children}</ConversationContent>
     <ConversationScrollButton aria-label="맨 아래로" />
   </Conversation>;
@@ -52,13 +56,70 @@ export function Welcome({ hint, suggestions, disabled, onSuggest }:
   </ConversationEmptyState>;
 }
 
-/** 말풍선. 비서 글은 마크다운(스트리밍 대응), 내 글은 그대로. pending 은 답을 기다리는 임시 한 줄. */
-export function Bubble({ role, text, pending }: { role: "user" | "assistant"; text: string; pending?: boolean }) {
-  return <Message from={role} aria-label={role === "user" ? "나" : "뽀미"}>
+/** 말풍선. 비서 글은 마크다운(스트리밍 대응), 내 글은 그대로. pending 은 답을 기다리는 임시 한 줄. actions 는 말풍선 아래 작은 버튼들. */
+export function Bubble({ role, text, pending, actions }: { role: "user" | "assistant"; text: string; pending?: boolean; actions?: ReactNode }) {
+  return <Message from={role} role="article" aria-label={role === "user" ? "나" : "뽀미"}>
     <MessageContent className={cn("text-sm leading-7", pending && "animate-pulse text-muted-foreground")}>
       {role === "assistant" ? <MessageResponse>{text || "…"}</MessageResponse> : <p className="m-0 whitespace-pre-wrap break-words">{text}</p>}
     </MessageContent>
+    {actions}
   </Message>;
+}
+
+/** 비서 말풍선의 동작: 복사, 마지막 답이면 다시 답하기. */
+export function BubbleActions({ text, onRetry }: { text: string; onRetry?: () => void }) {
+  return <MessageActions className="-mt-1">
+    <MessageAction tooltip="복사" label="복사" onClick={() => { void navigator.clipboard?.writeText(text); }}><CopyIcon className="size-4" /></MessageAction>
+    {onRetry && <MessageAction tooltip="다시 답하기" label="다시 답하기" onClick={onRetry}><RefreshCwIcon className="size-4" /></MessageAction>}
+  </MessageActions>;
+}
+
+/** 모델의 추론 요약: 흐르는 동안 열리고 끝나면 접힌다. */
+export function Thinking({ text, streaming }: { text: string; streaming: boolean }) {
+  return <Reasoning isStreaming={streaming} className="max-w-[95%]">
+    <ReasoningTrigger getThinkingMessage={(isStreaming, duration) => isStreaming || duration === 0
+      ? <span className="animate-pulse">생각하는 중…</span>
+      : <p>{duration === undefined ? "잠깐 생각함" : `${duration}초 생각함`}</p>} />
+    <ReasoningContent>{text}</ReasoningContent>
+  </Reasoning>;
+}
+
+export type ProcedureStep = { id: string; title: string };
+export type StepOutcome = "ok" | "changed" | "fail";
+/** 절차 카드: 플레이북 한 기능의 단계 목록. 판정(verify_step)이 붙은 단계는 완료·실패로 표시된다. */
+export function Procedure({ title, steps, outcomes, defaultOpen }:
+  { title: string; steps: ProcedureStep[]; outcomes: Record<string, StepOutcome>; defaultOpen?: boolean }) {
+  const done = steps.filter(step => outcomes[step.id] && outcomes[step.id] !== "fail").length;
+  return <Task defaultOpen={defaultOpen ?? false} className="max-w-[95%]">
+    <TaskTrigger title={`${title} · ${done}/${steps.length}`} />
+    <TaskContent>
+      {steps.map(step => <TaskItem key={step.id} className="flex items-start gap-2">
+        {outcomes[step.id] === "fail" ? <XCircleIcon className="mt-0.5 size-4 shrink-0 text-destructive" aria-label="실패" />
+          : outcomes[step.id] ? <CheckIcon className="mt-0.5 size-4 shrink-0 text-accent-foreground" aria-label="완료" />
+          : <CircleIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-label="대기" />}
+        <span className={cn(outcomes[step.id] && outcomes[step.id] !== "fail" && "text-muted-foreground")}>{step.title}</span>
+      </TaskItem>)}
+    </TaskContent>
+  </Task>;
+}
+
+/** 대기열: 비서가 일하는 동안 보낸 글은 여기 줄을 서고, 차례가 오면 순서대로 나간다. */
+export function Waiting({ items, onRemove }: { items: string[]; onRemove: (index: number) => void }) {
+  if (!items.length) return null;
+  return <Queue className="mb-2">
+    <QueueSection defaultOpen>
+      <QueueSectionTrigger><QueueSectionLabel label="건 대기" count={items.length} /></QueueSectionTrigger>
+      <QueueSectionContent>
+        <QueueList>
+          {items.map((text, index) => <QueueItem key={`${index}-${text}`} className="group">
+            <QueueItemIndicator />
+            <QueueItemContent>{text}</QueueItemContent>
+            <QueueItemActions><QueueItemAction aria-label="대기열에서 빼기" onClick={() => onRemove(index)}><XIcon className="size-4" /></QueueItemAction></QueueItemActions>
+          </QueueItem>)}
+        </QueueList>
+      </QueueSectionContent>
+    </QueueSection>
+  </Queue>;
 }
 
 export type ToolCardProps = {
@@ -89,14 +150,14 @@ function ComposerForm({ status, disabled, placeholder = "할 일", onSend, onSto
   const controller = usePromptInputController();
   const generating = status === "submitted" || status === "streaming";
   const empty = !controller.textInput.value.trim();
-  return <PromptInput className="rounded-2xl border bg-card shadow-none" aria-label="메시지 입력"
+  return <PromptInput className="rounded-2xl [&>[data-slot=input-group]]:rounded-2xl [&>[data-slot=input-group]]:bg-card" aria-label="메시지 입력"
     onSubmit={async ({ text }) => {
       const value = (text ?? "").trim();
       if (!value) throw new Error("empty");
       await onSend(value);
     }}>
     <PromptInputBody>
-      <PromptInputTextarea id="chat-input" aria-label="메시지" placeholder={placeholder} disabled={disabled} rows={2}
+      <PromptInputTextarea id="chat-input" aria-label="메시지" placeholder={placeholder} disabled={disabled} rows={2} maxLength={12_000}
         className="min-h-12 max-h-32 px-3.5 pt-3 text-sm placeholder:text-muted-foreground" />
     </PromptInputBody>
     <PromptInputFooter className="px-2 pb-2">
@@ -105,8 +166,10 @@ function ComposerForm({ status, disabled, placeholder = "할 일", onSend, onSto
           <PhoneIcon className="size-4" />
         </PromptInputButton>}
       </PromptInputTools>
-      <PromptInputSubmit status={status} onStop={onStop} disabled={generating ? false : disabled || empty}
-        aria-label={generating ? "진행 정지" : "메시지 보내기"} className="rounded-full" />
+      <PromptInputSubmit status={status} onStop={onStop} disabled={generating ? false : disabled || empty} size="sm"
+        aria-label={generating ? "진행 정지" : "메시지 보내기"} className="gap-1.5 rounded-full px-3">
+        {generating ? <><SquareIcon className="size-3.5" />정지</> : <><CornerDownLeftIcon className="size-4" />보내기</>}
+      </PromptInputSubmit>
     </PromptInputFooter>
   </PromptInput>;
 }
@@ -129,7 +192,7 @@ export function CallBar({ word, onEnd }: { word: ReactNode; onEnd: () => void })
 
 /** 걸려온 통화: 뽀미가 사람 차례(승인·질문)나 예약된 일로 부른다. 받기 = 통화 시작(뽀미가 용건을 말한다), 나중에 = 띠를 내린다. */
 export function IncomingCall({ reason, onAccept, onLater }: { reason: ReactNode; onAccept: () => void; onLater: () => void }) {
-  return <div className="mb-2 flex items-center gap-3 rounded-xl border bg-card px-3.5 py-2.5 text-sm" role="alert" aria-label="걸려온 통화">
+  return <div className="mb-2 flex flex-wrap items-center gap-3 rounded-xl border bg-card px-3.5 py-2.5 text-sm" role="alert" aria-label="걸려온 통화">
     <strong className="font-medium">뽀미가 부릅니다</strong>
     <span className="min-w-0 flex-1 break-words text-muted-foreground">{reason}</span>
     <Button size="sm" onClick={onAccept}>받기</Button>

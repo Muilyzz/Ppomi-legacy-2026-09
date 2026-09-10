@@ -209,7 +209,7 @@ internal class VoiceSessionHost private constructor(private val context: Context
                     val response = loader.shouldInterceptRequest(request.url) ?: return denied()
                     response.responseHeaders = (response.responseHeaders ?: emptyMap()) + mapOf(
                         "Cache-Control" to "no-store", "X-Content-Type-Options" to "nosniff",
-                        "Content-Security-Policy" to "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https://api.openai.com wss://api.openai.com/v1/realtime; img-src 'self' data:; media-src blob:; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none'")
+                        "Content-Security-Policy" to "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https://api.openai.com wss://api.openai.com/v1/realtime; img-src 'self' data:; font-src 'self'; media-src blob:; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none'")
                     return response
                 }
                 if (!request.isForMainFrame && VoiceBridgePolicy.realtimeSignaling(url, request.method)) return null

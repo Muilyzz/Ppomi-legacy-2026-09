@@ -1,6 +1,6 @@
 // 스토리에 꽂는 가짜 서브트리. 실제 App(main.tsx)이 주입하는 것과 같은 모양의 DOM을 만든다.
 import React from "react";
-import { Shell, Pane, Log, Welcome, Bubble, ToolCard, Composer, CallCard, CallBar, IncomingCall } from "./shell";
+import { Shell, Pane, Log, Welcome, Bubble, BubbleActions, Thinking, ToolCard, Procedure, Waiting, Composer, CallCard, CallBar, IncomingCall } from "./shell";
 import { ControlHeader, RecordsHeader } from "./workbench";
 
 export const tools = <>
@@ -18,10 +18,15 @@ export const welcome = (android = false) => <Welcome hint={android ? "앱 열기
 
 export const messages = <>
   <Bubble role="user" text="토스 열고 잔액 읽어 줘" />
-  <Bubble role="assistant" text="토스를 열었습니다. 잔액 **526,852원**." />
+  <Thinking text="토스 앱을 열고 홈 화면의 잔액을 읽으면 된다. 이체 화면은 열지 않는다." streaming={false} />
+  <Bubble role="assistant" text="토스를 열었습니다. 잔액 **526,852원**." actions={<BubbleActions text="토스를 열었습니다. 잔액 526,852원." onRetry={() => {}} />} />
   <Bubble role="user" text="이번 달 지출도" />
   <Bubble role="assistant" text="생각 중…" pending />
 </>;
+export const procedure = <Procedure title="KB 인증센터에서 사업자 공동인증서 발급·재발급" defaultOpen
+  steps={[{ id: "open", title: "KB 기업 인증센터 진입" }, { id: "form", title: "사업자번호·ID 확인" }, { id: "account", title: "계좌번호 입력" }, { id: "issue", title: "본인 인증·발급" }]}
+  outcomes={{ open: "ok", form: "ok", account: "fail" }} />;
+export const waiting = <Waiting items={["끝나면 영수증도 저장해 줘", "결과를 톡으로 알려 줘"]} onRemove={() => {}} />;
 
 /** 통화 중: 시작 카드 뒤에 말풍선(전사)이 쌓인다. */
 export const callInProgress = <>

@@ -7,7 +7,8 @@ import { createBridge, type Bootstrap } from "./bridge";
 import { VoiceController, type VoiceState, TextController, type TextState, type ChatMessage, type ToolProgress } from "./voice";
 import { type InputCard } from "./questions";
 import { QuestionCard } from "./question-cards";
-import { Shell, ErrorBanner, Pane, Log, Welcome, Bubble, ToolCard, CallCard, Composer, CallBar, IncomingCall } from "./ui/shell";
+import { Shell, ErrorBanner, Pane, Log, Welcome, Bubble, BubbleActions, Thinking, ToolCard, Procedure, Waiting, CallCard, Composer, CallBar, IncomingCall,
+  type ProcedureStep, type StepOutcome } from "./ui/shell";
 import type { ToolPart } from "@/components/ai-elements/tool";
 import "./index.css";
 import "./tokens.css";
@@ -46,6 +47,22 @@ function failureOf(output: unknown): { code: string; message: string } | null {
 }
 const progressState = (status: ToolProgress["status"]): ToolPart["state"] =>
   status === "running" ? "input-available" : status === "success" ? "output-available" : "output-error";
+const toolName = (tool: ToolPart) => tool.type === "dynamic-tool" ? tool.toolName : tool.type.slice(5);
+const toolParts = (message: UIMessage): ToolPart[] =>
+  message.parts.filter((part): part is ToolPart => part.type === "dynamic-tool" || part.type.startsWith("tool-"));
+/** 도구 결과는 객체이거나 JSON 문자열이다. */
+function objectOf(output: unknown): Record<string, unknown> | null {
+  if (output && typeof output === "object") return output as Record<string, unknown>;
+  if (typeof output === "string" && output.startsWith("{")) { try { return JSON.parse(output) as Record<string, unknown>; } catch { return null; } }
+  return null;
+}
+/** read_playbook 결과의 기능별 단계 목록. */
+function proceduresOf(output: unknown): { id: string; title: string; steps: ProcedureStep[] }[] {
+  const playbook = objectOf(output)?.playbook as { capabilities?: { id?: unknown; title?: unknown; steps?: { id?: unknown; title?: unknown }[] }[] } | undefined;
+  return (playbook?.capabilities ?? []).flatMap((capability) => typeof capability.id === "string" && typeof capability.title === "string"
+    ? [{ id: capability.id, title: capability.title, steps: (capability.steps ?? []).flatMap((step) =>
+        typeof step.id === "string" && typeof step.title === "string" ? [{ id: step.id, title: step.title }] : []) }] : []);
+}
 
 function App() {
   const [boot, setBoot] = useState<Bootstrap>();
@@ -60,6 +77,7 @@ function App() {
   const [call, setCall] = useState<Call | null>(null);
   const [incoming, setIncoming] = useState<string | null>(null);
   const [notices, setNotices] = useState<{ id: string; text: string; after: string | null }[]>([]);   // 비서의 톡(네이티브 사람 차례)
+  const [queue, setQueue] = useState<string[]>([]);   // 비서가 일하는 동안 보낸 글. 차례가 오면 순서대로 나간다
   const lastEntry = useRef<string | null>(null);   // a notice sits after the entry that was last when it arrived
   const missed = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);   // 벨은 45초면 끊는다(부재중)
   const actionEpoch = useRef(0);
@@ -111,7 +129,7 @@ function App() {
   const inCall = state !== "idle";
   const stopCurrent = async () => {
     actionEpoch.current += 1;
-    setSending(false);
+    setSending(false); setQueue([]);
     chat.stop();
     await textController.current?.stop();
     await controller.current?.stop();
@@ -131,10 +149,11 @@ function App() {
   const declineCall = () => { clearIncoming(); void bridge.call("declineCall", {}).catch(() => {}); };
   const busy = chat.status === "submitted" || chat.status === "streaming";
   const waiting = sending || settling || textState === "connecting" || busy;
-  /** 보내기. 실패는 거부로 알려 입력창이 글을 지우지 않게 한다. */
+  /** 보내기. 바쁘면 대기열에 줄을 세우고, 실패는 거부로 알려 입력창이 글을 지우지 않게 한다. */
   const send = async (value: string) => {
     const text = value.trim();
-    if (!text || text.length > 12_000 || !boot?.configured || inCall || waiting) throw new Error("busy");
+    if (!text || text.length > 12_000 || !boot?.configured || inCall) throw new Error("busy");
+    if (waiting) { setQueue((old) => [...old, text]); return; }
     const epoch = actionEpoch.current;
     setSending(true); setError("");
     try {
@@ -143,6 +162,13 @@ function App() {
       void chat.sendMessage({ text });   // resolves when the turn ends; status tracks it
     } finally { if (epoch === actionEpoch.current) setSending(false); }
   };
+  // 대기열: 차례가 오면 맨 앞 글을 보낸다. 실패한 글은 버리고 배너가 이유를 말한다.
+  useEffect(() => {
+    if (!queue.length || waiting || inCall || !boot?.configured) return;
+    const [next, ...rest] = queue;
+    setQueue(rest);
+    void send(next).catch(() => {});
+  }, [queue, waiting, inCall, boot?.configured]);
   const apply = (b: Bootstrap) => {
     applyUIScale(b); bootRef.current = b; setBoot(b);
     if (b.answerCall) void startCall(b.answerCall);   // answered on the OS call screen before the page was ready
@@ -215,17 +241,43 @@ function App() {
   const cards = questions ? inputCards.map((card) =>
     <QuestionCard key={card.id} card={card} requests={questions} onError={setError} />) : null;
   const android = boot?.platform === "android";
-  // 로그의 줄: 통화면 대사(ChatMessage), 아니면 useChat 메시지의 parts(글은 말풍선, 도구 호출·결과는 카드) 시간순.
+  // 단계 판정(verify_step)은 절차 카드의 진행으로 보인다.
+  const outcomes: Record<string, StepOutcome> = {};
+  for (const message of chat.messages) for (const tool of toolParts(message)) {
+    const input = tool.input as { step?: unknown; outcome?: unknown } | undefined;
+    if (toolName(tool) === "verify_step" && tool.state === "output-available" && typeof input?.step === "string"
+      && (input.outcome === "ok" || input.outcome === "changed" || input.outcome === "fail")) outcomes[input.step] = input.outcome;
+  }
+  const lastMessage = chat.messages[chat.messages.length - 1];
+  // 로그의 줄: 통화면 대사(ChatMessage), 아니면 useChat 메시지의 parts(추론 요약은 '생각', 글은 말풍선, 도구 호출·결과는 카드, 절차 읽기는 단계 목록) 시간순.
   const entries: Entry[] = call
     ? messages.map((message) => ({ id: message.id, role: message.role, node: <Bubble role={message.role} text={message.text} /> }))
     : chat.messages.flatMap((message) => message.role !== "user" && message.role !== "assistant" ? [] : message.parts.flatMap((part, index): Entry[] => {
       const id = `${message.id}-${index}`, role = message.role as "user" | "assistant";
-      if (part.type === "text") return part.text || role === "user" ? [{ id, role, node: <Bubble role={role} text={part.text} /> }] : [];
+      if (part.type === "reasoning") {
+        const previous = message.parts[index - 1];
+        if (previous?.type === "reasoning") return [];   // consecutive reasoning parts fold into the first one's card
+        let text = part.text, last = part;
+        for (let next = index + 1; next < message.parts.length && message.parts[next].type === "reasoning"; next++) {
+          last = message.parts[next] as typeof part; text += "\n\n" + last.text;
+        }
+        return [{ id, node: <Thinking text={text} streaming={last.state === "streaming"} /> }];
+      }
+      if (part.type === "text") {
+        if (!part.text && role !== "user") return [];
+        const isLast = message === lastMessage && !busy && role === "assistant" && !message.parts.slice(index + 1).some((p) => p.type === "text");
+        const actions = role === "assistant" && part.text ? <BubbleActions text={part.text} onRetry={isLast ? () => { setError(""); void chat.regenerate(); } : undefined} /> : undefined;
+        return [{ id, role, node: <Bubble role={role} text={part.text} actions={actions} /> }];
+      }
       if (part.type !== "dynamic-tool" && !part.type.startsWith("tool-")) return [];
-      const tool = part as ToolPart, name = tool.type === "dynamic-tool" ? tool.toolName : tool.type.slice(5);
+      const tool = part as ToolPart, name = toolName(tool);
       const failure = failureOf(tool.output);
-      return [{ id, node: <ToolCard name={name} label={toolLabel(name)} state={failure ? "output-error" : tool.state} input={tool.input}
-        output={failure ? undefined : tool.output} errorText={failure ? toolFailureLabels[failure.code] || failure.message || "처리 실패" : tool.errorText} /> }];
+      const failed = !!failure || tool.state === "output-error";
+      const card: Entry = { id, node: <ToolCard name={name} label={toolLabel(name)} state={failed ? "output-error" : tool.state} input={tool.input} defaultOpen={failed}
+        output={failure ? undefined : tool.output} errorText={failure ? toolFailureLabels[failure.code] || failure.message || "처리 실패" : tool.errorText} /> };
+      const procedures = name === "read_playbook" && tool.state === "output-available" ? proceduresOf(tool.output) : [];
+      return [card, ...procedures.map((procedure, position) => ({ id: `${id}-${procedure.id}`,
+        node: <Procedure title={procedure.title} steps={procedure.steps} outcomes={outcomes} defaultOpen={position === 0} /> }))];
     }));
   // 통화 중 도구 실행(음성 세션의 진행 신호)은 대사 뒤에 카드로. 글 대화의 카드는 parts 가 이미 든다.
   const callTools = call ? tools.map((item) => <ToolCard key={item.id} name={item.name} label={toolLabel(item.name)} state={progressState(item.status)}
@@ -237,7 +289,7 @@ function App() {
   const lastIsAssistant = entries.length > 0 && entries[entries.length - 1].role === "assistant";
   const pendingWord = textState === "connecting" ? "연결 중…" : toolsRunning ? "도구 실행 중…" : busy || sending ? "생각 중…" : "";
   const pendingBubble = !inCall && pendingWord && (toolsRunning || !lastIsAssistant) ? <Bubble key="pending" role="assistant" text={pendingWord} pending /> : null;
-  const status = running ? (chat.status === "streaming" ? "streaming" : "submitted") : chat.status;   // 세션 연결 중도 '진행 중'으로 보인다
+  const status = running ? (chat.status === "streaming" ? "streaming" : "submitted") : "ready";   // 세션 연결 중도 '진행 중'으로; 오류는 배너가 말하니 버튼은 보내기
   // 뼈대(ui/shell.tsx)에 서브트리를 주입한다. 상태와 브리지는 여기, DOM 모양은 뼈대, 스타일은 index.css(토큰 매핑)+style.css.
   return <Shell platform={boot?.platform}
     error={error ? <ErrorBanner onClose={() => setError("")}>{error}</ErrorBanner>
@@ -260,8 +312,11 @@ function App() {
       </Log>}
       composer={inCall
         ? <CallBar word={callWords[state]} onEnd={() => void controller.current?.stop()} />
-        : <Composer status={status} disabled={!boot?.configured} onSend={send} onStop={() => void stopCurrent()}
-            onCall={() => void startCall()} callDisabled={settling} />}
+        : <>
+          <Waiting items={queue} onRemove={(index) => setQueue((old) => old.filter((_, i) => i !== index))} />
+          <Composer status={status} disabled={!boot?.configured} onSend={send} onStop={() => void stopCurrent()}
+            onCall={() => void startCall()} callDisabled={settling} />
+        </>}
     />} />;
 }
 createRoot(document.getElementById("root")!).render(<App />);

@@ -41,4 +41,21 @@
   --radius-md: calc(var(--rc) - 0.125rem);
   --radius-lg: var(--rc);
   --radius-xl: calc(var(--rc) + 0.25rem);
+  /* streamdown 의 표·코드 상자는 sidebar 색을 쓴다: 우리 면 색으로. */
+  --color-sidebar: var(--surface);
+  --color-sidebar-foreground: var(--fg);
+  --color-sidebar-border: var(--line);
+  --color-sidebar-accent: var(--surface-2);
+  --color-sidebar-accent-foreground: var(--fg);
+  --color-sidebar-primary: var(--accent);
+  --color-sidebar-primary-foreground: var(--on-accent);
+  --color-sidebar-ring: var(--accent-fg);
+}
+
+@layer base {
+  /* shadcn 기본: 테두리는 currentColor 가 아니라 헤어라인 토큰, 포커스 링은 강조색. */
+  * { @apply border-border outline-ring/50; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  }
 }

@@ -38,7 +38,8 @@ export function errorText(error: unknown, prefix = "응답 실패"): string {
 
 export function createChatTransport(bridge: NativeBridge, check: () => void, model: string, instructions: string, tools: AgentTool[]): ChatTransport<UIMessage> {
   return new DirectChatTransport({
-    agent: new ToolLoopAgent({ model: bridgedModel(bridge, check, model), instructions, tools: chatTools(tools), stopWhen: stepCountIs(40) }),
+    agent: new ToolLoopAgent({ model: bridgedModel(bridge, check, model), instructions, tools: chatTools(tools), stopWhen: stepCountIs(40),
+      providerOptions: { openai: { reasoningSummary: "auto" } } }),   // 추론 요약을 받아 '생각' 카드로 보인다
     onError: error => errorText(error),
   }) as ChatTransport<UIMessage>;
 }

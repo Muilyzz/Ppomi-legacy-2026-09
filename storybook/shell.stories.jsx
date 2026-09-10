@@ -19,10 +19,10 @@ export const First = {name: '처음', args: {
   conversation: <Pane log={<Log>{f.welcome()}</Log>} composer={f.composer()} />,
 }};
 export const Talking = {name: '대화 중', args: {
-  conversation: <Pane log={<Log>{f.messages}{f.tools}</Log>} composer={f.composer(false, true)} />,
+  conversation: <Pane log={<Log>{f.messages}{f.tools}{f.procedure}</Log>} composer={<>{f.waiting}{f.composer(false, true)}</>} />,
 }};
 export const Calling = {name: '통화 중', args: {
-  conversation: <Pane log={<Log>{f.callInProgress}</Log>} composer={f.callBar('듣는 중')} />,
+  conversation: <Pane log={<Log>{f.callInProgress}{f.tools}</Log>} composer={f.callBar('듣는 중')} />,
 }};
 export const CallEnded = {name: '통화 끝', args: {
   conversation: <Pane log={<Log>{f.callEnded}</Log>} composer={f.composer()} />,

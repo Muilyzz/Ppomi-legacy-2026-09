@@ -37,6 +37,7 @@ main.agent-shell {
   flex-direction: column;
   overflow: hidden;
 }
+.input-card button, .input-card input, .input-card textarea { font: inherit; color: inherit; }
 .send { background: var(--accent); color: var(--on-accent); padding: 0.625rem 0.875rem; border-radius: var(--rc); font-size: var(--fs-2); flex-shrink: 0; font-weight: 500; }
 .text { background: none; color: var(--accent-fg); font-size: var(--fs-2); padding: 0.4375rem; }
 
@@ -92,6 +93,7 @@ main.agent-shell.android:has(textarea:focus) { row-gap: 0.375rem; }
   .agent-shell > .error { padding: 0.3125rem 0.5625rem; }
 }
 /* 질문·은행 카드의 두 버튼(제출/취소). 대화 입력창은 AI Elements 가 그린다. */
+.input-card button, .input-card input, .input-card textarea { font: inherit; color: inherit; }
 .send { background: var(--accent); color: var(--on-accent); padding: 0.625rem 0.875rem; border-radius: var(--rc); font-size: var(--fs-2); flex-shrink: 0; font-weight: 500; }
 .text { background: none; color: var(--accent-fg); font-size: var(--fs-2); padding: 0.4375rem; }
 }
