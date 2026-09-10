@@ -11,7 +11,7 @@ final class VoiceBridgePolicy {
     static final String ORIGIN = "https://appassets.androidplatform.net";
     static final String ENTRY = ORIGIN + "/assets/agent/index.html";
     static final Set<String> PATHS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
-        "/v1/session", "/v1/memories/list", "/v1/memories/save", "/v1/memories/delete")));
+        "/v1/session", "/v1/responses", "/v1/memories/list", "/v1/memories/save", "/v1/memories/delete")));
     static String endpoint(String raw) {
         try {
             URI uri = new URI(raw == null ? "" : raw.trim());

@@ -273,7 +273,7 @@ internal class VoiceSessionHost private constructor(private val context: Context
                 }
                 "request" -> {
                     val path = args.getString("path")
-                    val needsSession = path == "/v1/session" || path == "/v1/memories/save"
+                    val needsSession = path == "/v1/session" || path == "/v1/responses" || path == "/v1/memories/save"
                     if (needsSession) check(active)
                     else check(foregroundActivity() != null || active)
                     val body = args.getJSONObject("body")

@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RunContext } from "@openai/agents";
-import { RealtimeAgent } from "@openai/agents/realtime";
+import { RealtimeAgent, RealtimeSession } from "@openai/agents/realtime";
 import { NativeBridge, NativeBridgeError, formatNativeToolError, type Bootstrap } from "./bridge";
-import { createBridgedMCPTools, createNativeVoiceTools, createTextSession, nativeSchemas, voiceInstructions, VoiceController } from "./voice";
+import { createBridgedMCPTools, createNativeVoiceTools, nativeSchemas, voiceInstructions, VoiceController } from "./voice";
 
 const bootstrap: Bootstrap = {
   platform: "android", deviceLabel: "fixture", configured: true,
@@ -92,7 +92,7 @@ test("store search is advertised only by capable hosts and serializes to an actu
   const bridge = new NativeBridge(() => assert.fail("schema inspection must not call the native host"));
   assert.ok(!createNativeVoiceTools(bootstrap, bridge, () => {}).some(tool => tool.name === "store_search"));
   const tools = createNativeVoiceTools({ ...bootstrap, tools: [...bootstrap.tools, "store_search"] }, bridge, () => {});
-  const session = createTextSession(new RealtimeAgent({ name: "fixture", tools }), "synthetic-model");
+  const session = new RealtimeSession(new RealtimeAgent({ name: "fixture", tools }), { transport: "websocket" });
   try {
     const config = await session.getInitialSessionConfig();
     const search = config.tools?.find(tool => tool.type === "function" && tool.name === "store_search");

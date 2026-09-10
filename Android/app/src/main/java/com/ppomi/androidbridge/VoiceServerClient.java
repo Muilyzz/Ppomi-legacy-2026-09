@@ -27,15 +27,16 @@ final class VoiceServerClient {
     Object request(String endpoint, String path, JSONObject body, BooleanSupplier stillValid) throws Exception {
         if (!VoiceBridgePolicy.PATHS.contains(path)) throw new IllegalArgumentException("허용하지 않은 서버 요청입니다.");
         String base = VoiceBridgePolicy.endpoint(endpoint);
+        boolean modelTurn = path.equals("/v1/responses");   // a chat turn carries instructions, tools and history, and the model takes its time
         byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > 16000) throw new IllegalArgumentException("요청이 너무 큽니다.");
+        if (bytes.length > (modelTurn ? 1_000_000 : 16000)) throw new IllegalArgumentException("요청이 너무 큽니다.");
         String token = auth.agentAccessToken();
         if (!stillValid.getAsBoolean()) throw new IllegalStateException("음성 세션이 종료되었습니다.");
         HttpsURLConnection connection = (HttpsURLConnection) new URL(base + path).openConnection();
         inFlight = connection;
         connection.setInstanceFollowRedirects(false);
         connection.setUseCaches(false);
-        connection.setRequestMethod("POST"); connection.setConnectTimeout(12000); connection.setReadTimeout(20000);
+        connection.setRequestMethod("POST"); connection.setConnectTimeout(12000); connection.setReadTimeout(modelTurn ? 120000 : 20000);
         connection.setRequestProperty("Content-Type", "application/json");
         connection.setRequestProperty("Cache-Control", "no-store");
         connection.setRequestProperty("Authorization", "Bearer " + token);
@@ -53,7 +54,7 @@ final class VoiceServerClient {
                 byte[] buffer = new byte[8192]; int read;
                 while ((read = input.read(buffer)) != -1) {
                     if (!stillValid.getAsBoolean()) throw new IllegalStateException("음성 세션이 종료되었습니다.");
-                    if (output.size() + read > 512 * 1024) throw new IllegalStateException("음성 서버 응답이 너무 큽니다.");
+                    if (output.size() + read > (modelTurn ? 2 * 1024 * 1024 : 512 * 1024)) throw new IllegalStateException("음성 서버 응답이 너무 큽니다.");
                     output.write(buffer, 0, read);
                 }
             }

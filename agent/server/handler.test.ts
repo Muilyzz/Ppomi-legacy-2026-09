@@ -8,7 +8,7 @@ const WORKSPACE = 'aaaaaaaa-1111-4111-8111-111111111111';
 const DEVICE = 'dddddddd-1111-4111-8111-111111111111';
 const ID = 'bbbbbbbb-1111-4111-8111-111111111111';
 const NEXT = 'cccccccc-1111-4111-8111-111111111111';
-const environment = () => ({ SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co', SUPABASE_ANON_KEY: 'sb_publishable_test_public_key_only_123456', OPENAI_API_KEY: 'server-only-test-key', PPOMI_AGENT_MEMORY_KEY: randomBytes(32).toString('base64') });
+const environment = () => ({ SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co', SUPABASE_ANON_KEY: 'sb_publishable_test_public_key_only_123456', OPENAI_API_KEY: 'server-only-test-key', AI_GATEWAY_API_KEY: 'gateway-only-test-key', PPOMI_AGENT_MEMORY_KEY: randomBytes(32).toString('base64') });
 type Row = { id: string; workspace_id: string; replaces_id: string | null; created_at: string; deleted_at: string | null; envelope: Record<string, unknown>; request_digest: string };
 function fixture() {
   const env = environment(), rows = new Map<string, Row>(), calls: { url: string; body: Record<string, unknown>; auth: string; safety: string | null }[] = [];
@@ -76,20 +76,17 @@ test('session mints only ephemeral credential with tracing disabled and call tra
   assert.equal(f.rows.size, 0);
 });
 
-test('text session mints text-only output without audio transcription or turn detection', async () => {
+test('text sessions name the gateway model and mint no realtime secret', async () => {
   const f = fixture(), response = await f.handle(request('/v1/session', { mode: 'text' }));
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { clientSecret: 'ek_ephemeral_test_only', model: 'gpt-realtime-2.1' });
+  assert.deepEqual(await response.json(), { model: 'openai/gpt-6-astra' });
   assert.match(response.headers.get('cache-control') ?? '', /no-store/);
-  const call = f.calls.at(-1)!;
-  assert.deepEqual(call.body, { expires_after: { anchor: 'created_at', seconds: 60 }, session: { type: 'realtime', model: 'gpt-realtime-2.1', tracing: null,
-    output_modalities: ['text'], audio: { input: { transcription: null, turn_detection: null } } } });
-  assert.match(call.safety ?? '', /^[a-f0-9]{64}$/);
-  assert.equal(call.auth, `Bearer ${f.env.OPENAI_API_KEY}`);
+  assert.equal(f.calls.filter(item => item.url.endsWith('/client_secrets')).length, 0);
   assert.equal(f.rows.size, 0);
   f.revoke();
   assert.equal((await f.handle(request('/v1/session', { mode: 'text' }))).status, 403);
-  assert.equal(f.calls.filter(item => item.url.endsWith('/client_secrets')).length, 1);
+  const unconfigured = createHandler({ env: { ...f.env, AI_GATEWAY_API_KEY: undefined }, fetch: (async () => Response.json({ workspace: { id: WORKSPACE }, device: { id: DEVICE } })) as typeof fetch });
+  assert.equal((await unconfigured(request('/v1/session', { mode: 'text' }))).status, 503);
 });
 
 test('explicit voice mode preserves legacy mint configuration; invalid modes cannot mint', async () => {
@@ -194,27 +191,27 @@ test('server implementation has no transcript persistence, raw logging, or files
   assert.match(source, /model: textModel, stream: false, store: false/);
 });
 
-test('text sessions that can drive the Responses loop get the flagship model and no realtime secret; the proxy forces model, stream and store', async () => {
-  const env = environment(), calls: { url: string; body: Record<string, unknown>; safety: string | null }[] = [];
+test('the text proxy relays one turn to the AI Gateway with the server-side key, model, stream and store', async () => {
+  const env = environment(), calls: { url: string; body: Record<string, unknown>; auth: string | null }[] = [];
   const transport = (async (url: string | URL | Request, init?: RequestInit) => {
     const address = String(url), body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-    calls.push({ url: address, body, safety: new Headers(init?.headers).get('OpenAI-Safety-Identifier') });
+    calls.push({ url: address, body, auth: new Headers(init?.headers).get('Authorization') });
     if (address.endsWith('ppomi_context')) return Response.json({ workspace: { id: WORKSPACE }, device: { id: DEVICE } });
     if (address.endsWith('/v1/responses')) return Response.json({ id: 'resp_1', object: 'response', output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '네' }] }] });
     throw new Error('Unexpected endpoint ' + address);
   }) as typeof fetch;
   const handle = createHandler({ env, fetch: transport });
-  const session = await handle(request('/v1/session', { mode: 'text', responses: true }));
-  assert.equal(session.status, 200);
-  assert.deepEqual(await session.json(), { transport: 'responses', model: 'gpt-6-astra' });
-  assert.ok(!calls.some(call => call.url.endsWith('/client_secrets')));
   const proxied = await handle(request('/v1/responses', { model: 'gpt-4o-mini', stream: false, store: true, instructions: 'x', input: [{ role: 'user', content: '안녕' }], tools: [] }));
   assert.equal(proxied.status, 200);
   assert.equal(((await proxied.json()) as { id: string }).id, 'resp_1');
-  const upstream = calls.find(call => call.url === 'https://api.openai.com/v1/responses')!;
-  assert.equal(upstream.body.model, 'gpt-6-astra'); assert.equal(upstream.body.stream, false); assert.equal(upstream.body.store, false);
-  assert.equal(upstream.body.instructions, 'x'); assert.ok(upstream.safety);
+  const upstream = calls.find(call => call.url === 'https://ai-gateway.vercel.sh/v1/responses')!;
+  assert.equal(upstream.body.model, 'openai/gpt-6-astra'); assert.equal(upstream.body.stream, false); assert.equal(upstream.body.store, false);
+  assert.equal(upstream.body.instructions, 'x'); assert.equal(upstream.auth, 'Bearer gateway-only-test-key');
+  assert.ok(!calls.some(call => call.url.includes('api.openai.com')));
   assert.equal((await handle(request('/v1/responses', { input: [], stream: true }))).status, 400);
   assert.equal((await handle(request('/v1/responses', { instructions: 'no input' }))).status, 400);
-  assert.equal((await handle(request('/v1/session', { mode: 'text', responses: 'yes' }))).status, 400);
+  assert.equal((await handle(request('/v1/session', { mode: 'text', responses: true }))).status, 400);
+  const oidc = createHandler({ env: { ...env, AI_GATEWAY_API_KEY: undefined, VERCEL_OIDC_TOKEN: 'oidc-test-token', AI_TEXT_MODEL: 'openai/gpt-5.6-sol' }, fetch: transport });
+  assert.equal((await oidc(request('/v1/responses', { input: [] }))).status, 200);
+  assert.equal(calls.at(-1)?.auth, 'Bearer oidc-test-token'); assert.equal(calls.at(-1)?.body.model, 'openai/gpt-5.6-sol');
 });

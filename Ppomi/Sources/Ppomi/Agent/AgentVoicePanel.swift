@@ -240,7 +240,7 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
                     return ["platform": "macos", "deviceLabel": "Mac", "configured": configured,
                             "endpoint": endpoint, "tools": AgentNativePolicy.toolNames + MCPServer.tools.map(\.name),
                             "toolSpecs": MCPServer.toolSpecs, "toolGuide": self.mcp?.instructions ?? "",
-                            "bankProfileSupported": true, "responsesTransport": true, "uiScale": AppSettings.uiScale] as [String: Any]
+                            "bankProfileSupported": true, "uiScale": AppSettings.uiScale] as [String: Any]
                 case "bankProfileRequest", "bankProfileSubmit", "bankProfileCancel":
                     // Only our bundled main-frame UI can call these methods; they are not model executeTool names.
                     // Session changes revoke outstanding card tokens before another save can occur.

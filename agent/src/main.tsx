@@ -1,4 +1,6 @@
 import React, { Fragment, useEffect, useRef, useState } from "react";
+import { useChat, type UseChatHelpers } from "@ai-sdk/react";
+import type { UIMessage } from "ai";
 import { toolLabel } from "./tool-label";
 import { createRoot } from "react-dom/client";
 import { createBridge, type Bootstrap } from "./bridge";
@@ -51,6 +53,7 @@ function App() {
   const bootRef = useRef<Bootstrap | undefined>(undefined);      // window hooks are installed once; they read the latest values through refs
   const textStateRef = useRef<TextState>("idle");
   const chatLog = useRef<HTMLDivElement>(null);
+  const chatRef = useRef<UseChatHelpers<UIMessage> | null>(null);   // the state callback below is created once; it clears the chat through this ref
   const textController = useRef<TextController | null>(null);
   const trackTools = (progress: ToolProgress) => setTools((old) => {
     const index = old.findIndex((item) => item.id === progress.id);
@@ -64,11 +67,17 @@ function App() {
       if (next === "idle") {
         actionEpoch.current += 1;
         setTools([]); setDraft(""); setSending(false); setSettling(true);
+        chatRef.current?.setMessages([]);
         queueMicrotask(() => { void textController.current?.whenStopped().finally(() => setSettling(false)); });
       }
     },
-    setError, setMessages, trackTools, undefined, setInputCards,
+    setError, trackTools, setInputCards,
   );
+  // 글 대화: Vercel AI SDK useChat. 전송·상태(submitted/streaming/ready/error)·말풍선은 SDK가, 도구 실행과 세션 수명은 TextController가 맡는다.
+  const chat = useChat<UIMessage>({ transport: textController.current, onError: (error) => {
+    if (textStateRef.current !== "idle") setError(error.message || "응답 실패");   // a session that already ended reports nothing
+  } });
+  chatRef.current = chat;
   const controller = useRef<VoiceController | null>(null);
   if (!controller.current)
     controller.current = new VoiceController(
@@ -89,6 +98,7 @@ function App() {
   const stopCurrent = async () => {
     actionEpoch.current += 1;
     setDraft(""); setSending(false);
+    chat.stop();
     await textController.current?.stop();
     await controller.current?.stop();
   };
@@ -107,13 +117,14 @@ function App() {
   const declineCall = () => { clearIncoming(); void bridge.call("declineCall", {}).catch(() => {}); };
   const send = async () => {
     const value = draft.trim();
-    if (!value || !boot?.configured || inCall || sending || settling || !["idle", "ready"].includes(textState)) return;
+    if (!value || value.length > 12_000 || !boot?.configured || inCall || waiting) return;
     const epoch = actionEpoch.current;
     setSending(true); setError("");
     try {
       if (textState === "idle") await textController.current?.start(boot);
-      if (epoch !== actionEpoch.current) return;
-      if (textController.current?.send(value)) setDraft("");
+      if (epoch !== actionEpoch.current || textStateRef.current !== "ready") return;
+      setDraft("");
+      void chat.sendMessage({ text: value });   // resolves when the turn ends; status tracks it
     } finally { if (epoch === actionEpoch.current) setSending(false); }
   };
   const apply = (b: Bootstrap) => {
@@ -163,10 +174,16 @@ function App() {
       delete window.ppomiAnswerCall;
     };
   }, []);
+  // 로그의 줄: 통화면 대사(ChatMessage), 아니면 useChat 메시지의 글 부분만(도구 호출·결과는 위의 실행 내역에만 보인다).
+  const rows: ChatMessage[] = call ? messages : chat.messages.flatMap((message) => {
+    if (message.role !== "user" && message.role !== "assistant") return [];
+    const text = message.parts.flatMap((part) => part.type === "text" ? [part.text] : []).join("");
+    return text || message.role === "user" ? [{ id: message.id, role: message.role, text, status: "completed" as const }] : [];
+  });
   useEffect(() => {
     const log = chatLog.current;
     if (log) log.scrollTop = log.scrollHeight;
-  }, [messages, tools, inputCards, call]);
+  }, [rows.length, tools, inputCards, call]);
   // 벨소리: 걸려온 동안 두 음(440·480Hz)을 1초 울리고 2초 쉰다. 파일 없이 Web Audio. 30초 뒤엔 그친다(띠는 남는다).
   useEffect(() => {
     if (incoming === null || bootRef.current?.platform === "android") return;   // Android rings through the OS call UI
@@ -187,12 +204,13 @@ function App() {
     const timer = setInterval(ring, 3000);
     return () => { clearInterval(timer); void ctx.close(); };
   }, [incoming]);
-  const waiting = sending || settling || !["idle", "ready"].includes(textState);
-  const running = sending || !["idle", "ready"].includes(textState);   // 정지 only while something runs
+  const busy = chat.status === "submitted" || chat.status === "streaming";
+  const waiting = sending || settling || textState === "connecting" || busy;
+  const running = sending || textState === "connecting" || busy;   // 정지 only while something runs
   const questions = (inCall ? controller.current : textController.current)?.questionRequests;
   const cards = questions ? inputCards.map((card) =>
     <QuestionCard key={card.id} card={card} requests={questions} onError={setError} />) : null;
-  useEffect(() => { lastMessage.current = messages.length ? messages[messages.length - 1].id : null; }, [messages]);
+  useEffect(() => { lastMessage.current = rows.length ? rows[rows.length - 1].id : null; }, [rows.length]);
   const noticesAfter = (id: string | null) => notices.filter((n) => n.after === id).map((n) => <Message key={n.id} role="assistant" text={n.text} />);
   const android = boot?.platform === "android";
   const toolRows: ToolRow[] = tools.map((item) => ({
@@ -202,9 +220,9 @@ function App() {
   }));
   const toolsRunning = tools.some((item) => item.status === "running"), failed = tools.some((item) => item.status === "error");
   // 대기 중임을 항상 보이게: 응답을 기다리거나 도구가 도는 동안 마지막에 임시 비서 말풍선 한 줄(모델이 첫 글자를 보내기 전에도).
-  const lastIsPending = messages.length > 0 && messages[messages.length - 1].role === "assistant" && messages[messages.length - 1].status === "in_progress";
-  const pendingWord = textState === "connecting" ? "연결 중…" : textState === "working" || toolsRunning ? "도구 실행 중…" : textState === "responding" || sending ? "생각 중…" : "";
-  const pendingBubble = !inCall && pendingWord && !lastIsPending ? <Message key="pending" role="assistant" text={pendingWord} /> : null;
+  const lastIsAssistant = rows.length > 0 && rows[rows.length - 1].role === "assistant";
+  const pendingWord = textState === "connecting" ? "연결 중…" : toolsRunning ? "도구 실행 중…" : busy || sending ? "생각 중…" : "";
+  const pendingBubble = !inCall && pendingWord && (toolsRunning || !lastIsAssistant) ? <Message key="pending" role="assistant" text={pendingWord} /> : null;
   // 뼈대(ui/shell.tsx)에 서브트리를 주입한다. 상태와 브리지는 여기, DOM 모양은 뼈대, 스타일은 style.css.
   return <Shell platform={boot?.platform}
     error={error ? <ErrorBanner onClose={() => setError("")}>{error}</ErrorBanner>
@@ -215,13 +233,13 @@ function App() {
       tools={tools.length > 0 && <ToolSummary rows={toolRows}
         summary={`${toolsRunning ? "실행 중" : "실행 내역"} · ${tools.length}개${failed ? " · 실패" : ""}`} />}
       log={<ChatLog logRef={chatLog}>
-        {!call && messages.length === 0 && <Welcome disabled={waiting}
+        {!call && rows.length === 0 && <Welcome disabled={waiting}
           hint={android ? "앱 열기 · 화면 읽기 · 일 처리" : "절차 · 기억 · 할 일"}
           suggestion={android ? "토스 화면 읽기 ↗" : "플레이북 찾기 ↗"}
           onSuggest={() => setDraft(android ? "토스를 열고 현재 화면을 읽어 줘." : "사용할 수 있는 플레이북을 찾아서 알려 줘.")} />}
         {call && <CallCard kind="start" time={clock(call.startedAt)} />}
         {noticesAfter(null)}
-        {messages.map((message) => <Fragment key={message.id}><Message role={message.role} text={message.text} />{noticesAfter(message.id)}</Fragment>)}
+        {rows.map((message) => <Fragment key={message.id}><Message role={message.role} text={message.text} />{noticesAfter(message.id)}</Fragment>)}
         {pendingBubble}
         {cards}
         {call?.endedAt && <CallCard kind="end" time={clock(call.endedAt)} />}

@@ -18,9 +18,10 @@ type Context = { workspace: { id: string }; device: { id: string } };
 type StoredMemory = { id: string; workspace_id: string; replaces_id: string | null; created_at: string; deleted_at: string | null; envelope: Json };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PATHS = new Set(['/v1/session', '/v1/responses', '/v1/memories/list', '/v1/memories/save', '/v1/memories/delete']);
-/** Text chat runs on a flagship model through the Responses proxy; the server picks the model, never the client. */
-const TEXT_MODEL = 'gpt-6-astra';
-const MODEL_ID = /^[a-zA-Z0-9_.-]{1,100}$/;
+/** Text chat runs on a flagship model through the Vercel AI Gateway; the server picks the model, never the client. */
+const TEXT_MODEL = 'openai/gpt-6-astra';
+const GATEWAY = 'https://ai-gateway.vercel.sh/v1';
+const MODEL_ID = /^[a-zA-Z0-9_.\/-]{1,100}$/;
 const NO_STORE = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store, private', 'Pragma': 'no-cache', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
 
 class SafeError extends Error {
@@ -45,6 +46,12 @@ function containsSecretOrTranscript(text: string): boolean {
     || /(?:password|passwd|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|client[_ -]?secret|비밀번호|비번|인증번호|복구\s*코드)\s*(?::|=|은|는|이|가)\s*\S+/i.test(text)
     || /\b\d{6}-[1-8]\d{6}\b/.test(text)
     || (text.match(/^(?:user|assistant|system|사용자|어시스턴트)\s*:/gim)?.length ?? 0) >= 2;
+}
+/** Gateway credentials: an explicit key, else the deployment's OIDC token (Vercel injects it at runtime). */
+function gateway(env: Environment): { key: string; base: string; textModel: string } {
+  const key = env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN || '', base = env.AI_GATEWAY_BASE_URL || GATEWAY, textModel = env.AI_TEXT_MODEL || TEXT_MODEL;
+  if (!key || /\s/.test(key) || !/^https:\/\/[^\s?#]+$/.test(base) || !MODEL_ID.test(textModel)) throw new SafeError(503, 'not_configured', '에이전트 서버 설정이 필요합니다.');
+  return { key, base: base.replace(/\/+$/, ''), textModel };
 }
 function memoryInput(value: unknown): MemoryInput {
   const body = object(value);
@@ -160,16 +167,12 @@ export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment
       const body = object(await boundedJson(request, path === '/v1/responses' ? 1_000_000 : 16_384));   // a Responses turn carries instructions, tools and history
       let result: unknown;
       if (path === '/v1/session') {
-        exactFields(body, ['mode', 'responses'], []);
+        exactFields(body, ['mode'], []);
         if (body.mode !== undefined && body.mode !== 'voice' && body.mode !== 'text') invalid();
-        if (body.responses !== undefined && typeof body.responses !== 'boolean') invalid();
-        const textMode = body.mode === 'text';
-        const key = env.OPENAI_API_KEY ?? '', model = env.OPENAI_REALTIME_MODEL ?? 'gpt-realtime-2.1', textModel = env.OPENAI_TEXT_MODEL ?? TEXT_MODEL;
-        if (!key || /\s/.test(key) || !MODEL_ID.test(model) || !MODEL_ID.test(textModel)) throw new SafeError(503, 'not_configured', '에이전트 서버 설정이 필요합니다.');
-        if (textMode && body.responses === true) {
-          // A client that can drive the Responses loop through its native bridge gets the flagship text model; no secret is minted.
-          return new Response(JSON.stringify({ transport: 'responses', model: textModel }), { status: 200, headers: NO_STORE });
-        }
+        // Text chat: the page drives the model loop through its native bridge and this proxy; no secret is minted.
+        if (body.mode === 'text') return new Response(JSON.stringify({ model: gateway(env).textModel }), { status: 200, headers: NO_STORE });
+        const key = env.OPENAI_API_KEY ?? '', model = env.OPENAI_REALTIME_MODEL ?? 'gpt-realtime-2.1';
+        if (!key || /\s/.test(key) || !MODEL_ID.test(model)) throw new SafeError(503, 'not_configured', '에이전트 서버 설정이 필요합니다.');
         const safetyIdentifier = createHmac('sha256', encryptionKey(env)).update('ppomi-voice-safety\0').update(JSON.stringify([context.workspace.id, context.device.id])).digest('hex');
         let response: Response;
         try {
@@ -177,8 +180,7 @@ export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment
             headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json',
               'OpenAI-Safety-Identifier': safetyIdentifier }, cache: 'no-store',
             body: JSON.stringify({ expires_after: { anchor: 'created_at', seconds: 60 }, session: { type: 'realtime', model, tracing: null,
-              ...(textMode ? { output_modalities: ['text'], audio: { input: { transcription: null, turn_detection: null } } }
-                : { audio: { input: { transcription: { model: 'gpt-4o-mini-transcribe' } }, output: { voice: 'marin' } } }) } }) });   // a call logs both sides
+              audio: { input: { transcription: { model: 'gpt-4o-mini-transcribe' } }, output: { voice: 'marin' } } } }) });   // a call logs both sides
         } catch { throw new SafeError(502, 'voice_unavailable', '에이전트 연결을 준비하지 못했습니다.'); }
         if (!response.ok) { await response.body?.cancel(); throw new SafeError(502, 'voice_unavailable', '에이전트 연결을 준비하지 못했습니다.'); }
         const secret = object(await boundedJson(response, 65_536));
@@ -186,16 +188,14 @@ export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment
           throw new SafeError(502, 'voice_unavailable', '임시 에이전트 연결 정보를 확인하지 못했습니다.');
         result = { clientSecret: secret.value, model };
       } else if (path === '/v1/responses') {
-        // Proxy one non-streaming Responses call for the bundled text chat. The key, model and storage policy stay here.
-        const key = env.OPENAI_API_KEY ?? '', textModel = env.OPENAI_TEXT_MODEL ?? TEXT_MODEL;
-        if (!key || /\s/.test(key) || !MODEL_ID.test(textModel)) throw new SafeError(503, 'not_configured', '에이전트 서버 설정이 필요합니다.');
+        // Proxy one non-streaming Responses call to the AI Gateway for the bundled text chat. The key, model and storage policy stay here.
+        const { key, base, textModel } = gateway(env);
         if (!('input' in body) || body.stream === true) invalid();
         const { model: _clientModel, stream: _stream, store: _store, previous_response_id: _previous, ...rest } = body;
-        const safetyIdentifier = createHmac('sha256', encryptionKey(env)).update('ppomi-text-safety\0').update(JSON.stringify([context.workspace.id, context.device.id])).digest('hex');
         let response: Response;
         try {
-          response = await transport('https://api.openai.com/v1/responses', { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(110_000),
-            headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'OpenAI-Safety-Identifier': safetyIdentifier }, cache: 'no-store',
+          response = await transport(`${base}/responses`, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(110_000),
+            headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, cache: 'no-store',
             body: JSON.stringify({ ...rest, model: textModel, stream: false, store: false }) });
         } catch { throw new SafeError(502, 'model_unavailable', '모델 응답을 받지 못했습니다.'); }
         if (!response.ok) {

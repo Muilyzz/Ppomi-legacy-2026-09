@@ -12,7 +12,8 @@ import { VoiceLifetime } from "./lifetime";
 import { koreanConversationStyle, koreanVoiceStyle, koreanTurnDetection } from "./korean-conversation";
 import { executePlaybook, playbookSchemas, type PlaybookToolName } from "./playbooks";
 import { QuestionRequests, userInputSchema, bankProfileSchema, type InputCard } from "./questions";
-import { ResponsesChat } from "./responses-chat";
+import { createChatTransport, errorText } from "./chat";
+import type { ChatTransport, UIMessage } from "ai";
 
 setSensitiveDataLoggingEnabled(false);
 export type VoiceState =
@@ -555,24 +556,13 @@ export class VoiceController {
   }
 }
 
-export type TextState = "idle" | "connecting" | "ready" | "responding" | "working";
+export type TextState = "idle" | "connecting" | "ready";
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
   status: "in_progress" | "completed" | "incomplete";
 };
-
-/** Only display conversation text; function arguments/results and audio never become chat rows. */
-export function chatMessagesFromHistory(history: RealtimeItem[]): ChatMessage[] {
-  return history.flatMap((item): ChatMessage[] => {
-    if (item.type !== "message" || item.role === "system") return [];
-    const text = item.content.flatMap(content =>
-      content.type === "input_text" || content.type === "output_text" ? [content.text] : [],
-    ).join("");
-    return text ? [{ id: item.itemId, role: item.role, text, status: item.status }] : [];
-  });
-}
 
 /** A call's log: what was said, as transcripts. Only the voice session projects audio; text sessions never do. */
 export function callMessagesFromHistory(history: RealtimeItem[]): ChatMessage[] {
@@ -586,45 +576,23 @@ export function callMessagesFromHistory(history: RealtimeItem[]): ChatMessage[] 
   });
 }
 
-export function createTextSession(agent: RealtimeAgent, model: string): RealtimeSession {
-  return new RealtimeSession(agent, {
-    model,
-    // Explicit WebSocket transport never creates a microphone, audio element, or audio context.
-    transport: "websocket",
-    historyStoreAudio: false,
-    tracingDisabled: true,
-    config: {
-      outputModalities: ["text"],
-      tracing: null,
-      audio: { input: { transcription: null, turnDetection: null } },
-    },
-    toolErrorFormatter: () => "이 작업은 승인되지 않아 실행하지 않았습니다. 성공으로 보고하거나 다른 도구로 우회하지 마세요.",
-  });
-}
-
-/** Text and tool state are held only by this session and its UI callbacks; stop clears both. */
-export class TextController {
+/** Text chat: the AI SDK transport lives here so its tools, question cards and native session state stop together. */
+export class TextController implements ChatTransport<UIMessage> {
   private life = new VoiceLifetime();
-  private session?: RealtimeSession;
+  private transport?: ChatTransport<UIMessage>;
   private state: TextState = "idle";
   private starting = false;
   private stopping?: Promise<void>;
   private startIntent = 0;
   private ending?: ReturnType<typeof setTimeout>;
-  private connectDeadline?: ReturnType<typeof setTimeout>;
-  private unsubscribe: (() => void)[] = [];
   private questions?: QuestionRequests;
-  /** Flagship-model text chat (Responses loop) when the host offers it; otherwise the realtime text session below. */
-  private chat?: ResponsesChat;
-  private chatGeneration = 0;
   constructor(
     private bridge: NativeBridge,
     private onState: (state: TextState) => void,
     private onError: (text: string) => void,
-    private onMessages: (messages: ChatMessage[]) => void,
     private onToolProgress: (progress: ToolProgress) => void,
-    private sessionFactory: typeof createTextSession = createTextSession,
     private onQuestions: (cards: InputCard[]) => void = () => {},
+    private transportFactory: (...args: Parameters<typeof createChatTransport>) => ChatTransport<UIMessage> = createChatTransport,
   ) {}
   private change(state: TextState) {
     this.state = state;
@@ -640,147 +608,42 @@ export class TextController {
     const check = () => {
       if (!this.life.isCurrent(generation)) throw new NativeBridgeError("session_ended");
     };
-    let credentials: { clientSecret?: string; model: string; transport?: "realtime" | "responses" } | undefined;
     this.change("connecting");
-    this.onMessages([]);
     try {
       bootstrap = await this.bridge.call<Bootstrap>("bootstrap");
       check();
       if (!bootstrap.configured || !Array.isArray(bootstrap.tools)) throw new NativeBridgeError("server_unconfigured");
       await this.bridge.call("sessionState", { active: true, mode: "text" });
       check();
-      credentials = await this.bridge.call("request", { path: "/v1/session", body: { mode: "text", ...(bootstrap.responsesTransport === true ? { responses: true } : {}) } });
+      // The server names the model; no secret reaches the page. Every turn is proxied through the bridge.
+      const credentials = await this.bridge.call<{ model?: unknown }>("request", { path: "/v1/session", body: { mode: "text" } });
       check();
-      if (!credentials?.model || (credentials.transport !== "responses" && !credentials.clientSecret?.startsWith("ek_"))) throw new NativeBridgeError("tool_failed");
-      const runningTools = new Set<string>();
-      const progress = (event: ToolProgress) => {
-        if (!this.life.isCurrent(generation)) return;
-        if (event.status === "running") runningTools.add(event.id);
-        else runningTools.delete(event.id);
-        this.change(runningTools.size ? "working" : "responding");
-        this.onToolProgress(event);
-      };
+      if (typeof credentials?.model !== "string" || !credentials.model) throw new NativeBridgeError("tool_failed");
       const tools = createAgentTools(bootstrap, this.bridge, check, () => {
         if (this.ending) clearTimeout(this.ending);
         this.ending = setTimeout(() => {
           if (this.life.isCurrent(generation)) void this.stop();
         }, 800);
-      }, progress, executePlaybook, this.questions = new QuestionRequests(this.bridge, this.onQuestions, check));
-      if (credentials.transport === "responses") {
-        // The flagship text model: no realtime session, each model turn is one proxied Responses call.
-        this.chat = new ResponsesChat(this.bridge, check, credentials.model, voiceInstructions(bootstrap, "text"), tools);
-        this.chatGeneration = generation;
-        this.unsubscribe.push(() => { runningTools.clear(); this.chat = undefined; });
-        this.change("ready");
-        return;
-      }
-      const session = this.sessionFactory(new RealtimeAgent({
-        name: "뽀미",
-        instructions: voiceInstructions(bootstrap, "text"),
-        tools,
-      }), credentials.model);
-      this.session = session;
-      const historyChanged = (history: RealtimeItem[]) => {
-        if (this.life.isCurrent(generation)) this.onMessages(chatMessagesFromHistory(history));
-      };
-      const responding = () => {
-        if (this.life.isCurrent(generation)) this.change(runningTools.size ? "working" : "responding");
-      };
-      const turnDone: Parameters<typeof session.transport.on<"turn_done">>[1] = (event) => {
-        if (!this.life.isCurrent(generation)) return;
-        // A function-call response ends before its tools and follow-up response. Keep input disabled then.
-        if (runningTools.size || event.response.output.some(item => item.type === "function_call")) return;
-        this.change("ready");
-      };
-      const failed = () => {
-        if (!this.life.isCurrent(generation)) return;
-        this.onError("채팅 연결 끊김");
-        void this.stop();
-      };
-      const responseStatus: Parameters<typeof session.on<"transport_event">>[1] = (event) => {
-        if (event.type !== "response.done" || !this.life.isCurrent(generation)) return;
-        // SDK turn_done omits status and status_details. Inspect only this enum, never expose raw errors.
-        const response = event.response as { status?: unknown } | undefined;
-        if (response?.status === "failed" || response?.status === "incomplete" || response?.status === "cancelled") {
-          this.onError("응답 실패");
-          void this.stop();
-        }
-      };
-      const connectionChanged = (status: string) => {
-        if (status === "disconnected") failed();
-      };
-      session.on("history_updated", historyChanged);
-      session.on("agent_start", responding);
-      session.on("error", failed);
-      session.on("transport_event", responseStatus);
-      session.transport.on("turn_done", turnDone);
-      session.transport.on("connection_change", connectionChanged);
-      this.unsubscribe.push(() => {
-        session.off("history_updated", historyChanged);
-        session.off("agent_start", responding);
-        session.off("error", failed);
-        session.off("transport_event", responseStatus);
-        session.transport.off("turn_done", turnDone);
-        session.transport.off("connection_change", connectionChanged);
-        runningTools.clear();
-      });
-      const deadline = setTimeout(() => {
-        if (!this.life.isCurrent(generation)) return;
-        this.onError("연결 시간 초과");
-        void this.stop();
-      }, 30_000);
-      this.connectDeadline = deadline;
-      try {
-        await session.connect({ apiKey: credentials.clientSecret ?? "" });
-      } finally {
-        clearTimeout(deadline);
-        if (this.connectDeadline === deadline) this.connectDeadline = undefined;
-      }
-      if (!this.life.isCurrent(generation)) {
-        session.close();
-        return;
-      }
+      }, event => {
+        if (this.life.isCurrent(generation)) this.onToolProgress(event);
+      }, executePlaybook, this.questions = new QuestionRequests(this.bridge, this.onQuestions, check));
+      this.transport = this.transportFactory(this.bridge, check, credentials.model, voiceInstructions(bootstrap, "text"), tools);
       this.change("ready");
     } catch (error) {
       if (this.life.isCurrent(generation)) {
-        // Session-start errors come from the SDK/OpenAI (never screen data): keep a short reason so the person can report it.
-        this.onError(error instanceof NativeBridgeError ? error.message : "채팅 시작 실패" + (error instanceof Error && error.message ? ` · ${error.message.slice(0, 200)}` : ""));
+        this.onError(errorText(error, "채팅 시작 실패"));
         await this.stop();
       }
     } finally {
-      if (credentials) credentials.clientSecret = "";
       if (this.life.isCurrent(generation)) this.starting = false;
     }
   }
-  send(text: string): boolean {
-    if (this.state !== "ready" || (!this.session && !this.chat)) return false;
-    const message = text.trim();
-    if (!message || message.length > 12_000) return false;
-    this.change("responding");
-    if (this.chat) { void this.runChat(this.chat, message, this.chatGeneration); return true; }
-    try {
-      this.session!.sendMessage(message);
-      return true;
-    } catch {
-      this.onError("전달 확인 실패");
-      void this.stop();
-      return false;
-    }
+  /** useChat sends every turn through here; a stopped session refuses instead of reviving. */
+  sendMessages(options: Parameters<ChatTransport<UIMessage>["sendMessages"]>[0]) {
+    if (this.state !== "ready" || !this.transport) return Promise.reject(new NativeBridgeError("session_ended"));
+    return this.transport.sendMessages(options);
   }
-  private async runChat(chat: ResponsesChat, message: string, generation: number) {
-    this.onMessages([...chat.messages, { id: `pending-${Date.now()}`, role: "user", text: message, status: "completed" }]);
-    try {
-      const messages = await chat.send(message);
-      if (!this.life.isCurrent(generation)) return;
-      this.onMessages(messages);
-      if (this.state !== "idle") this.change("ready");
-    } catch (error) {
-      if (!this.life.isCurrent(generation)) return;
-      this.onMessages(chat.messages);
-      this.onError(error instanceof NativeBridgeError ? error.message : "응답 실패" + (error instanceof Error && error.message ? ` · ${error.message.slice(0, 200)}` : ""));
-      if (this.state !== "idle") this.change("ready");
-    }
-  }
+  reconnectToStream() { return Promise.resolve(null); }
   whenStopped(): Promise<void> {
     return this.stopping ?? Promise.resolve();
   }
@@ -788,33 +651,19 @@ export class TextController {
   stop(): Promise<void> {
     ++this.startIntent;
     if (this.stopping) return this.stopping;
-    const deactivate = this.state !== "idle" || this.starting || !!this.session || !!this.chat;
-    this.chat = undefined;
+    const deactivate = this.state !== "idle" || this.starting || !!this.transport;
+    this.transport = undefined;
     this.life.end();
     this.questions?.close();
     this.questions = undefined;
     this.starting = false;
     if (this.ending) clearTimeout(this.ending);
-    if (this.connectDeadline) clearTimeout(this.connectDeadline);
     this.ending = undefined;
-    this.connectDeadline = undefined;
-    const session = this.session;
-    this.session = undefined;
-    for (const unsubscribe of this.unsubscribe.splice(0)) {
-      try { unsubscribe(); } catch {}
-    }
-    if (session) {
-      try { session.updateHistory([]); } catch {}
-      try { session.close(); } catch {}
-      try { session.history.splice(0); } catch {}
-      try { session.context.context.history.splice(0); } catch {}
-    }
     if (deactivate) this.bridge.clear();
     const stopping = deactivate
       ? this.bridge.call("sessionState", { active: false, mode: "text" }).then(() => {}, () => {})
       : Promise.resolve();
     this.stopping = stopping;
-    this.onMessages([]);
     this.change("idle");
     void stopping.then(() => {
       if (this.stopping === stopping) this.stopping = undefined;

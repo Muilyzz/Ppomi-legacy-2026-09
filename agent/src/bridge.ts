@@ -11,8 +11,6 @@ export type Bootstrap = {
   toolSpecs?: { name: string; description: string; parameters: Record<string, unknown> }[];
   /** Mac: the MCP server's own operating guide (common rules, approval boundaries), appended to the instructions. */
   toolGuide?: string;
-  /** Mac: the host can proxy Responses calls, so text chat may run on the flagship model instead of a realtime session. */
-  responsesTransport?: boolean;
   /** System text size (Android font scale, Mac setting). Applied as --ui-scale so the whole UI grows, not just text. */
   uiScale?: number;
   /** Android only: the WebView is reused across activity recreation, so the host says which scheme the page shows. */

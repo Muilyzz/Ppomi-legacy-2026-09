@@ -72,6 +72,10 @@ Android 추가·강화 검사 8개도 통과했다. 실제 네이티브 선택 U
 
 폴드에 0.6.1/code5를 설치한 후 접근성 서비스가 다시 정상 연결됐고 기존 권한·서버 endpoint가 유지됨을 확인했다. APK SHA-256은 `e167af08ebee70eb871f3979c284e996e76234f13af932b2ac3d32d918ec9a2a`다. 0.6.1 검증 당시에는 토스 허용과 실제 화면 읽기가 남아 있었다. 이후 채팅을 통한 실기기 검증은 아래 0.6.2 항목에 기록한다.
 
+### 0.7 글 대화는 Vercel AI SDK + AI Gateway
+
+2026-09-10. 글 대화(텍스트)는 더 이상 Realtime WebSocket 세션을 쓰지 않는다. 화면은 `@ai-sdk/react`의 `useChat`(상태 submitted/streaming/ready/error, 메시지 parts)이고, 전송은 `src/chat.ts`의 `DirectChatTransport` + `ToolLoopAgent`(`stopWhen: stepCountIs(40)`)다. 모델은 `@ai-sdk/openai`의 Responses 모델을 네이티브 브리지 fetch로 감싼 것이라 페이지는 키를 갖지 않는다: 브리지 `request` → 앱 서버 `/v1/responses` → Vercel AI Gateway(`https://ai-gateway.vercel.sh/v1`, 기본 모델 `openai/gpt-6-astra`, env `AI_TEXT_MODEL`/`AI_GATEWAY_API_KEY`/`AI_GATEWAY_BASE_URL`, 키가 없으면 배포의 `VERCEL_OIDC_TOKEN`). 서버는 model·`stream:false`·`store:false`를 강제한다(프록시가 SSE를 중계할 때까지 `simulateStreamingMiddleware`). 도구는 통화와 같은 `createAgentTools` 정의를 `chatTools`가 AI SDK 도구로 감싸며, 실행 내역·실패 코드는 기존 `ToolProgress`로 표시한다. `/v1/session`의 `mode: text`는 임시 키 없이 `{model}`만 돌려준다. 통화(음성)는 그대로 OpenAI Realtime이다.
+
 ### 0.6.2 임시 채팅과 실제 기기 검증
 
 같은 날 기본 화면에 채팅 입력·답변·접을 수 있는 도구 실행 내역을 추가하고 기존 음성을 유지했다. 텍스트는 마이크 없이 Realtime WebSocket을 사용하며 서버에 `mode: text` 임시 키 발급을 배포했다. 종료하면 입력 초안·메시지·도구 상태·SDK history를 비우고 연결을 닫는다. 모드 전환은 이전 네이티브 세션 종료가 끝날 때까지 기다린다.

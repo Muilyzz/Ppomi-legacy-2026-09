@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RunContext } from "@openai/agents";
-import { RealtimeAgent } from "@openai/agents/realtime";
+import { RealtimeAgent, RealtimeSession } from "@openai/agents/realtime";
 import { NativeBridge, NativeBridgeError, type Bootstrap } from "./bridge";
 import { PlaybookLibrary, type BundledPlaybooks, type PublicPlaybook } from "./playbooks";
-import { createAgentTools, createTextSession, type ToolProgress } from "./voice";
+import { createAgentTools, type ToolProgress } from "./voice";
 import { createFixturePlaybookExecutor, fixtureName } from "../scripts/playbook-smoke-fixture";
 
 const context = { platform: "android" as const, availableNativeTools: ["app_list", "app_open", "screen_read"] };
@@ -82,7 +82,7 @@ test("production SDK playbook tools work locally and identify procedure data wit
   assert.ok(result.playbook.guide.length > 0 && result.commonGuide.length > 0);
   assert.deepEqual(progress.map(event => [event.name, event.status]), [["list_playbooks", "running"], ["list_playbooks", "success"], ["read_playbook", "running"], ["read_playbook", "success"]]);
   assert.ok(!JSON.stringify(progress).includes(result.playbook.guide));
-  const session = createTextSession(new RealtimeAgent({ name: "fixture", tools }), "synthetic-model");
+  const session = new RealtimeSession(new RealtimeAgent({ name: "fixture", tools }), { transport: "websocket" });
   try {
     const config = await session.getInitialSessionConfig();
     for (const name of ["list_playbooks", "read_playbook"]) {

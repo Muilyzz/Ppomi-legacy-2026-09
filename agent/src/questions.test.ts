@@ -2,12 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { RunContext } from "@openai/agents";
-import { RealtimeAgent, type RealtimeSession, type RealtimeItem } from "@openai/agents/realtime";
+import { RunContext, type Tool } from "@openai/agents";
+import { RealtimeAgent, RealtimeSession } from "@openai/agents/realtime";
 import { NativeBridge, type Bootstrap } from "./bridge";
 import { QuestionRequests, type InputCard, type UserInputRequest } from "./questions";
 import { QuestionCard } from "./question-cards";
-import { createAgentTools, createTextSession, TextController, voiceInstructions } from "./voice";
+import { createAgentTools, TextController, voiceInstructions } from "./voice";
 
 const question: UserInputRequest = { questions: [{ id: "route", prompt: "어디에서 진행할까요?",
   options: [{ label: "현재 기기", description: "현재 화면을 사용합니다." }], allow_text: true }] };
@@ -160,7 +160,7 @@ test("question cards are shared; bank cards require native bank profile support"
   assert.match(voiceInstructions({ ...boot, platform: "android", bankProfileSupported: undefined }), /request_user_input/);
   assert.doesNotMatch(voiceInstructions({ ...boot, platform: "android", bankProfileSupported: undefined }), /request_bank_profile/);
   assert.match(voiceInstructions(boot), /request_bank_profile/);
-  const session = createTextSession(new RealtimeAgent({ name: "fixture", tools: make(boot) }), "synthetic-model");
+  const session = new RealtimeSession(new RealtimeAgent({ name: "fixture", tools: make(boot) }), { transport: "websocket" });
   try {
     const config = await session.getInitialSessionConfig();
     const schema = config.tools?.find(tool => tool.type === "function" && tool.name === "request_bank_profile");
@@ -170,27 +170,25 @@ test("question cards are shared; bank cards require native bank profile support"
 });
 
 test("TextController stop clears a waiting card, rejects the old tool result and starts with fresh questions", async () => {
-  let cards: InputCard[] = [], agent: RealtimeAgent | undefined, session: RealtimeSession | undefined;
+  let cards: InputCard[] = [], tools: Tool[] = [];
   const bridge = new NativeBridge(text => {
     const call = JSON.parse(text);
     queueMicrotask(() => bridge.receive({ id: call.id, result: call.method === "bootstrap" ? boot
-      : call.method === "request" ? { clientSecret: "ek_synthetic", model: "synthetic-model" } : { active: call.args.active } }));
+      : call.method === "request" ? { model: "synthetic-model" } : { active: call.args.active } }));
   });
-  const controller = new TextController(bridge, () => {}, () => {}, () => {}, () => {}, (next, model) => {
-    agent = next; session = createTextSession(next, model); session.connect = async () => {}; return session;
-  }, value => { cards = value; });
+  const controller = new TextController(bridge, () => {}, () => {}, () => {}, value => { cards = value; }, (_bridge, _check, _model, _instructions, next) => {
+    tools = next; return { sendMessages: () => Promise.reject(new Error("unused")), reconnectToStream: async () => null };
+  });
   await controller.start(boot);
-  const context = new RunContext({ history: [] as RealtimeItem[] });
-  const tools = await agent!.getAllTools(context);
+  const context = new RunContext({});
   const input = tools.find(tool => tool.name === "request_user_input")!;
-  assert.equal(input.type, "function");
   assert.ok(input.type === "function");
   const pending = input.invoke(context, JSON.stringify(question));
   await tick(); assert.equal(cards.length, 1);
   const old = controller.questionRequests;
   await controller.stop();
   assert.equal(JSON.parse(String(await pending)).error.code, "session_ended");
-  assert.deepEqual(cards, []); assert.deepEqual(session!.history, []);
+  assert.deepEqual(cards, []);
   await controller.start(boot);
   assert.notEqual(controller.questionRequests, old);
   assert.deepEqual(cards, []);
