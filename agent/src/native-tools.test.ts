@@ -206,3 +206,15 @@ test("Mac MCP tools arrive as JSON-schema specs, execute through the bridge and 
   assert.match(text, /phone_screen/); assert.match(text, /run_combo 먼저/);
   assert.doesNotMatch(voiceInstructions(bootstrap, "text"), /\[도구 안내\]/);
 });
+
+test("an MCP error result keeps its text for the model in the shared {ok:false} shape so the UI shows a failed card", async () => {
+  const mac: Bootstrap = { platform: "macos", deviceLabel: "Mac", configured: true, endpoint: "https://example.invalid", tools: ["phone_wait"],
+    toolSpecs: [{ name: "phone_wait", description: "대기", parameters: { type: "object", required: [], properties: {} } }] };
+  const bridge = new NativeBridge(raw => {
+    const request = JSON.parse(raw);
+    queueMicrotask(() => bridge.receive({ id: request.id, result: { text: "실행 안 함: 미러링 창이 없다", error: true } }));
+  });
+  const wait = createBridgedMCPTools(mac, bridge, () => {}).find(tool => tool.name === "phone_wait")!;
+  const output = JSON.parse(String(await wait.invoke(new RunContext({}), "{}")));
+  assert.equal(output.ok, false); assert.equal(output.error.code, "tool_failed"); assert.match(output.error.message, /미러링 창이 없다/);
+});

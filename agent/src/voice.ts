@@ -189,7 +189,9 @@ export function createBridgedMCPTools(bootstrap: Bootstrap, bridge: NativeBridge
       execute: (input: unknown) => observeTool(spec.name as AgentToolName, check, async () => {
         const args = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
         const result = await bridge.call<{ text?: string; error?: boolean }>("executeTool", { name: spec.name, args }, 200_000);   // phone_wait and OCR tools can run for minutes
-        return typeof result?.text === "string" ? result.text : JSON.stringify(result ?? null);
+        const text = typeof result?.text === "string" ? result.text : JSON.stringify(result ?? null);
+        // An MCP error result keeps its text for the model but travels in the same {ok:false} shape as native failures, so the UI shows a failed card.
+        return result?.error === true ? JSON.stringify({ ok: false, error: { code: "tool_failed", message: text, recovery: "같은 실패를 반복하지 말고 원인을 화면에서 확인하라." } }) : text;
       }, onProgress),
       errorFunction: (_context, error) => formatNativeToolError(error),
       });
