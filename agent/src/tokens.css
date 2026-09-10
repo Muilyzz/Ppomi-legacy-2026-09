@@ -33,6 +33,5 @@
 
 html { font-size: calc(16px * var(--ui-scale)); }
 body { margin: 0; background: var(--bg); color: var(--fg); font: var(--fs-3)/1.5 var(--font); -webkit-font-smoothing: antialiased; }
-button, input, select, textarea { font: inherit; color: inherit; }
 /* 타이포 규칙: 굵기는 400(본문)·500(제목/동작/금액)뿐. 큰 두 단(--fs-5/6)만 -.01em. */
 h1, h2, h3, h4 { font-family: var(--font); font-weight: 500; line-height: 1.25; }

@@ -1,4 +1,6 @@
 /* style.css — 대화 셸(Mac WKWebView·Android WebView 공용). 색은 tokens.css 토큰만, 크기는 rem(--ui-scale로 전체가 커진다). */
+@layer components {
+/* style.css — 대화 셸(Mac WKWebView·Android WebView 공용). 색은 tokens.css 토큰만, 크기는 rem(--ui-scale로 전체가 커진다). */
 * { box-sizing: border-box; }
 button { cursor: pointer; border: 0; }
 button:disabled { opacity: 0.38; cursor: default; }
@@ -35,43 +37,8 @@ main.agent-shell {
   flex-direction: column;
   overflow: hidden;
 }
-.tool-summary { flex: 0 1 auto; min-height: 0; max-height: 25%; margin-top: 0.375rem; overflow-y: auto; font-size: var(--fs-2); color: var(--accent-fg); }
-.tool-summary summary { cursor: pointer; padding: 0.3125rem 0.125rem; }
-.tool-progress { list-style: none; padding: 0.75rem; margin: 0.5rem 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--rc); }
-.tool-progress li { display: flex; align-items: center; gap: 0.5rem; padding: 0.3125rem 0; font-size: var(--fs-1); color: var(--fg); }
-.tool-progress small { font-size: var(--fs-1); margin-left: auto; color: var(--fg-2); overflow-wrap: anywhere; }
-.tool-progress .error, .tool-progress .error small { color: var(--bad); }
-
-.chat-log {
-  flex: 1 1 0;
-  min-height: 0;
-  padding: 0.875rem 0.125rem 0.375rem;
-  overflow-y: auto;
-  overflow-anchor: none;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line-2) transparent;
-}
-.chat-welcome { text-align: center; padding: 0.875rem 0 1.125rem; }
-.chat-welcome p { color: var(--fg-2); font-size: var(--fs-3); }
-.suggestion { background: var(--surface); border: 1px solid var(--line); color: var(--fg); border-radius: var(--rc); padding: 0.75rem 0.9375rem; font-size: var(--fs-2); margin-top: 0.5rem; }
-.message { width: fit-content; max-width: 92%; margin: 0 0 1.25rem; padding: 0 0.5rem; }
-.message p { font-size: var(--fs-3); line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.3125rem 0 0; }
-.message.user { margin-left: auto; padding: 0.75rem 1rem; border-radius: 1.125rem 1.125rem 0.3125rem 1.125rem; background: var(--surface-2); border: 1px solid var(--line); }
-.composer { flex: 0 0 auto; display: flex; align-items: flex-end; gap: 0.625rem; padding: 0.625rem; border: 1px solid var(--line); border-radius: 1.125rem; background: var(--surface); }
-.composer textarea { flex: 1; min-width: 0; resize: none; height: 3rem; min-height: 2.5rem; max-height: 6rem; border: 0; padding: 0.3125rem 0.125rem; background: transparent; font-size: var(--fs-3); }
-.composer textarea::placeholder { color: var(--fg-2); }
 .send { background: var(--accent); color: var(--on-accent); padding: 0.625rem 0.875rem; border-radius: var(--rc); font-size: var(--fs-2); flex-shrink: 0; font-weight: 500; }
 .text { background: none; color: var(--accent-fg); font-size: var(--fs-2); padding: 0.4375rem; }
-
-/* 통화: 입력창 자리에 상태 한 마디 + 끊기. 로그에는 통화 카드와 말풍선. 걸려오면 로그 위에 수신 띠. */
-.composer .call-button { background: var(--surface-2); border: 1px solid var(--line); border-radius: 50%; width: 2.75rem; height: 2.75rem; flex-shrink: 0; font-size: var(--fs-4); }
-.composer.call-bar { align-items: center; justify-content: space-between; padding: 0.625rem 0.625rem 0.625rem 1.25rem; }
-.composer.call-bar [role="status"] { color: var(--fg-2); font-size: var(--fs-3); }
-.call { display: flex; align-items: center; gap: 0.5rem; margin: 0 auto 1.25rem; padding: 0.375rem 0.875rem; width: fit-content; border: 1px solid var(--line); border-radius: 1.125rem; color: var(--fg-2); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
-.incoming { flex: 0 0 auto; display: flex; align-items: center; gap: 0.75rem; padding: 0.625rem 0.875rem; margin-bottom: 0.5rem; border: 1px solid var(--line-2); border-radius: var(--rc); background: var(--surface); font-size: var(--fs-3); }
-.incoming strong { font-weight: 500; }
-.incoming .reason { color: var(--fg-2); flex: 1; min-width: 0; overflow-wrap: anywhere; }
 
 /* Session-owned input cards. Bank fields are uncontrolled and cleared on submit/unmount. */
 .input-card { border: 1px solid var(--line); border-radius: 1.125rem; background: var(--surface); padding: 1.25rem; margin: 0.5rem 0 1.375rem; text-align: left; }
@@ -101,27 +68,30 @@ main.agent-shell {
 .bank-registered { display: flex; gap: 0.75rem; justify-content: space-between; padding: 0.75rem 0; border-bottom: 1px solid var(--line); font-size: var(--fs-2); }
 .bank-registered small { color: var(--accent-fg); white-space: nowrap; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
-@media (max-width: 430px) { .input-card { padding: 0.9375rem; } .input-card-heading { flex-wrap: wrap; } }
+@media (max-width: 430px) {
+  .input-card { padding: 0.9375rem; }
+  .input-card-heading { flex-wrap: wrap; }
+}
+
 
 @media (min-width: 720px) {
   main.agent-shell { padding: 1.125rem 1.75rem 0.75rem; }
 }
 
+
 /* Android IME: only the log yields height. */
-main.agent-shell.android:has(.composer textarea:focus) { row-gap: 0.375rem; }
+main.agent-shell.android:has(textarea:focus) { row-gap: 0.375rem; }
 
 @media (max-height: 600px) {
   main.agent-shell { padding: 0.5rem 0.75rem; row-gap: 0.3125rem; }
-  .agent-shell .chat-log { padding-top: 0.5rem; }
-  .agent-shell .composer { padding: 0.5rem; gap: 0.5rem; border-radius: 0.875rem; }
-  .agent-shell .composer textarea { height: 2.5rem; min-height: 2.25rem; }
-  .agent-shell .chat-welcome { padding: 0; }
 }
+
 
 @media (max-height: 360px) {
   main.agent-shell { row-gap: 0.125rem; padding: 0.3125rem 0.625rem; }
-  .agent-shell.android:has(.composer textarea:focus) .tool-summary { display: none; }
   .agent-shell > .error { padding: 0.3125rem 0.5625rem; }
-  .agent-shell .chat-log { padding: 0.1875rem 0.125rem; }
 }
-
+/* 질문·은행 카드의 두 버튼(제출/취소). 대화 입력창은 AI Elements 가 그린다. */
+.send { background: var(--accent); color: var(--on-accent); padding: 0.625rem 0.875rem; border-radius: var(--rc); font-size: var(--fs-2); flex-shrink: 0; font-weight: 500; }
+.text { background: none; color: var(--accent-fg); font-size: var(--fs-2); padding: 0.4375rem; }
+}

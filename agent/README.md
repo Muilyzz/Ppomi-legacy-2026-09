@@ -72,6 +72,10 @@ Android 추가·강화 검사 8개도 통과했다. 실제 네이티브 선택 U
 
 폴드에 0.6.1/code5를 설치한 후 접근성 서비스가 다시 정상 연결됐고 기존 권한·서버 endpoint가 유지됨을 확인했다. APK SHA-256은 `e167af08ebee70eb871f3979c284e996e76234f13af932b2ac3d32d918ec9a2a`다. 0.6.1 검증 당시에는 토스 허용과 실제 화면 읽기가 남아 있었다. 이후 채팅을 통한 실기기 검증은 아래 0.6.2 항목에 기록한다.
 
+### 0.7.1 대화 셸을 AI Elements 로
+
+2026-09-10. 대화 셸(`src/ui/shell.tsx`)을 Vercel **AI Elements**(shadcn/ui + Tailwind v4, radix) 위에 다시 그렸다. 로그는 `Conversation`(바닥 고정 스크롤 use-stick-to-bottom), 말풍선은 `Message` + `MessageResponse`(streamdown 마크다운, 한국어 줄바꿈 플러그인만), 도구는 `Tool` 카드(입력·결과 펼침, 우리말 상태 배지), 입력은 `PromptInput`(자동 높이, Enter 전송·한글 조합 제외, 상태에 따라 보내기/정지), 첫 화면은 `Suggestion` 칩(누르면 바로 전송). 색은 새로 만들지 않는다: `src/index.css` 의 `@theme inline` 이 Tailwind 색 이름을 `tokens.css` 두 색 파생 토큰에 매핑하고, `dark:` 는 `html[data-theme]`·시스템 다크를 tokens 와 같은 규칙으로 따른다. 남은 자체 CSS(`style.css`)는 셸 격자·오류 띠·질문/은행 카드뿐이며 `@layer components` 로 감싸 Tailwind 유틸리티가 이긴다. 컴포넌트 파일은 `src/components/{ai-elements,ui}` 에 우리 소유로 들어왔다(`npx shadcn add https://elements.ai-sdk.dev/api/registry/<name>.json`, `components.json`). 코드 강조(shiki)·수식·mermaid·motion 은 뺐다(번들 2.9 MB). 스토리북은 `.storybook/main.js` 에 Tailwind 플러그인과 `@/` 별칭을 붙여 같은 셸을 본다.
+
 ### 0.7 글 대화는 Vercel AI SDK + AI Gateway
 
 2026-09-10. 글 대화(텍스트)는 더 이상 Realtime WebSocket 세션을 쓰지 않는다. 화면은 `@ai-sdk/react`의 `useChat`(상태 submitted/streaming/ready/error, 메시지 parts)이고, 전송은 `src/chat.ts`의 `DirectChatTransport` + `ToolLoopAgent`(`stopWhen: stepCountIs(40)`)다. 모델은 `@ai-sdk/openai`의 Responses 모델을 네이티브 브리지 fetch로 감싼 것이라 페이지는 키를 갖지 않는다: 브리지 `request` → 앱 서버 `/v1/responses` → Vercel AI Gateway(`https://ai-gateway.vercel.sh/v1`, 기본 모델 `openai/gpt-6-astra`, env `AI_TEXT_MODEL`/`AI_GATEWAY_API_KEY`/`AI_GATEWAY_BASE_URL`, 키가 없으면 배포의 `VERCEL_OIDC_TOKEN`). 서버는 model·`stream:false`·`store:false`를 강제한다(프록시가 SSE를 중계할 때까지 `simulateStreamingMiddleware`). 도구는 통화와 같은 `createAgentTools` 정의를 `chatTools`가 AI SDK 도구로 감싸며, 실행 내역·실패 코드는 기존 `ToolProgress`로 표시한다. `/v1/session`의 `mode: text`는 임시 키 없이 `{model}`만 돌려준다. 통화(음성)는 그대로 OpenAI Realtime이다.

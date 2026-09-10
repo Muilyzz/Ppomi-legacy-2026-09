@@ -1,0 +1,44 @@
+/* index.css — Tailwind v4 + shadcn/AI Elements 를 뽀미 토큰(tokens.css 두 색 파생)에 매핑한다. 색은 여기서 새로 만들지 않는다:
+   Tailwind 색 이름 → 토큰 변수. 라이트/다크는 토큰이 이미 갈라 놓았고(html[data-theme] 또는 시스템), --ui-scale 은 rem 을 그대로 키운다. */
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "streamdown/styles.css";
+@source "../node_modules/streamdown/dist/*.js";
+/* 스토리북처럼 다른 폴더에서 빌드해도 셸·컴포넌트의 클래스가 잡히도록 원본 폴더를 명시한다(자동 감지는 cwd 기준). */
+@source "../src";
+
+/* dark: 명시적 data-theme=dark, 아니면 시스템 다크(단 data-theme=light 로 강제하면 라이트). tokens.css 와 같은 규칙. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) { @slot; }
+  @media (prefers-color-scheme: dark) {
+    &:where(:not([data-theme="light"]):not([data-theme="light"] *)) { @slot; }
+  }
+}
+
+@theme inline {
+  --font-sans: var(--font);
+  --font-mono: var(--mono);
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--fg);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--fg);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--on-accent);
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--fg);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--fg-2);
+  --color-accent: var(--accent-soft);
+  --color-accent-foreground: var(--accent-fg);
+  --color-destructive: var(--bad);
+  --color-border: var(--line);
+  --color-input: var(--line-2);
+  --color-ring: var(--accent-fg);
+  --radius: var(--rc);
+  --radius-sm: calc(var(--rc) - 0.25rem);
+  --radius-md: calc(var(--rc) - 0.125rem);
+  --radius-lg: var(--rc);
+  --radius-xl: calc(var(--rc) + 0.25rem);
+}

@@ -1,5 +1,7 @@
 // 컴포넌트는 CSS를 안 갖는다. 툴바 '스타일'이 스킨 하나를 <style>로 넣는다: 뽀미 테마(두 색 토큰 + 페이지·셸·작업대 스타일, 기본) ·
 // 심플(밝은 최소본) · 없음(기본 DOM). 툴바 '테마'는 라이트/다크, '글자 크기'는 --ui-scale(글자·여백·컨트롤이 함께 커진다).
+// Tailwind 유틸리티(대화 셸의 AI Elements)는 스킨과 무관하게 항상 붙는다. 색은 토큰이 정하므로 스킨 토글은 그대로 뜻이 있다.
+import '../../agent/src/index.css';
 import colors from '../../agent/src/generated/theme-colors.css?raw';
 import tokensSource from '../../agent/src/tokens.css?raw';
 import fontUrl from '../../agent/public/fonts/PretendardVariable.woff2?url';
