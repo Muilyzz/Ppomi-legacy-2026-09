@@ -9,9 +9,9 @@
 .control-slot { flex: 1 1 0; min-height: 0; display: grid; place-items: center; border-radius: var(--r); color: var(--fg-2); text-align: center; }
 .control-slot.turn { border: 2px solid var(--turn); }
 .turn { justify-content: flex-end; font-size: var(--fs-3); }
-.records-header [role="tablist"] { display: flex; gap: .75rem; overflow-x: auto; }
-.records-header [role="tab"] { background: none; color: var(--fg-2); padding: .25rem 0; }
-.records-header [role="tab"][aria-selected="true"] { color: var(--fg); font-weight: 500; border-bottom: 2px solid var(--fg); }
+.control-header [role="tablist"], .records-header [role="tablist"] { display: flex; gap: .75rem; overflow-x: auto; }
+.control-header [role="tab"], .records-header [role="tab"] { background: none; color: var(--fg-2); padding: .25rem 0; }
+.control-header [role="tab"][aria-selected="true"], .records-header [role="tab"][aria-selected="true"] { color: var(--fg); font-weight: 500; border-bottom: 2px solid var(--fg); }
 .records-body { flex: 1 1 0; min-height: 0; overflow: auto; color: var(--fg-2); }
 
 /* 크기 클래스 둘(축은 기기가 아니라 가용 폭). 840px = Android WindowSizeClass expanded 경계.
@@ -23,4 +23,5 @@
   .workspace > .control { order: -1; flex-direction: row; align-items: center; }   /* .workspace > section 의 column 을 이긴다 */
   .control-header { flex: 1 1 auto; }
   .control-slot { flex: 0 0 auto; padding: .25rem .5rem; }
+  .control .records-body { display: none; }   /* 아이패드 세로: 장부 본문은 접히고 탭만 레일에 */
 }

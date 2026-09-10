@@ -188,7 +188,7 @@ export function createBridgedMCPTools(bootstrap: Bootstrap, bridge: NativeBridge
       strict: false,
       execute: (input: unknown) => observeTool(spec.name as AgentToolName, check, async () => {
         const args = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
-        const result = await bridge.call<{ text?: string; error?: boolean }>("executeTool", { name: spec.name, args });
+        const result = await bridge.call<{ text?: string; error?: boolean }>("executeTool", { name: spec.name, args }, 200_000);   // phone_wait and OCR tools can run for minutes
         return typeof result?.text === "string" ? result.text : JSON.stringify(result ?? null);
       }, onProgress),
       errorFunction: (_context, error) => formatNativeToolError(error),

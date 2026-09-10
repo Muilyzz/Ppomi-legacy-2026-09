@@ -103,7 +103,7 @@ final class MCPServer {
     }
 
     // ---------------------------------------------------------------- tools
-    private static let reused = ["phone_screen", "phone_tap", "phone_type", "phone_key", "phone_scroll", "phone_open", "phone_installed", "run_combo",
+    private static let reused = ["phone_screen", "phone_tap", "phone_type", "phone_key", "phone_scroll", "phone_open", "phone_installed", "phone_wait", "run_combo",
                                  "windows_screen", "windows_click", "windows_type", "windows_key", "windows_scroll", "windows_open", "browser_open", "screen_inspect",
                                  "profile_save", "profile_status", "profile_delete", "profile_fill",
                                  "pay_preference", "confirm_payment", "record_spend", "balances", "today_spending", "ask_choice",

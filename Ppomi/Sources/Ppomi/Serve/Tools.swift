@@ -350,6 +350,7 @@ final class Tools {
         T("windows_open", "Windows에서 URL(기본 브라우저의 새 탭) 또는 프로그램 이름을 연다(Win+R). app에 플레이북 ID를 주면 그 URL을 연다. launch.target=windows(exe 설치·공동인증서 사이트)인 플레이북의 기본 경로.", ["target": ("string", "URL 또는 프로그램"), "app": ("string", "플레이북 ID 또는 이름")]),
         T("run_combo", "아는 길을 두뇌 없이 재생한다. 낯선 화면·승인 지점·사용자 차례에서 멈추고 마지막 화면을 돌려준다. 폰 앱 작업은 phone_screen 전에 이걸 먼저 불러라.",
           ["app": ("string", "플레이북 ID 또는 앱 이름(비우면 마지막으로 연 앱)"), "max_steps": ("integer", "기본 12")]),
+        T("phone_wait", "폰이 ‘사용 중’(미러링 끊김)이거나 사람이 폰에서 로그인·인증을 하는 동안 폰이 다시 잠겨 미러링이 붙을 때까지 기다린다(최대 seconds초, 기본 90). 되묻거나 턴을 끝내는 대신 이걸 부르고, 결과가 ‘연결됨’이면 같은 단계를 이어간다.", ["seconds": ("integer", "5~150, 기본 90")]),
         T("phone_installed", "이름을 준 앱들이 폰에 설치돼 있는지 Spotlight로 확인한다. 결제 수단을 고를 때: 토스(토스페이), 카카오톡(카카오페이), 네이버(네이버페이), 페이코 같은 결제앱 중 설치된 것만 고르라.",
           ["names": ("string", "쉼표로 구분한 앱 이름들")], ["names"]),
         T("pay_preference", "결제 수단을 고를 근거: 최근 90일 지출이 어느 계좌·카드로 나갔는지, 설치된 결제앱, 고르는 규칙. 결제 화면에 도달하면 호출해서 수단을 제안하라."),
@@ -464,6 +465,22 @@ final class Tools {
         let state = supplied?.state ?? ((try? Desk.state()) ?? "NONE")
         if state != "READY" { return refuse("window", "실행 안 함: Parallels의 Windows 창이 없다. 사용자에게 Parallels에서 Windows를 창 모드로 열어 달라고 한 줄로 부탁하고 멈춰라.") }
         return nil
+    }
+
+    /// phone_wait: the person is using the phone (login, OTP). Poll the mirror until it is connected again or the time is up;
+    /// one line of advice for the model either way, never a question to the person from here.
+    static func waitForPhone(seconds: Int, observe: () -> Mirroring.ConnectionSnapshot, sleep: () -> Void, now: () -> Date = Date.init) -> String {
+        let start = now()
+        var polls = 0
+        while true {
+            let snapshot = observe(); polls += 1
+            if snapshot.connected { return "연결됨: 폰이 잠겨 미러링이 다시 붙었다(\(polls)회 확인). 같은 단계를 이어가라." }
+            if snapshot.needsUnlock { return "iPhone에서 미러링 연결 인증이 필요하다. 사용자에게 한 줄로 부탁하고 phone_wait를 다시 불러라." }
+            if now().timeIntervalSince(start) >= Double(seconds) {
+                return "아직 사용 중: \(seconds)초 동안 폰이 잠기지 않았다. 사용자에게 폰을 잠가 달라고 한 줄로 부탁하고 phone_wait를 다시 불러라."
+            }
+            sleep()
+        }
     }
 
     /// phone_screen's text: one line per visual row, "y  words…", y in 0~1.
@@ -843,6 +860,11 @@ final class Tools {
                 }
                 return ok ? "열었다." : (store ? "설치돼 있지 않다(App Store '받기'가 보인다). 설치는 사용자가 폰에서 직접 해야 한다; 웹이 있으면 web_text 로 대신하라." : "Spotlight에서 못 찾았다.")
             case "pay_preference": return payPreference()
+            case "phone_wait":
+                let requested = (a["seconds"] as? Int) ?? Int((a["seconds"] as? Double) ?? 90)
+                return Self.waitForPhone(seconds: min(max(requested, 5), 150),
+                                         observe: { let s = Mirroring.connectionSnapshot(); return s.inUse ? s : Mirroring.recoverOnce(polls: 1) },
+                                         sleep: { Thread.sleep(forTimeInterval: 3) })
             case "phone_installed":
                 let requestedApps = str("names").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
                 let checksPhone = requestedApps.contains { catalog($0)?.manifest.launch.openTool == nil }

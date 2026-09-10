@@ -35,7 +35,7 @@ struct RuntimeEvent: Equatable, Identifiable, Sendable {
         "collect_now": "기록 수집", "draft_reply": "답장 초안", "remind": "알림 설정", "ask_choice": "선택 요청",
         "note_playbook": "절차 기록", "remember": "기억 저장", "forget_fact": "기억 삭제", "web_text": "웹 읽기",
         "phone_screen": "아이폰 화면 읽기", "phone_tap": "아이폰 탭", "phone_key": "아이폰 키 입력",
-        "phone_type": "아이폰 입력", "phone_open": "아이폰 앱 열기", "phone_scroll": "아이폰 스크롤",
+        "phone_type": "아이폰 입력", "phone_open": "아이폰 앱 열기", "phone_wait": "아이폰 잠금 대기", "phone_scroll": "아이폰 스크롤",
         "phone_installed": "아이폰 앱 확인", "browser_open": "브라우저 열기",
         "windows_screen": "Windows 화면 읽기", "windows_click": "Windows 클릭",
         "windows_type": "Windows 입력", "windows_key": "Windows 키 입력",
