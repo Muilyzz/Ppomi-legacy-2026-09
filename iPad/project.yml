@@ -1,4 +1,4 @@
-# 아이패드 앱. xcodegen generate → xcodebuild. 대화 = 번들 agent 앱(Web/Agent, Mac·Android 와 같은 빌드) + 네이티브 다리(서버 대화만).
+# 아이패드 앱 = 뷰어(타임라인·증빙·분개). xcodegen generate → xcodebuild. 대화(통화)는 뒤에: 번들 agent 앱(Web/Agent)과 다리(PadBridge)는 그때 쓴다.
 # 장부 = Supabase 의 암호화 기록을 이 기기가 직접 읽어 Mac 과 같은 페이지(Web/timeline.html)로 그린다. 장부 코드는 Mac 타깃의 파일을 그대로 컴파일한다.
 name: PpomiPad
 options:
@@ -23,6 +23,8 @@ targets:
         buildPhase: resources
       - path: ../Ppomi/Sources/Ppomi/Web/theme.css
         buildPhase: resources
+      - path: ../Ppomi/Sources/Ppomi/Web/journal.js
+        buildPhase: resources
       - ../Ppomi/Sources/Ppomi/Ledger/Model.swift
       - ../Ppomi/Sources/Ppomi/Ledger/Ledger.swift
       - ../Ppomi/Sources/Ppomi/Ledger/Rules.swift
@@ -32,6 +34,7 @@ targets:
       - ../Ppomi/Sources/Ppomi/Records/RecordScope.swift
       - ../Ppomi/Sources/Ppomi/Records/LifeJSON.swift
       - ../Ppomi/Sources/Ppomi/Shared/SharedRecordCrypto.swift
+      - ../Ppomi/Sources/Ppomi/Shared/SupabaseAuth.swift
       - ../Ppomi/Sources/Ppomi/Shared/SharedLedgerArchive.swift
     settings:
       base:
@@ -46,5 +49,4 @@ targets:
         CFBundleDisplayName: 뽀미
         UILaunchScreen: {}
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
-        NSCameraUsageDescription: Mac 화면의 연결 QR 을 읽습니다.
         NSMicrophoneUsageDescription: 통화(음성 대화)에 씁니다.

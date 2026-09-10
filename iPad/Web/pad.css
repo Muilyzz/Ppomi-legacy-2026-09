@@ -1,26 +1,9 @@
-/* 아이패드 작업대: agent/src/ui/workbench.css 의 골격을 이 페이지로. 색·간격은 app.css 의 토큰, 열은 대화 = 남는 폭 · 장부 = 45%. */
-[hidden] { display: none !important; }
-html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); }
-.workbench { display: grid; grid-template-rows: minmax(0, 1fr); height: 100dvh; gap: .75rem; padding: .75rem; box-sizing: border-box; background: var(--bg); container-type: inline-size; }
-.workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(20rem, 45%); gap: .75rem; min-height: 0; }
-.workspace > section { display: flex; flex-direction: column; gap: .75rem; min-height: 0; min-width: 0; }
-.workspace .agent-shell { height: auto; min-height: 0; flex: 1 1 0; padding: 0; }
-.control-header { display: flex; align-items: center; gap: .75rem; }
-.control-header [role="tablist"] { display: flex; gap: .75rem; overflow-x: auto; }
-.control-header [role="tab"], .records-back { background: none; border: 0; color: var(--fg-2); padding: .25rem 0; font: inherit; }
+/* 아이패드 = 뷰어. 대화 열 없이 탭 한 줄 + 페이지 하나가 화면 전부다(키보드가 없는 기기: 읽기와 통화 위주). 색·글꼴은 tokens.css. */
+html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); font-family: "Pretendard Variable", -apple-system, system-ui, sans-serif; }
+.viewer { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100dvh; gap: .5rem; box-sizing: border-box;
+  padding: max(.5rem, env(safe-area-inset-top)) .75rem max(.5rem, env(safe-area-inset-bottom)); }
+.control-header { display: flex; align-items: center; gap: .75rem; padding-right: 3rem; }   /* 오른쪽은 네이티브 톱니 자리 */
+.control-header [role="tablist"] { display: flex; gap: 1rem; overflow-x: auto; }
+.control-header [role="tab"] { background: none; border: 0; color: var(--fg-2); padding: .25rem 0; font: inherit; font-size: 1.1rem; }
 .control-header [role="tab"][aria-selected="true"] { color: var(--fg); font-weight: 500; border-bottom: 2px solid var(--fg); }
-.records-back { display: none; }
-.records-body { flex: 1 1 0; min-height: 0; width: 100%; border: 0; border-radius: var(--r, .5rem); background: var(--surface); }
-/* 세로(< 840): 장부 열은 탭 레일로 접힌다. 탭을 누르면 기록 페이지(대화 대신 장부 전체 + ← 대화). */
-@container (max-width: 839px) {
-  .workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-  .workspace > .control { order: -1; flex-direction: row; align-items: center; }
-  .control-header { flex: 1 1 auto; }
-  .control .records-body { display: none !important; }
-  .workbench.records .workspace { grid-template-rows: minmax(0, 1fr); }
-  .workbench.records .conversation { display: none; }
-  .workbench.records .control { flex-direction: column; align-items: stretch; }
-  .workbench.records .control-header { flex: 0 0 auto; }
-  .workbench.records .records-back { display: inline; }
-  .workbench.records .control .records-body { display: block !important; }
-}
+.records-body { min-height: 0; width: 100%; height: 100%; border: 0; border-radius: .5rem; background: var(--surface); }

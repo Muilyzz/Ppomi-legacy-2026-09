@@ -4,10 +4,10 @@ import Security
 import UIKit
 
 enum PadSettings {
-    static let supabaseURL = "https://nafutfqfbbmknzmyspus.supabase.co"
-    static let publishableKey = "sb_publishable_diyhnKb7L4C1R5wt9FRoEQ_rQs8b4WX"   // 공개 키(anon). 접근 제한은 서버 RLS 몫
-    static let agentEndpoint = "https://ppomi-agent.vercel.app"
-    static let callbackScheme = "ppomipad"
+    static let supabaseURL = PpomiServer.supabaseURL
+    static let publishableKey = PpomiServer.publishableKey
+    static let agentEndpoint = PpomiServer.agentEndpoint
+    static let callbackScheme = PpomiServer.callbackScheme
     private static let d = UserDefaults.standard
     /// 이 설치의 기기 ID. 작업 공간 등록 때 서버에 남고, 모든 요청의 X-Ppomi-Device 가 된다.
     static var deviceID: String {

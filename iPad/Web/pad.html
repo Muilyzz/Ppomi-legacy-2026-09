@@ -1,11 +1,7 @@
 <!doctype html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://api.openai.com wss://api.openai.com; media-src 'self' blob:; img-src 'self' data:; font-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
-<title>뽀미</title><link rel="stylesheet" href="./Agent/app.css"><link rel="stylesheet" href="./pad.css"><script defer src="./Agent/app.js"></script><script defer src="./pad.js"></script></head>
-<body><div class="workbench"><div class="workspace">
-<section class="conversation" aria-label="대화"><div id="root"></div></section>
-<section class="control" aria-label="장부">
-  <div class="control-header"><button class="records-back" aria-label="대화로 돌아가기">← 대화</button>
-    <div role="tablist" aria-label="기록 종류"><button role="tab" data-page="timeline" aria-selected="true">타임라인</button><button role="tab" data-page="evidence" aria-selected="false">증빙</button></div></div>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>뽀미</title><link rel="stylesheet" href="./tokens.css"><link rel="stylesheet" href="./pad.css"><script defer src="./pad.js"></script></head>
+<body><div class="viewer">
+  <div class="control-header"><div role="tablist" aria-label="기록 종류"><button role="tab" data-page="timeline" aria-selected="true">타임라인</button><button role="tab" data-page="evidence" aria-selected="false">증빙</button><button role="tab" data-page="journal" aria-selected="false">분개</button></div></div>
   <iframe class="records-body" title="장부"></iframe>
-</section>
-</div></div></body></html>
+</div></body></html>
