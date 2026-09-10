@@ -47,6 +47,14 @@ enum WorkSurface: String, CaseIterable, Identifiable {
         case .windows: return ParallelsWindow.processIdentifier
         }
     }
+    /// Every process that may own this surface's window or its Stage Manager thumbnail (the App Store Parallels draws the
+    /// guest window from the host process, not the VM process).
+    var processIdentifiers: [pid_t] {
+        switch self {
+        case .windows: return ParallelsWindow.processIdentifiers
+        default: return processIdentifier.map { [$0] } ?? []
+        }
+    }
     func liveWindow() -> (id: CGWindowID, rect: CGRect)? {
         switch self {
         case .iphone: return Mirroring.liveWindow()
@@ -242,6 +250,11 @@ private enum ParallelsWindow {
         selectedWindow()?.candidate.pid ?? processes().sorted {
             $0.kind == .virtualMachine && $1.kind != .virtualMachine
         }.first?.app.processIdentifier
+    }
+    static var processIdentifiers: [pid_t] {
+        var ids = processes().map(\.app.processIdentifier)
+        if let selected = selectedWindow()?.candidate.pid, let index = ids.firstIndex(of: selected) { ids.swapAt(0, index) }
+        return ids
     }
 
     private static func attr(_ element: AXUIElement, _ name: String) -> AnyObject? {

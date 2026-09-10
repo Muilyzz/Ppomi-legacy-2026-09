@@ -730,10 +730,11 @@ final class KioskController {
     /// Stage Manager shows windows of other stages as small strip thumbnails: on screen, but not a live window.
     /// WindowServer coordinates (origin top-left).
     private var surfaceThumbnail: CGRect? {
-        guard let pid = surface.processIdentifier else { return nil }
+        let pids = Set(surface.processIdentifiers)
+        guard !pids.isEmpty else { return nil }
         let l = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]) ?? []
         for w in l {
-            guard (w[kCGWindowOwnerPID as String] as? pid_t) == pid, (w[kCGWindowLayer as String] as? Int) == 0,
+            guard let owner = w[kCGWindowOwnerPID as String] as? pid_t, pids.contains(owner), (w[kCGWindowLayer as String] as? Int) == 0,
                   let b = w[kCGWindowBounds as String] as? [String: CGFloat],
                   let h = b["Height"], h > 40, h <= 200, let x = b["X"], let y = b["Y"], let width = b["Width"] else { continue }
             return CGRect(x: x, y: y, width: width, height: h)
