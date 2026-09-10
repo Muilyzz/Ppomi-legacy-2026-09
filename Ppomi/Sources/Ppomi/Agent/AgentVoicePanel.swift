@@ -11,6 +11,8 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
     var onActive: ((Bool) -> Void)?
     /// The surface the assistant just drove (phone_* → iPhone, windows_* → Windows, android_* → Android): the workbench follows it.
     var onSurfaceHint: ((WorkSurface) -> Void)?
+    /// Marks to draw over the docked window (tap rings, validated fields, reading sweep, a VLM line).
+    var onOverlay: ((OverlayMark) -> Void)?
     var onClose: (() -> Void)?
     /// When this returns a host, the conversation is mounted there instead of opening its own window.
     var host: (() -> ConversationHost?)?
@@ -149,8 +151,14 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
         mcp?.onRuntimeEvent = { [weak self] event in
             let payload: [String: String] = ["tool": event.tool, "kind": event.kind.rawValue, "method": event.method.rawValue]
             guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
-            DispatchQueue.main.async { self?.webView?.evaluateJavaScript("window.ppomiToolProgress?.(\(json))") }
+            let reading: Bool? = (event.kind == .reading || event.kind == .observing) ? true
+                : (event.kind == .read || event.kind == .observed || event.kind == .readFailed || event.kind.isTerminal || event.kind == .cached) ? false : nil
+            DispatchQueue.main.async {
+                self?.webView?.evaluateJavaScript("window.ppomiToolProgress?.(\(json))")
+                if let reading { self?.onOverlay?(.reading(reading)) }
+            }
         }
+        mcp?.onMark = { [weak self] mark in DispatchQueue.main.async { self?.onOverlay?(mark) } }
         let currentEpoch = epoch
         let rules = #"[{"trigger":{"url-filter":"^https?://","resource-type":["script"]},"action":{"type":"block"}}]"#
         WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "ppomi-agent-local-scripts-v1", encodedContentRuleList: rules) { [weak self, weak view] rule, _ in

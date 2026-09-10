@@ -12,6 +12,11 @@ final class MCPServer {
         get { tools.runtimeRecorder.onEvent }
         set { tools.runtimeRecorder.onEvent = newValue }
     }
+    /// Where the hands went (taps, validated fields, a VLM line) for a host UI that draws over the controlled window.
+    var onMark: ((OverlayMark) -> Void)? {
+        get { tools.onMark }
+        set { tools.onMark = newValue }
+    }
     private let out: FileHandle
     private let lock = NSLock()                    // one writer at a time; also guards `pending` and `nextID`
     private let calls = DispatchQueue(label: "ppomi.mcp.tools")   // the phone does one thing at a time; the read loop stays free

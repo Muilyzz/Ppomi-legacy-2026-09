@@ -41,6 +41,10 @@ final class Tools {
     private var visualCache: (key: String, at: Date, result: String)?
     var identityStore = IdentityProfileStore.shared
     var profileFiller = ProfileFormFiller()
+    /// Where the hands go, for a host UI that draws over the controlled window. Coordinates only, plus one VLM line.
+    var onMark: ((OverlayMark) -> Void)? {
+        didSet { ProfileFormFiller.onRegion = onMark.map { mark in { rect, ok in mark(.box(rect, ok: ok)) } } }
+    }
     var phoneProfileFiller = PhoneProfileFormFiller()
     private var scrolled: [OCR.Word]? = nil            // the screen before the brain's last phone_scroll: a text tap next is one ↓ step from there
     /// Test hook, a fake phone: `screen` replaces Phone.screen, `hand` swallows tap/key/type/scroll/open, the gate skips the mirror check.
@@ -528,6 +532,7 @@ final class Tools {
         } catch { runtimeRecorder.emit(.failed, method: .vlm); throw error }
         runtimeRecorder.emit(.observed, method: .vlm)
         visualCache = (key, Date(), result)
+        onMark?(.note(result.split(whereSeparator: \.isNewline).first.map(String.init) ?? result))
         return result
     }
 
@@ -721,7 +726,7 @@ final class Tools {
                 let target: OCR.Word?
                 if let x = a["x"] as? Double, let y = a["y"] as? Double {
                     target = words.first { Self.isPayWord($0.text) && abs($0.y + $0.h / 2 - y) < 0.03 && x >= $0.x - 0.05 && x <= $0.x + $0.w + 0.05 }
-                    if target == nil { try hand(["click"]) { try Desk.click(x, y) }; sleep(2); return "클릭했다. windows_screen 으로 결과를 확인하라." }
+                    if target == nil { onMark?(.tap(x: x, y: y)); try hand(["click"]) { try Desk.click(x, y) }; sleep(2); return "클릭했다. windows_screen 으로 결과를 확인하라." }
                 } else {
                     guard let w = Phone.find(words, str("text")) else { return "화면에 '\(str("text"))'가 없다" }
                     target = w
@@ -734,19 +739,19 @@ final class Tools {
                             return "같은 가입하기 버튼이 여러 개다. 최신 화면에서 원하는 회원유형의 버튼 좌표를 지정하라."
                         }
                     }
-                    try hand(["click", w.text]) { try Desk.click(w) }; sleep(2)
+                    onMark?(.tap(x: w.x + w.w / 2, y: w.y + w.h / 2)); try hand(["click", w.text]) { try Desk.click(w) }; sleep(2)
                     return "세움터 유형선택의 \(memberType) 가입 경로 버튼을 눌렀다. windows_screen으로 약관 화면 진입을 확인하라. 가입 완료나 약관 동의가 아니다."
                 }
                 if Self.isPayWord(w.text) {
                     guard let ap = approval else { runtimeRecorder.emit(.blocked, method: .human); return "'\(w.text)'는 돈이 나가는 버튼이다. confirm_payment 로 사용자 승인을 먼저 받아라. 승인 없이는 코드가 클릭을 막는다." }
                     approval = nil                                   // one approval, one attempt
-                    try hand(["click", w.text]) { try Desk.click(w) }; sleep(2)
+                    onMark?(.tap(x: w.x + w.w / 2, y: w.y + w.h / 2)); try hand(["click", w.text]) { try Desk.click(w) }; sleep(2)
                     runtimeRecorder.emit(.handedOff, method: .human)
                     onHuman?("Windows 창에서 결제 인증 → 끝나면 이어서 확인")
                     Notify.post("🖥 Windows 창에서 인증해 주세요", "\(esc(ap.summary)) · \(ap.amount.won)\n결제 버튼을 눌렀습니다. 인증을 마쳐 주세요.")
                     return "결제 버튼 '\(w.text)'을 눌렀다. 결제 인증은 사용자 차례라고 알려라. 잠시 뒤 windows_screen 으로 완료 화면을 읽고 record_spend 로 적은 뒤 보고하라. 실패·시간초과·가격변동이면 다시 결제하지 말고 보고만 하라."
                 }
-                try hand(["click", w.text]) { try Desk.click(w) }; sleep(2)
+                onMark?(.tap(x: w.x + w.w / 2, y: w.y + w.h / 2)); try hand(["click", w.text]) { try Desk.click(w) }; sleep(2)
                 return "클릭했다. windows_screen 으로 결과를 확인하라."
             case "windows_type":
                 if let g = windowsGate(name) { return g }
@@ -796,7 +801,7 @@ final class Tools {
                 if let x = a["x"] as? Double, let y = a["y"] as? Double {
                     // a coordinate tap counts as a pay tap when a pay-word sits at that height
                     target = words.first { Self.isPayWord($0.text) && abs($0.y + $0.h / 2 - y) < 0.03 && x >= $0.x - 0.05 && x <= $0.x + $0.w + 0.05 }
-                    if target == nil { try hand(["tap"]) { try Phone.tap(x, y) }; sleep(2.5); return "탭했다. phone_screen 으로 결과를 확인하라." }
+                    if target == nil { onMark?(.tap(x: x, y: y)); try hand(["tap"]) { try Phone.tap(x, y) }; sleep(2.5); return "탭했다. phone_screen 으로 결과를 확인하라." }
                 } else {
                     guard let w = Phone.find(words, str("text")) else { return "화면에 '\(str("text"))'가 없다" }
                     target = w
@@ -811,6 +816,7 @@ final class Tools {
                     Notify.post("📱 폰에서 인증해 주세요", "\(esc(ap.summary)) · \(ap.amount.won)\n결제 버튼을 눌렀습니다. 폰의 Face ID/결제 비밀번호 인증을 마쳐 주세요.")
                     return "결제 버튼 '\(w.text)'을 눌렀다. 폰에서 Face ID/결제 비밀번호 인증이 필요하다고 사용자에게 알려라. 60초쯤 뒤 phone_screen 으로 완료 화면(예약번호·취소 조건)을 읽고 record_spend 로 적은 뒤 결과를 보고하라. 실패·시간초과·가격변동이면 다시 결제하지 말고 보고만 하라."
                 }
+                onMark?(.tap(x: w.x + w.w / 2, y: w.y + w.h / 2))
                 try hand(["tap", w.text]) { try Phone.tap(w) }; sleep(2.5)
                 if a["x"] == nil { record(from == nil ? "⊙" : "↓", str("text"), before: from) }   // a coordinate tap has no target to replay
                 return "탭했다. phone_screen 으로 결과를 확인하라."

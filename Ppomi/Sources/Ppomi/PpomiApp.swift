@@ -81,7 +81,9 @@ struct PpomiApp: App {
         s.reloadLedger()
         let conversation = AgentVoicePanel()
         conversation.onSurfaceHint = { [weak s] surface in s?.selectSurface(surface) }   // the workbench docks the window the assistant is driving
-        kiosk = KioskController(state: s, conversation: conversation)
+        let workbench = KioskController(state: s, conversation: conversation)
+        kiosk = workbench
+        conversation.onOverlay = { mark in workbench.showMark(mark) }   // taps, filled fields and reading drawn over the docked window
         s.watchAsks()                                   // questions from the MCP server / the voice tools → workbench buttons
         s.watchLedger()                                 // committed values appear in the records panel while control continues
         do { voice = try VoiceSession(state: s, panel: conversation) } catch { voice = nil; print("voice: \(error)") }

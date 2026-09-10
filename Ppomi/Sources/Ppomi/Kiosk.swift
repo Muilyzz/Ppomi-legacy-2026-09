@@ -786,6 +786,9 @@ final class KioskController {
     /// person's frame at least the minimum size and on the display.
     /// Stage Manager keeps its strip of other apps' thumbnails along the left edge; a workbench that grows over it hides
     /// the very thumbnail the person (or the stage pull) needs to drag in. Treat that band as off-limits.
+    /// A transient mark over the docked window: the assistant's tap, the field it filled, reading in progress.
+    func showMark(_ mark: OverlayMark) { content?.show(mark) }
+
     static let stageStripWidth: CGFloat = 200
     static var stageManagerActive: Bool { UserDefaults(suiteName: "com.apple.WindowManager")?.bool(forKey: "GloballyEnabled") ?? false }
     nonisolated static func usable(_ display: CGRect, stageManager: Bool) -> CGRect {

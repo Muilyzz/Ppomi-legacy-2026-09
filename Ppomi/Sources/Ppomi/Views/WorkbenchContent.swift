@@ -7,6 +7,8 @@ final class WorkbenchContent: WorkbenchSurface {
     let controlToolbarArea = WorkbenchContentHost()
     let phoneSlot = DockView()
     let band = PhoneBand()
+    /// Drawn over the hole: where the assistant tapped, the field it filled, reading in progress. Never a click target.
+    let overlay = WorkbenchOverlayView()
     /// The records page replaces the whole workspace.
     var recordsFocused = false { didSet { needsLayout = true } }
     var surface: WorkSurface = .iphone {
@@ -25,7 +27,7 @@ final class WorkbenchContent: WorkbenchSurface {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        [phoneSlot, workbenchArea, recordsArea, controlToolbarArea, band].forEach(addSubview)
+        [phoneSlot, workbenchArea, recordsArea, controlToolbarArea, band, overlay].forEach(addSubview)
     }
     required init?(coder: NSCoder) { fatalError() }
     override var isOpaque: Bool { false }
@@ -42,8 +44,11 @@ final class WorkbenchContent: WorkbenchSurface {
         controlToolbarArea.reclaim()
         if band.superview !== self { addSubview(band) }
         if phoneSlot.superview !== self { addSubview(phoneSlot) }
+        if overlay.superview !== self { addSubview(overlay) }
         needsLayout = true
     }
+
+    func show(_ mark: OverlayMark) { overlay.show(mark) }
 
     var dashboard: WorkbenchLayout.Dashboard { WorkbenchLayout.dashboard(in: bounds, controlWidth: phoneSize.width) }
 
@@ -77,6 +82,9 @@ final class WorkbenchContent: WorkbenchSurface {
                 ? WorkbenchLayout.topAlignedWindow(size: phoneSize, in: control.available) : control.available)
         }
         if band.superview === self { band.frame = control.footer }
+        overlay.frame = phoneSlot.frame
+        overlay.isHidden = recordsFocused
+        if overlay.superview === self { addSubview(overlay) }   // stays above the slot and the lent areas
         workbenchArea.frame = WorkbenchLayout.pane(in: dashboard.conversationColumn).content
     }
 

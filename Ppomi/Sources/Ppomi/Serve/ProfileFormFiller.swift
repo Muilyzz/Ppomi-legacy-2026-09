@@ -40,9 +40,27 @@ struct ProfileFormFiller {
     var inputFocus: (Target) throws -> Bool = { target in
         try Desk.privateInputFocus(x: target.x, y: target.y,
                                    enrich: target.form == .eaisBusiness || target.form == .kbCertificate ? BusinessFormGeometry.enrich : nil,
-                                   focusMinimums: target.form == .kbCertificate ? (0.025, 0.02) : (0.05, 0.025)) {
-            try ProfileFormFiller.validate($0, target: target)
-            try ProfileFormFiller.requireEmptyBusinessNumber($0, target: target)
+                                   focusMinimums: target.form == .kbCertificate ? (0.025, 0.02) : (0.05, 0.025)) { words in
+            let region = ProfileFormFiller.region(words, target: target)
+            do {
+                try ProfileFormFiller.validate(words, target: target)
+                try ProfileFormFiller.requireEmptyBusinessNumber(words, target: target)
+                if let region { ProfileFormFiller.onRegion?(region, true) }
+            } catch {
+                // The rejected box (or the requested point when no box was found) is worth showing; the words are not.
+                ProfileFormFiller.onRegion?(region ?? CGRect(x: target.x - 0.05, y: target.y - 0.015, width: 0.1, height: 0.03), false)
+                throw error
+            }
+        }
+    }
+    /// Geometry only (0~1), for a host that draws over the controlled window; nil when the form has no box finder.
+    static var onRegion: ((CGRect, Bool) -> Void)?
+    static func region(_ words: [OCR.Word], target: Target) -> CGRect? {
+        switch target.form {
+        case .eaisBusiness: return try? businessRegion(words, target: target)
+        case .kbIDLookup: return try? KBIdentityFormGeometry.region(words, target: target)
+        case .kbCertificate: return try? KBCertificateFormGeometry.region(words, target: target)
+        case .eaisPASS: return nil
         }
     }
     var settle: () -> Void = { Thread.sleep(forTimeInterval: 0.6) }
@@ -300,7 +318,10 @@ struct ProfileFormFiller {
     func fill(_ profile: IdentityProfile, target: Target) throws -> String {
         let value = try Self.value(profile.validated(), target: target)
         let before = try screen()
-        try Self.validate(before, target: target)
+        do { try Self.validate(before, target: target) } catch {
+            Self.onRegion?(Self.region(before, target: target) ?? CGRect(x: target.x - 0.05, y: target.y - 0.015, width: 0.1, height: 0.03), false)
+            throw error
+        }
         let maskedBusinessNumber = target.form == .eaisBusiness && target.field == .businessRegistrationNumber && (target.segment ?? 0) > 1
         if !maskedBusinessNumber && Self.containsValue(value, in: before, target: target) {
             return try ProfileTools.json(["field": target.field.rawValue, "verified": true, "already_filled": true])
