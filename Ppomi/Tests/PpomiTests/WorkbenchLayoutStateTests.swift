@@ -66,7 +66,7 @@ final class WorkbenchLayoutStateTests: XCTestCase {
         content.phoneSize = CGSize(width: 300, height: 420)
         content.layoutSubtreeIfNeeded()
         XCTAssertEqual(Set(content.subviews.map { ObjectIdentifier($0) }),
-                       Set([content.phoneSlot, content.workbenchArea, content.recordsArea, content.controlToolbarArea, content.band].map { ObjectIdentifier($0) }))
+                       Set([content.phoneSlot, content.workbenchArea, content.recordsArea, content.controlToolbarArea, content.band, content.overlay].map { ObjectIdentifier($0) }))
         XCTAssertTrue(sidebar.superview === content.workbenchArea)
         XCTAssertTrue(records.superview === content.recordsArea)
         XCTAssertTrue(toolbar.superview === content.controlToolbarArea)
