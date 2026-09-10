@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "id": "accountinfo",
+  "name": "어카운트인포",
+  "version": "0.2.0",
+  "aliases": [
+    "AccountInfo",
+    "어카운트인포-계좌통합관리",
+    "계좌정보통합관리"
+  ],
+  "launch": {
+    "search": "https://www.payinfo.or.kr/",
+    "target": "browser"
+  },
+  "capabilities": [
+    {
+      "id": "read-accounts",
+      "title": "Mac 웹에서 초기 계좌 목록 확인과 필요시 재조회",
+      "description": "자산 관리의 초기 설정을 위한 본인 계좌 목록 확인과 필요할 때 재조회를 준비합니다. 브라우저 제어 도구가 연결된 Mac에서 공식 웹을 우선 사용하고, 실제 Windows 전용 요건이 확인되거나 사용자가 지정한 경우 Parallels 경로를 확인합니다. 인증은 당사자가 처리하고 새 화면에서 조회 결과를 확인합니다. Android 또는 파일 도구만 있는 Mac 에이전트에서는 실행 환경을 안내하며 앱 제어·자동 이관을 강행하지 않습니다. 초기 조회는 지속적인 거래내역 수집 연결이 아니며 웹 인증·계좌 조회와 Parallels 호환성은 아직 미검증입니다.",
+      "inputs": [
+        {
+          "name": "institutionScope",
+          "label": "조회할 금융기관 범위(미지정이면 현재 서비스가 제공하는 범위)",
+          "required": false
+        }
+      ],
+      "steps": [
+        {
+          "id": "inspect-purpose",
+          "title": "초기 계좌 목록 확인 또는 재조회 목적과 범위를 확인",
+          "kind": "read"
+        },
+        {
+          "id": "inspect-environment",
+          "title": "현재 Mac 브라우저·Windows 제어 도구의 실제 연결 여부 확인",
+          "kind": "read"
+        },
+        {
+          "id": "open-site",
+          "title": "Mac 브라우저 도구로 공식 계좌정보통합관리 웹 열기",
+          "kind": "open"
+        },
+        {
+          "id": "prepare-inquiry",
+          "title": "현재 화면의 내계좌한눈에 조회 진입점과 인증 방법·지원 환경 확인",
+          "kind": "read"
+        },
+        {
+          "id": "windows-if-needed",
+          "title": "사용자 지정 또는 실제 Windows 필요 시 연결된 Parallels에서 같은 공식 웹 준비",
+          "kind": "open"
+        },
+        {
+          "id": "human-required",
+          "title": "실제로 요구된 인증·자격 증명·새 필수 동의와 권한만 당사자가 처리",
+          "kind": "human"
+        },
+        {
+          "id": "resume-inquiry",
+          "title": "완료 보고 후 같은 요청의 최신 화면으로 인증 결과를 확인하고 조회 재개",
+          "kind": "read"
+        },
+        {
+          "id": "read-results",
+          "title": "확인된 금융기관·마스킹 계좌 식별자·조회 시점·누락 범위 읽기",
+          "kind": "read"
+        },
+        {
+          "id": "report-results",
+          "title": "초기 목록·일부 조회·조회 완료를 구분하고 지속 수집 연결과 별개임을 보고",
+          "kind": "read"
+        }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "에이전트가 연결된 브라우저에서 사이트 열기와 일반 조회 준비를 맡습니다. 당사자는 실제 필요한 인증서 암호·비밀번호·OTP·생체 인증·인증용 실명번호와 아직 허용하지 않은 필수 동의·민감 권한만 처리합니다.",
+    "현재 작업에서 이미 승인된 일반 준비는 되묻지 않습니다. 선택 광고 동의와 불필요한 권한은 자동 선택하지 않으며, 보안 프로그램 설치 성공이나 인증 완료를 추정하지 않습니다.",
+    "현재 환경에 브라우저·Windows 제어 도구가 없으면 실행 가능한 Mac 환경을 안내합니다. 자동 기기 이관·지속 로그인·계좌 수집 연결이 완료됐다고 주장하지 않습니다.",
+    "완료 보고 후 같은 요청의 새 화면을 읽어 결과를 확인합니다. 보안 차단은 우회하지 않으며 이체·송금·납부·결제·계좌 해지·잔고 이전·지급정지·금융 설정 변경은 이 조회에 포함하지 않습니다."
+  ],
+  "guide": "guide.md"
+}

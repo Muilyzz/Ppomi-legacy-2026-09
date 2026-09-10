@@ -1,21 +1,36 @@
-<!doctype html><meta charset="utf-8"><title>타임라인</title>
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><title>타임라인</title>
 <style>/*THEME*/
-svg{display:block;width:100%} #chart{height:200px;cursor:pointer} #eq{height:160px}
-.grid{stroke:var(--line)} .axis,.htext{fill:var(--meta);font-size:11px} .zero{stroke:var(--line2)}
-.nw{fill:none;stroke:var(--fg);stroke-width:1.5} .pin,.sel{fill:var(--pick)} .hover{stroke:var(--line2)}
-.obs{fill:var(--fg)} .exp{fill:var(--meta)} .res{fill:none;stroke:var(--fg);stroke-width:1} .dayhit{fill:transparent}
+svg{display:block;width:100%} #chart{height:12.5rem;cursor:pointer} #eq{height:10rem}
+.grid{stroke:var(--line)} .axis,.htext{fill:var(--fg-2);font-size:var(--fs-1)} .zero{stroke:var(--line-2)}
+.nw{fill:none;stroke:var(--fg);stroke-width:1.5} .pin,.sel{fill:var(--accent-soft)} .hover{stroke:var(--line-2)}
+.obs{fill:var(--fg)} .exp{fill:var(--fg-2)} .res{fill:none;stroke:var(--fg);stroke-width:1} .dayhit{fill:transparent}
 .sec .r{min-width:0;overflow:hidden} .sec .r>span{overflow:hidden;text-overflow:ellipsis}   /* 긴 '어디로' 목록은 … 로 (가로 스크롤 없음) */
+.timeline-section+.timeline-section{margin-top:2rem}
+.transaction{border:0;background:none;padding:0;color:inherit;font:inherit;text-align:inherit;cursor:pointer}
+.transaction:focus-visible,.nav button:focus-visible{outline:1px solid var(--fg);outline-offset:3px}
 </style>
-<div class="sec">순자산<span class="r">관측된 계좌만</span></div>
-<svg id="chart"></svg>
-<div class="sec">기간<span class="r"><span class="nav" id="chips"></span><span><i style="background:var(--fg)"></i>관측 <i style="background:var(--meta)"></i>설명 <i style="border:1px solid var(--fg)"></i>미관측</span></span></div>
-<svg id="eq"></svg>
-<div id="eqsum"></div>
-<div id="panel"></div>
+</head>
+<body>
+<main aria-label="장부 타임라인">
+  <section class="timeline-section" aria-labelledby="net-worth-title">
+    <header class="sec"><h2 id="net-worth-title">순자산</h2><span class="r">관측된 계좌만</span></header>
+    <svg id="chart" role="img" aria-label="날짜별 순자산 추이"></svg>
+  </section>
+  <section class="timeline-section" aria-labelledby="range-title">
+    <header class="sec"><h2 id="range-title">기간</h2><div class="r"><nav class="nav" id="chips" aria-label="조회 기간"></nav><span><i style="background:var(--fg)"></i>관측 <i style="background:var(--fg-2)"></i>설명 <i style="border:1px solid var(--fg)"></i>미관측</span></div></header>
+    <svg id="eq" role="img" aria-label="날짜별 관측·설명·미관측 증감 비교"></svg>
+    <div id="eqsum"></div>
+  </section>
+  <section class="timeline-section" id="panel" aria-labelledby="day-title"></section>
+</main>
 <script>
 // The data: Swift (Timeline.html) replaces the placeholder with {accounts, series, inside, lines} — the shape report.py's
 // timeline_data made, plus uid on each line so a row can open its 증빙. Times are KST wall-clock strings.
 var D=/*TIMELINE*/null;
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;'}[c];});}
 function post(m){if(window.webkit&&webkit.messageHandlers&&webkit.messageHandlers.ppomi)webkit.messageHandlers.ppomi.postMessage(m);}
 var P=function(s){return new Date(s.replace(' ','T'));},DAY=86400000;
 function dayStart(t){var d=new Date(t);d.setHours(0,0,0,0);return d;}
@@ -27,7 +42,7 @@ function fmtFull(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2
 function valueAt(id,t){var a=D.series[id]||[],v=null;for(var i=0;i<a.length;i++){if(P(a[i][0])<=t)v=a[i];else break;}return v;}
 function sheet(t){return D.accounts.map(function(a){return {id:a.id,app:a.app,v:valueAt(a.id,t)};});}
 function total(t){var s=0,unk=0;sheet(t).forEach(function(r){if(r.v)s+=r.v[1];else unk++;});return {sum:s,unk:unk};}
-var INS={};D.inside.forEach(function(x){INS[x]=1;});
+var INS={};
 function flows(t1,t2){var inc=0,out=0,xf=0,cap={},rows=[];
   D.lines.forEach(function(l){var t=P(l.ts);if(t<t1||t>=t2)return;var d=!!INS[l.dr],c=!!INS[l.cr],k='';
     if(d&&c){xf+=l.amount;k='xf';}else if(c){out+=l.amount;cap[l.dr]=(cap[l.dr]||0)+l.amount;k='out';}
@@ -36,41 +51,43 @@ function flows(t1,t2){var inc=0,out=0,xf=0,cap={},rows=[];
   return {inc:inc,out:out,xf:xf,cap:cap,rows:rows};}
 // observed change of the assets between two instants: only accounts observed at both ends count
 function observed(a,b){var s=0,n=0;D.accounts.forEach(function(acc){var v1=valueAt(acc.id,a),v2=valueAt(acc.id,b);if(v1&&v2){s+=v2[1]-v1[1];n++;}});return {sum:s,n:n};}
-// ---- domain
-var allTs=[];Object.keys(D.series).forEach(function(k){D.series[k].forEach(function(p){allTs.push(P(p[0]));});});
-var today=dayStart(new Date()),t0=dayStart(allTs.length?new Date(Math.min.apply(null,allTs)):today),tEnd=addDays(today,1);
-// ---- top: net worth step, month-boundary grid, click a day
-var svg=document.getElementById('chart'),W=svg.clientWidth||800,H=200,L=8,R=8,T=16,B=26;
-svg.setAttribute('viewBox','0 0 '+W+' '+H);
-var X=function(t){return L+(t-t0)/(tEnd-t0)*(W-L-R);};
-var times=allTs.slice();for(var d=new Date(t0);d<=tEnd;d=addDays(d,1))times.push(new Date(d));times.sort(function(a,b){return a-b;});
-var pts=times.map(function(t){return [t,total(t).sum];}),ys=pts.map(function(p){return p[1];}),ymin=Math.min.apply(null,ys),ymax=Math.max.apply(null,ys);
-if(ymax===ymin){ymax+=1;ymin-=1;}var pad=(ymax-ymin)*0.15;ymin-=pad;ymax+=pad;
-var Y=function(v){return T+(1-(v-ymin)/(ymax-ymin))*(H-T-B);};
-var g='',nDays=Math.round((tEnd-t0)/DAY);
-for(var d=new Date(t0);d<=tEnd;d=addDays(d,1)){var x=X(d);if(d.getDate()===1)g+='<line class="grid" x1="'+x+'" y1="'+T+'" x2="'+x+'" y2="'+(H-B)+'"/>';
-  if(d<tEnd&&(nDays<45||d.getDate()===1))g+='<text class="axis" x="'+(x+3)+'" y="'+(H-8)+'">'+fmt(d)+'</text>';}
-var path='';pts.forEach(function(p,i){var x=X(p[0]),y=Y(p[1]);path+=(i?'H'+x+'V'+y:'M'+x+' '+y);});path+='H'+X(tEnd);
-g+='<path class="nw" d="'+path+'"/>';
-g+='<rect id="pinr" class="pin" x="0" y="'+T+'" width="0" height="'+(H-T-B)+'" style="display:none"/>';
-g+='<line id="hov" class="hover" x1="0" y1="'+T+'" x2="0" y2="'+(H-B)+'" style="display:none"/><text id="htext" class="htext" x="0" y="'+(T+10)+'"></text>';
-for(var d=new Date(t0);d<tEnd;d=addDays(d,1))g+='<rect class="dayhit" data-t="'+d.getTime()+'" x="'+X(d)+'" y="0" width="'+(X(addDays(d,1))-X(d))+'" height="'+H+'"/>';
-svg.innerHTML=g;
+// ---- shared chart coordinates; the document and its event listeners survive data changes.
+var allTs=[],today,t0,tEnd;
+var svg=document.getElementById('chart'),W,H,L,R,T,B,X,rem;
+function drawNetWorth() {
+  rem=parseFloat(getComputedStyle(document.documentElement).fontSize)/16;H=200*rem;L=R=8*rem;T=16*rem;B=26*rem;
+  W=svg.clientWidth||800;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  X=function(t){return L+(t-t0)/(tEnd-t0)*(W-L-R);};
+  var times=allTs.slice();for(var d=new Date(t0);d<=tEnd;d=addDays(d,1))times.push(new Date(d));times.sort(function(a,b){return a-b;});
+  var pts=times.map(function(t){return [t,total(t).sum];}),ys=pts.map(function(p){return p[1];}),ymin=Math.min.apply(null,ys),ymax=Math.max.apply(null,ys);
+  if(ymax===ymin){ymax+=1;ymin-=1;}var pad=(ymax-ymin)*0.15;ymin-=pad;ymax+=pad;
+  var Y=function(v){return T+(1-(v-ymin)/(ymax-ymin))*(H-T-B);};
+  var g='',nDays=Math.round((tEnd-t0)/DAY);
+  for(var d=new Date(t0);d<=tEnd;d=addDays(d,1)){var x=X(d);if(d.getDate()===1)g+='<line class="grid" x1="'+x+'" y1="'+T+'" x2="'+x+'" y2="'+(H-B)+'"/>';
+    if(d<tEnd&&(nDays<45||d.getDate()===1))g+='<text class="axis" x="'+(x+3*rem)+'" y="'+(H-8*rem)+'">'+fmt(d)+'</text>';}
+  var path='';pts.forEach(function(p,i){var x=X(p[0]),y=Y(p[1]);path+=(i?'H'+x+'V'+y:'M'+x+' '+y);});path+='H'+X(tEnd);
+  g+='<path class="nw" d="'+path+'"/>';
+  g+='<rect id="pinr" class="pin" x="0" y="'+T+'" width="0" height="'+(H-T-B)+'" style="display:none"/>';
+  g+='<line id="hov" class="hover" x1="0" y1="'+T+'" x2="0" y2="'+(H-B)+'" style="display:none"/><text id="htext" class="htext" x="0" y="'+(T+10*rem)+'"></text>';
+  for(var d=new Date(t0);d<tEnd;d=addDays(d,1))g+='<rect class="dayhit" data-t="'+d.getTime()+'" x="'+X(d)+'" y="0" width="'+(X(addDays(d,1))-X(d))+'" height="'+H+'"/>';
+  svg.innerHTML=g;
+}
 svg.addEventListener('pointermove',function(e){var t=new Date(t0.getTime()+(e.offsetX-L)/(W-L-R)*(tEnd-t0));if(t<t0||t>tEnd)return;var h=document.getElementById('hov'),ht=document.getElementById('htext');
-  h.style.display='';h.setAttribute('x1',X(t));h.setAttribute('x2',X(t));ht.textContent=fmtFull(dayStart(t))+' '+won(total(t).sum);ht.setAttribute('x',Math.min(X(t)+6,W-170));});
+  h.style.display='';h.setAttribute('x1',X(t));h.setAttribute('x2',X(t));ht.textContent=fmtFull(dayStart(t))+' '+won(total(t).sum);ht.setAttribute('x',Math.min(X(t)+6*rem,W-170*rem));});
 svg.addEventListener('pointerleave',function(){document.getElementById('hov').style.display='none';document.getElementById('htext').textContent='';});
 svg.addEventListener('click',function(e){var r=e.target.closest('.dayhit');if(r)showDay(new Date(+r.dataset.t));});
 // ---- range nav
 var RANGES={'오늘':function(){return [today,addDays(today,1)];},'7일':function(){return [addDays(today,-6),addDays(today,1)];},
   '이번 달':function(){return [new Date(today.getFullYear(),today.getMonth(),1),addDays(today,1)];},
   '지난 달':function(){return [new Date(today.getFullYear(),today.getMonth()-1,1),new Date(today.getFullYear(),today.getMonth(),1)];}};
-var chips=document.getElementById('chips');Object.keys(RANGES).forEach(function(k){var b=document.createElement('button');b.textContent=k;b.onclick=function(){setRange(k);};chips.appendChild(b);});
+var chips=document.getElementById('chips');Object.keys(RANGES).forEach(function(k){var b=document.createElement('button');b.type='button';b.textContent=k;b.onclick=function(){setRange(k);};chips.appendChild(b);});
 var range=null,selDay=null;
-function setRange(k){range=k;chips.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b.textContent===k);});drawEq();}
+function setRange(k){range=k;chips.querySelectorAll('button').forEach(function(b){var active=b.textContent===k;b.classList.toggle('on',active);b.setAttribute('aria-pressed',String(active));});drawEq();}
 // ---- bottom: per day, observed change vs explained change (income − spend); the difference is what the ledger did not see
-function drawEq(){var ab=RANGES[range](),a=ab[0],b=ab[1],days=[];
+function drawEq(){rem=parseFloat(getComputedStyle(document.documentElement).fontSize)/16;var ab=RANGES[range](),a=ab[0],b=ab[1],days=[];
   for(var d=new Date(a);d<b;d=addDays(d,1)){var o=observed(d,addDays(d,1)),f=flows(d,addDays(d,1));days.push({d:d,obs:o.sum,exp:f.inc-f.out,inc:f.inc,out:f.out,n:o.n});}
-  var e=document.getElementById('eq'),w=e.clientWidth||800,h=160,l=8,rr=8,t=16,bb=26;e.setAttribute('viewBox','0 0 '+w+' '+h);
+  var e=document.getElementById('eq'),w=e.clientWidth||800,h=160*rem,l=8*rem,rr=8*rem,t=16*rem,bb=26*rem;e.setAttribute('viewBox','0 0 '+w+' '+h);
   var vals=[];days.forEach(function(x){vals.push(x.obs,x.exp,x.obs-x.exp);});var m=Math.max.apply(null,vals.map(Math.abs).concat([1]));
   var y0=t+(h-t-bb)/2,ys=function(v){return -v/m*(h-t-bb)/2;},bw=(w-l-rr)/days.length,s='';
   s+='<line class="zero" x1="'+l+'" y1="'+y0+'" x2="'+(w-rr)+'" y2="'+y0+'"/>';
@@ -78,27 +95,97 @@ function drawEq(){var ab=RANGES[range](),a=ab[0],b=ab[1],days=[];
     if(selDay&&x.d.getTime()===selDay.getTime())s+='<rect class="sel" x="'+x0+'" y="'+t+'" width="'+bw+'" height="'+(h-t-bb)+'"/>';
     [['obs',x.obs],['exp',x.exp],['res',x.obs-x.exp]].forEach(function(p,j){var v=p[1],yy=ys(v);
       s+='<rect class="'+p[0]+'" x="'+(x0+gap+j*g3)+'" y="'+(v>=0?y0+yy:y0)+'" width="'+(g3-1)+'" height="'+Math.abs(yy)+'"/>';});
-    if(days.length<=31)s+='<text class="axis" x="'+(x0+bw/2)+'" y="'+(h-8)+'" text-anchor="middle">'+fmt(x.d)+'</text>';
+    if(days.length<=31)s+='<text class="axis" x="'+(x0+bw/2)+'" y="'+(h-8*rem)+'" text-anchor="middle">'+fmt(x.d)+'</text>';
     s+='<rect class="dayhit" data-t="'+x.d.getTime()+'" x="'+x0+'" y="0" width="'+bw+'" height="'+h+'"/>';});
   e.innerHTML=s;
   var O=0,E=0,I=0,U=0;days.forEach(function(x){O+=x.obs;E+=x.exp;I+=x.inc;U+=x.out;});
-  document.getElementById('eqsum').innerHTML='<div class="grid3"><div><span class="lbl">관측된 자산 증감</span><span class="key n">'+signed(O)+'</span></div>'+
-    '<div><span class="lbl">설명된 증감 = 수입 − 지출</span><span class="key n">'+signed(E)+'</span><div class="meta">'+won(I)+' − '+won(U)+'</div></div>'+
-    '<div><span class="lbl">미관측 = 관측 − 설명</span><span class="key n'+(Math.abs(O-E)>0?' strong':'')+'">'+signed(O-E)+'</span><div class="meta">'+(Math.abs(O-E)>0?'경계 밖에서 드나든 돈. 0이면 장부가 닫힘':'장부가 닫힘')+'</div></div></div>';}
+  document.getElementById('eqsum').innerHTML='<div class="grid3"><div><span class="lbl">관측 증감</span><span class="key n">'+signed(O)+'</span></div>'+
+    '<div><span class="lbl">설명 = 수입 − 지출</span><span class="key n">'+signed(E)+'</span><div class="meta">'+won(I)+' − '+won(U)+'</div></div>'+
+    '<div><span class="lbl">미관측 = 관측 − 설명</span><span class="key n'+(Math.abs(O-E)>0?' strong':'')+'">'+signed(O-E)+'</span><div class="meta">'+(Math.abs(O-E)>0?'경계 밖 돈':'장부 닫힘')+'</div></div></div>';}
 document.getElementById('eq').addEventListener('click',function(e){var r=e.target.closest('.dayhit');if(r)showDay(new Date(+r.dataset.t));});
-// ---- a day: its start and end balance sheets, its flows. A transaction row opens its 증빙 in the app.
-function showDay(d){selDay=d;post({day:fmtFull(d)});var a=d,b=addDays(d,1),p=document.getElementById('pinr');p.style.display='';p.setAttribute('x',X(a));p.setAttribute('width',X(b)-X(a));
-  var s1=sheet(a),s2=sheet(b),f=flows(a,b),o=observed(a,b),ta=total(a),tb=total(b),un=o.sum-(f.inc-f.out);
-  var h='<div class="sec">'+fmtFull(d)+'<span class="r">00:00 → 24:00 KST</span></div>'+
-    '<div><span class="disp">'+won(tb.sum).replace('원','')+'</span> <span class="meta">원 · 끝 순자산</span></div>'+
-    '<div class="grid3"><div><span class="lbl">시작 순자산</span><span class="n">'+won(ta.sum)+'</span></div><div><span class="lbl">관측 증감</span><span class="n">'+signed(o.sum)+'</span></div>'+
-    '<div><span class="lbl">수입 − 지출</span><span class="n">'+signed(f.inc-f.out)+'</span></div><div><span class="lbl">미관측</span><span class="n'+(un?' strong':'')+'">'+signed(un)+'</span></div></div>';
-  h+='<table><tr><th>계좌</th><th class="n">00:00</th><th class="n">24:00</th><th class="n">증감</th><th>근거 (끝 시점)</th></tr>'+D.accounts.map(function(acc,i){var v1=s1[i].v,v2=s2[i].v;
-    return '<tr><td>'+acc.id+' <span class="meta">'+acc.app+'</span></td><td class="n">'+(v1?won(v1[1]):'<span class="mute">—</span>')+'</td><td class="n">'+(v2?won(v2[1]):'<span class="mute">—</span>')+'</td><td class="n">'+(v1&&v2?signed(v2[1]-v1[1]):'<span class="mute">—</span>')+'</td><td class="meta">'+(v2?v2[2]+' · '+v2[0]:'관측 없음')+'</td></tr>';}).join('')+'</table>';
-  var caps=Object.keys(f.cap).sort(function(x,y){return f.cap[y]-f.cap[x];});
-  if(f.rows.length)h+='<div class="sec">거래 '+f.rows.length+'건'+(caps.length?'<span class="r"><span>어디로: '+caps.map(function(k){return k+' '+won(f.cap[k]);}).join(', ')+'</span></span>':'')+'</div><table>'+f.rows.map(function(x){return '<tr class="'+x.k+'"'+(x.l.uid?' data-uid="'+x.l.uid+'"':'')+'><td>'+x.l.ts.slice(11)+'</td><td>'+x.l.memo+'</td><td>'+x.l.cr+' → '+x.l.dr+'</td><td class="n">'+won(x.l.amount)+'</td><td class="meta">'+({inc:'수입',out:'지출',xf:'이체',"":'무관'})[x.k]+'</td></tr>';}).join('')+'</table>';
-  var panel=document.getElementById('panel');panel.innerHTML=h;
-  panel.querySelectorAll('tr[data-uid]').forEach(function(tr){tr.onclick=function(){post({evidence:tr.dataset.uid,day:fmtFull(d)});};});
-  if(range)drawEq();}
-setRange('7일');showDay(today);
+// ---- a day: summary, account balances, and transaction evidence links.
+function balanceTable(start, end) {
+  var rows = D.accounts.map(function(account, i) {
+    var before = start[i].v, after = end[i].v;
+    var missing = '<span class="mute">—</span>';
+    return '<tr><td>' + esc(account.id) + ' <span class="meta">' + esc(account.app) + '</span></td>' +
+      '<td class="n">' + (before ? won(before[1]) : missing) + '</td>' +
+      '<td class="n">' + (after ? won(after[1]) : missing) + '</td>' +
+      '<td class="n">' + (before && after ? signed(after[1] - before[1]) : missing) + '</td>' +
+      '<td class="meta">' + (after ? esc(after[2]) + ' · ' + esc(after[0]) : '관측 없음') + '</td></tr>';
+  }).join('');
+  return '<table aria-label="선택일 계좌 잔액"><thead><tr>' +
+    '<th scope="col">계좌</th><th scope="col" class="n">00:00</th><th scope="col" class="n">24:00</th>' +
+    '<th scope="col" class="n">증감</th><th scope="col">근거</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+function transactionTable(flow) {
+  if (!flow.rows.length) return '';
+  var categories = Object.keys(flow.cap).sort(function(a, b) { return flow.cap[b] - flow.cap[a]; });
+  var destinations = categories.map(function(key) { return esc(key) + ' ' + won(flow.cap[key]); }).join(', ');
+  var header = '<div class="sec"><h3 id="transactions-title">거래 ' + flow.rows.length + '건</h3>' +
+    (destinations ? '<span class="r"><span>어디로: ' + destinations + '</span></span>' : '') + '</div>';
+  var rows = flow.rows.map(function(entry) {
+    var line = entry.l;
+    var memo = line.uid ? '<button class="transaction" type="button" aria-label="' + esc(line.memo + ' 증빙 보기') +
+      '">' + esc(line.memo) + '</button>' : esc(line.memo);
+    var kind = {inc: '수입', out: '지출', xf: '이체', '': '무관'}[entry.k];
+    return '<tr class="' + entry.k + '"' + (line.uid ? ' data-uid="' + esc(line.uid) + '"' : '') + '>' +
+      '<td>' + esc(line.ts.slice(11)) + '</td><td>' + memo + '</td>' +
+      '<td>' + esc(line.cr) + ' → ' + esc(line.dr) + '</td>' +
+      '<td class="n">' + won(line.amount) + '</td><td class="meta">' + kind + '</td></tr>';
+  }).join('');
+  return header + '<table aria-labelledby="transactions-title"><tbody>' + rows + '</tbody></table>';
+}
+
+function daySummary(day, start, end, flow, observation) {
+  var unexplained = observation.sum - (flow.inc - flow.out);
+  return '<header class="sec"><h2 id="day-title">' + fmtFull(day) +
+    '</h2><span class="r">00:00 → 24:00 KST</span></header>' +
+    '<div><span class="disp">' + won(end.sum).replace('원', '') + '</span> <span class="meta">원 · 끝</span></div>' +
+    '<div class="grid3"><div><span class="lbl">시작 순자산</span><span class="n">' + won(start.sum) + '</span></div>' +
+    '<div><span class="lbl">관측 증감</span><span class="n">' + signed(observation.sum) + '</span></div>' +
+    '<div><span class="lbl">수입 − 지출</span><span class="n">' + signed(flow.inc - flow.out) + '</span></div>' +
+    '<div><span class="lbl">미관측</span><span class="n' + (unexplained ? ' strong' : '') + '">' +
+    signed(unexplained) + '</span></div></div>';
+}
+
+function showDay(day) {
+  selDay = day;
+  post({day: fmtFull(day)});
+  var end = addDays(day, 1), flow = flows(day, end), pin = document.getElementById('pinr');
+  pin.style.display = '';
+  pin.setAttribute('x', X(day));
+  pin.setAttribute('width', X(end) - X(day));
+  var panel = document.getElementById('panel');
+  panel.innerHTML = daySummary(day, total(day), total(end), flow, observed(day, end)) +
+    balanceTable(sheet(day), sheet(end)) + transactionTable(flow);
+  if (range) drawEq();
+}
+
+// One parent owns transaction navigation even when a new day replaces its rows.
+document.getElementById('panel').addEventListener('click', function(event) {
+  var row = event.target.closest('tr[data-uid]');
+  if (row) post({evidence: row.dataset.uid, day: fmtFull(selDay)});
+});
+// New committed values replace only the chart/table contents, retaining the user's reading position.
+function updateTimeline(data) {
+  var scrollX=window.scrollX,scrollY=window.scrollY;
+  D=data;
+  INS={};D.inside.forEach(function(account){INS[account]=1;});
+  allTs=[];
+  Object.keys(D.series).forEach(function(account){
+    D.series[account].forEach(function(point){allTs.push(P(point[0]));});
+  });
+  today=dayStart(new Date());
+  t0=dayStart(allTs.length?new Date(Math.min.apply(null,allTs)):today);
+  tEnd=addDays(today,1);
+  drawNetWorth();
+  if(!range)setRange('7일');
+  showDay(selDay||today);
+  window.scrollTo(scrollX,scrollY);
+}
+if(D)updateTimeline(D);
 </script>
+</body>
+</html>

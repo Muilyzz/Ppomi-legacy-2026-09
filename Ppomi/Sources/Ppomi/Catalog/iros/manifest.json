@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "id": "iros",
+  "name": "인터넷등기소",
+  "version": "0.2.0",
+  "aliases": [
+    "IROS",
+    "등기소",
+    "iros.go.kr"
+  ],
+  "launch": {
+    "search": "https://www.iros.go.kr/",
+    "target": "browser"
+  },
+  "capabilities": [
+    {
+      "id": "read-property-register",
+      "title": "부동산 등기사항증명서 열람 · 발급",
+      "description": "Mac Chrome에서 주소로 부동산을 찾고 필요한 인증을 준비합니다. 실제로 막히는 단계만 Windows에서 확인하며, 수수료는 사람 승인 뒤 결제합니다. 문서를 확인한 경우에만 등기사항을 보고합니다.",
+      "inputs": [
+        {
+          "name": "addresses",
+          "label": "부동산 소재지(도로명 또는 지번) 목록",
+          "required": true
+        },
+        {
+          "name": "mode",
+          "label": "열람 또는 발급(기본 열람)",
+          "required": false
+        }
+      ],
+      "steps": [
+        {
+          "id": "step-1",
+          "title": "▶https://www.iros.go.kr/ (browser_open · Mac Chrome)",
+          "kind": "open"
+        },
+        {
+          "id": "step-2",
+          "title": "⎋사용자지원센터 카드·NEWS 팝업",
+          "kind": "close"
+        },
+        {
+          "id": "step-3",
+          "title": "⌨홈 검색창에 주소",
+          "kind": "input"
+        },
+        {
+          "id": "step-4",
+          "title": "⊙검색 결과의 부동산",
+          "kind": "tap"
+        },
+        {
+          "id": "step-5",
+          "title": "⊙열람하기|발급하기",
+          "kind": "tap"
+        },
+        {
+          "id": "step-6",
+          "title": "로그인·비회원 절차 준비 → 실제 인증·새 권한만 사람에게 요청",
+          "kind": "human"
+        },
+        {
+          "id": "step-7",
+          "title": "✋승인(열람·발급 수수료)",
+          "kind": "human"
+        },
+        {
+          "id": "step-8",
+          "title": "⊙결제",
+          "kind": "payment"
+        },
+        {
+          "id": "step-9",
+          "title": "📝등기사항(표제부·갑구·을구) 읽기",
+          "kind": "read"
+        }
+      ]
+    },
+    {
+      "id": "prepare-account-access",
+      "title": "회원가입·로그인 준비와 작업 복귀",
+      "description": "현재 계정과 작업 당사자를 구분하고 가입·로그인의 일반 안내와 폼 준비를 진행합니다. 사용자가 제공하고 이 사이트 사용을 허용한 이름·연락처·주소 등 일반 정보는 채우며 필요한 정보가 없을 때만 질문합니다. 실제 인증·새 동의는 당사자가 처리한 뒤 상태를 확인하고 원래 작업으로 돌아갑니다. 가입 전체 과정은 아직 검증하지 않았습니다.",
+      "inputs": [
+        {
+          "name": "access-mode",
+          "label": "기존 계정 로그인 또는 가입 준비(문맥에서 알면 다시 묻지 않음)",
+          "required": false
+        }
+      ],
+      "steps": [
+        {
+          "id": "open-account",
+          "title": "현재 홈페이지에서 로그인·회원가입 진입점 확인",
+          "kind": "open"
+        },
+        {
+          "id": "prepare-form",
+          "title": "이용 안내 확인과 사용자가 제공·허용한 일반 폼 정보 작성",
+          "kind": "input"
+        },
+        {
+          "id": "account-human-step",
+          "title": "비밀번호·본인인증·약관 확정·새 민감 권한만 사람에게 요청",
+          "kind": "human"
+        },
+        {
+          "id": "verify-account",
+          "title": "새 화면에서 완료 여부 확인 후 원래 작업으로 복귀",
+          "kind": "read"
+        }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "자격 증명·비밀번호·인증서 암호·인증에 쓰이는 주민번호·OTP·생체인증·CAPTCHA는 당사자가 직접 처리합니다. 로그인 진입·안내와 사용자가 제공하고 이 사이트 사용을 허용한 이름·연락처·주소 등 일반 폼 정보 작성은 에이전트가 진행합니다. 필요한 정보가 없을 때만 질문하고 실제 값은 공개 패키지나 발자국에 남기지 않습니다.",
+    "새 민감 접근 권한·새 약관 동의 및 가입 최종 확정은 구체적인 화면에서 당사자가 직접 처리합니다. 공식 프로그램 안내·다운로드 등 이미 허용된 준비는 반복 확인하지 않습니다.",
+    "Mac Chrome의 최종 수수료 결제 버튼과 결제 인증은 당사자가 직접 처리합니다. 외부 브라우저 클릭에는 뽀미의 승인 코드 경계가 없으므로 승인 후 자동 결제를 지원하지 않습니다. Windows에서는 confirm_payment 승인 1회에 windows_click 결제 클릭 1회의 기존 코드 경계를 따르고 결제 인증은 당사자가 마칩니다."
+  ],
+  "guide": "guide.md"
+}

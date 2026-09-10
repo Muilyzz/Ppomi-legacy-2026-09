@@ -1,0 +1,16 @@
+// 타임라인 페이지 데이터: report.py timeline_data 의 모양(Tests/timeline-parity.json) + 줄마다 uid. Mac(Views/TimelineView)과 아이패드가 같은 함수로 같은 페이지를 만든다.
+import Foundation
+
+enum LedgerPage {
+    static func timelineData(_ L: Ledger) -> [String: Any] {
+        ["accounts": L.accounts.map { ["id": $0.id, "app": $0.title] },
+         "series": L.series.mapValues { $0.map { [TS.string($0.ts), $0.value, $0.how.rawValue] as [Any] } },
+         "inside": Array(L.defaultLens.inside).sorted(),
+         "lines": L.lines.map { ["ts": TS.string($0.ts), "memo": $0.memo, "dr": $0.dr, "cr": $0.cr, "amount": $0.amount, "rev": $0.rev, "uid": $0.uid] }]
+    }
+    /// Web/timeline.html 의 /*TIMELINE*/null 자리에 데이터를 넣은 한 장.
+    static func timelineHTML(template: String, ledger: Ledger) -> String {
+        let json = String(decoding: try! JSONSerialization.data(withJSONObject: timelineData(ledger), options: .sortedKeys), as: UTF8.self)
+        return template.replacingOccurrences(of: "/*TIMELINE*/null", with: json)
+    }
+}

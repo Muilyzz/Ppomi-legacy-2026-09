@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "id": "efine",
+  "name": "교통민원24(이파인)",
+  "version": "0.1.0",
+  "aliases": [
+    "이파인",
+    "efine",
+    "교통민원24",
+    "efine.go.kr",
+    "경찰청 교통민원24"
+  ],
+  "launch": {
+    "search": "https://www.efine.go.kr/main/main.do",
+    "target": "windows"
+  },
+  "capabilities": [
+    {
+      "id": "unpaid-fines",
+      "title": "미납 과태료·범칙금 조회 납부",
+      "description": "Parallels Windows에서 조회 → 과태료 → 미납과태료·미납범칙금 목록을 읽고 금액·기한을 보고합니다. 납부는 사람 승인 1회 뒤 결제 클릭 1회의 코드 경계를 따르며 결제 인증은 당사자가 마칩니다. 지방세 주정차 과태료(위택스·서울시)는 여기서 조회되지 않습니다.",
+      "inputs": [
+        { "name": "kind", "label": "과태료 또는 범칙금(기본 둘 다)", "required": false },
+        { "name": "pay", "label": "조회만 또는 납부까지(기본 조회만)", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.efine.go.kr/main/main.do (windows_open · Parallels)", "kind": "open" },
+        { "id": "step-2", "title": "⎋공지·팝업", "kind": "close" },
+        { "id": "step-3", "title": "⊙조회 → 과태료 → 미납과태료|미납범칙금", "kind": "tap" },
+        { "id": "step-4", "title": "👤로그인(간편인증|금융인증서|공동인증서) 준비 → 인증은 당사자", "kind": "human" },
+        { "id": "step-5", "title": "📝미납 목록(위반일·금액·납부기한) 읽기", "kind": "read" },
+        { "id": "step-6", "title": "⊙납부 대상 선택 → 납부", "kind": "tap" },
+        { "id": "step-7", "title": "✋승인(최종 금액·수단)", "kind": "human" },
+        { "id": "step-8", "title": "⊙결제 (windows_click 1회)", "kind": "payment" },
+        { "id": "step-9", "title": "📝납부 결과 보고 · record_spend", "kind": "read" }
+      ]
+    },
+    {
+      "id": "recent-enforcement",
+      "title": "무인단속 내역 조회",
+      "description": "조회 → 과태료 → 최근단속내역에서 확정 전 무인단속(속도·신호 등) 내역을 읽고 보고합니다. 로그인 필요.",
+      "inputs": [
+        { "name": "period", "label": "조회 기간(기본 화면 기본값)", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.efine.go.kr/main/main.do (windows_open · Parallels)", "kind": "open" },
+        { "id": "step-2", "title": "⊙조회 → 과태료 → 최근단속내역", "kind": "tap" },
+        { "id": "step-3", "title": "👤로그인 준비 → 인증은 당사자", "kind": "human" },
+        { "id": "step-4", "title": "↓목록 끝까지", "kind": "scroll" },
+        { "id": "step-5", "title": "📝단속일시·위반 종류·장소·상태 읽기", "kind": "read" }
+      ]
+    },
+    {
+      "id": "license-points",
+      "title": "운전면허 벌점 조회",
+      "description": "조회 → 운전면허 → 운전면허 벌점에서 누산 벌점과 정지 기준을 읽고 보고합니다. 로그인 필요.",
+      "inputs": [],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.efine.go.kr/main/main.do (windows_open · Parallels)", "kind": "open" },
+        { "id": "step-2", "title": "⊙조회 → 운전면허 → 운전면허 벌점", "kind": "tap" },
+        { "id": "step-3", "title": "👤로그인 준비 → 인증은 당사자", "kind": "human" },
+        { "id": "step-4", "title": "📝벌점·정지 기준 읽기", "kind": "read" }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "자격 증명·인증서 암호·인증에 쓰이는 주민번호·OTP·생체인증·CAPTCHA·간편인증 앱 승인은 당사자가 직접 처리합니다. 로그인 화면 진입과 인증 방식 탭 선택까지는 에이전트가 준비하고 실제 값은 패키지·발자국에 남기지 않습니다.",
+    "웹보안·키보드보안 프로그램(TouchEn·nxbiz) 설치와 브라우저의 새 접근 권한·새 동의는 현재 화면에서 당사자가 처리합니다. 이미 허용된 설치는 반복 확인하지 않습니다.",
+    "납부는 Windows에서 confirm_payment 승인 1회에 windows_click 결제 클릭 1회의 코드 경계를 따르고 결제 인증은 당사자가 마칩니다. 이체·송금은 하지 않습니다."
+  ],
+  "guide": "guide.md"
+}

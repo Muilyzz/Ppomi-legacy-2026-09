@@ -3,12 +3,14 @@ import Foundation
 
 enum Web {
     /// Ppomi_Ppomi.bundle in Contents/Resources (dist/Ppomi.app, scripts/make-app.sh) or wherever SwiftPM put it.
-    static let bundle = Bundle.main.resourceURL.flatMap { Bundle(url: $0.appendingPathComponent("Ppomi_Ppomi.bundle")) } ?? Bundle.module
+    static let bundle = AppResources.bundle
+    /// Web/ inside the resource bundle: the base URL for pages loaded as strings so ./Agent/fonts/… resolves.
+    static var directory: URL { bundle.resourceURL!.appendingPathComponent("Web", isDirectory: true) }
     static func file(_ name: String, _ ext: String) -> String {
         try! String(contentsOf: bundle.url(forResource: name, withExtension: ext, subdirectory: "Web")!, encoding: .utf8)
     }
     /// The template with the shared theme in place; callers then fill their own /*DATA*/ placeholders.
     static func page(_ name: String) -> String {
-        file(name, "html").replacingOccurrences(of: "/*THEME*/", with: file("theme", "css"))
+        file(name, "html").replacingOccurrences(of: "/*THEME*/", with: file("tokens", "css") + "\n" + file("theme", "css"))
     }
 }

@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "id": "gov24",
+  "name": "정부24",
+  "version": "0.1.0",
+  "aliases": ["정부24", "gov.kr", "plus.gov.kr", "정부24 플러스", "보조금24", "혜택알리미", "전자문서지갑"],
+  "launch": { "search": "https://www.gov.kr/", "target": "windows" },
+  "capabilities": [
+    {
+      "id": "issue-resident-register",
+      "title": "주민등록등본 발급",
+      "description": "Parallels Windows에서 정부24를 열고 민원서비스 검색으로 주민등록표 등본(초본) 발급 화면까지 준비합니다. 로그인 인증·수수료 결제 인증은 당사자가 처리하며, 발급 결과를 확인한 경우에만 보고합니다. 발급 전체 경로는 미검증입니다.",
+      "inputs": [
+        { "name": "documentType", "label": "등본 또는 초본(기본 등본)", "required": false },
+        { "name": "receiveMethod", "label": "수령 방법(본인출력·전자문서지갑·제3자 제출)", "required": false },
+        { "name": "copies", "label": "통수", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.gov.kr/ (windows_open · Parallels)", "kind": "open" },
+        { "id": "step-2", "title": "⎋공지·앱 설치 팝업", "kind": "close" },
+        { "id": "step-3", "title": "⌨통합검색에 주민등록등본", "kind": "input" },
+        { "id": "step-4", "title": "⊙주민등록표 등본(초본) 발급", "kind": "tap" },
+        { "id": "step-5", "title": "⊙발급하기|신청하기", "kind": "tap" },
+        { "id": "step-6", "title": "👤로그인 방식 준비 → 간편인증·공동인증서 암호·본인인증은 당사자", "kind": "human" },
+        { "id": "step-7", "title": "⊙등본|초본 · 수령 방법 · 통수", "kind": "tap" },
+        { "id": "step-8", "title": "✋승인(수수료가 있을 때만 · confirm_payment 1회)", "kind": "human" },
+        { "id": "step-9", "title": "⊙결제(windows_click 1회) → 결제 인증은 당사자", "kind": "payment" },
+        { "id": "step-10", "title": "📝처리 결과·문서 확인 보고", "kind": "read" }
+      ]
+    },
+    {
+      "id": "check-benefits",
+      "title": "보조금24 수혜 조회",
+      "description": "혜택알리미(구 보조금24)의 나의 혜택에서 받을 수 있는 혜택 목록을 읽고 정리합니다. 로그인 인증은 당사자가 처리하며 신청 제출은 하지 않습니다.",
+      "inputs": [
+        { "name": "person", "label": "조회 당사자(가족 중 누구)", "required": false },
+        { "name": "category", "label": "관심 분야", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.gov.kr/ (windows_open · Parallels)", "kind": "open" },
+        { "id": "step-2", "title": "⊙혜택알리미", "kind": "tap" },
+        { "id": "step-3", "title": "⊙나의 혜택", "kind": "tap" },
+        { "id": "step-4", "title": "👤로그인 방식 준비 → 인증은 당사자", "kind": "human" },
+        { "id": "step-5", "title": "↓혜택 목록 끝까지", "kind": "scroll" },
+        { "id": "step-6", "title": "📝혜택명·신청 기한·신청처 정리", "kind": "read" }
+      ]
+    },
+    {
+      "id": "issue-electronic-certificate",
+      "title": "전자증명서 발급",
+      "description": "민원 발급 시 수령 방법을 전자문서지갑으로 선택해 전자증명서를 발급하고 MyGOV 전자증명서 내역에서 확인합니다. 개인 열람·제출은 정부24 앱 안내가 있으므로 폰 차례가 될 수 있습니다. 미검증입니다.",
+      "inputs": [
+        { "name": "certificate", "label": "증명서 종류", "required": true },
+        { "name": "recipient", "label": "제출처(있을 때)", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.gov.kr/ (windows_open · Parallels)", "kind": "open" },
+        { "id": "step-2", "title": "⌨통합검색에 증명서 종류", "kind": "input" },
+        { "id": "step-3", "title": "⊙발급하기|신청하기", "kind": "tap" },
+        { "id": "step-4", "title": "👤로그인 방식 준비 → 인증은 당사자", "kind": "human" },
+        { "id": "step-5", "title": "⊙수령 방법 전자문서지갑", "kind": "tap" },
+        { "id": "step-6", "title": "✋승인(수수료가 있을 때만)", "kind": "human" },
+        { "id": "step-7", "title": "⊙결제(windows_click 1회) → 결제 인증은 당사자", "kind": "payment" },
+        { "id": "step-8", "title": "⊙MyGOV → 전자증명서 내역", "kind": "tap" },
+        { "id": "step-9", "title": "📝발급 상태·제출 방법 보고", "kind": "read" }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "자격 증명·비밀번호·인증서 암호·인증용 주민번호·OTP·생체인증·CAPTCHA·새 동의는 당사자가 직접 처리합니다. 로그인 화면 진입과 허용된 일반 폼 작성은 에이전트가 이어가고, 실제 값은 패키지·발자국에 남기지 않습니다.",
+    "수수료 결제는 Windows에서 confirm_payment 승인 1회에 windows_click 결제 클릭 1회의 코드 경계를 따르고 결제 인증은 당사자가 마칩니다. 무료 민원에는 승인 단계가 없습니다.",
+    "혜택 신청·민원 제출은 조회·준비까지만 하고 최종 제출은 당사자가 확인합니다."
+  ],
+  "guide": "guide.md"
+}

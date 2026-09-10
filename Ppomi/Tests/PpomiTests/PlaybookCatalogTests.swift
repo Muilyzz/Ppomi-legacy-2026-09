@@ -29,8 +29,9 @@ final class PlaybookCatalogTests: XCTestCase {
     func testBundledCatalogHasRealIconAssetsAndStructuredSteps() throws {
         let result = PlaybookCatalog.inspect(in: temporary)
         XCTAssertTrue(result.issues.isEmpty, result.issues.map(\.message).joined(separator: "\n"))
-        XCTAssertEqual(Set(result.records.map(\.id)), Set(["kb", "kbank", "kakao", "toss", "yeogi"]))
+        XCTAssertTrue(Set(result.records.map(\.id)).isSuperset(of: Set(["kb", "kbank", "kakao", "toss", "yeogi", "iros", "eais", "accountinfo", "joint-certificate", "kb-enterprise", "hometax", "gov24", "efine", "nps", "nhis"])))
         for record in result.records {
+            if record.manifest.icon == nil { XCTAssertNil(record.iconURL, "no invented icon for a site without official artwork"); continue }
             let icon = try XCTUnwrap(record.iconURL)
             XCTAssertGreaterThan(try Data(contentsOf: icon).count, 100)
             XCTAssertFalse(record.guideText.contains("콤보:"), "Bundled steps belong in the manifest only")
@@ -39,6 +40,53 @@ final class PlaybookCatalogTests: XCTestCase {
         XCTAssertEqual(PlaybookCatalog.resolve("KB", in: temporary)?.id, "kb")
         XCTAssertEqual(PlaybookCatalog.resolve("여기어때", in: temporary)?.id, "yeogi")
         XCTAssertFalse(PlaybookCatalog.common(in: temporary).isEmpty)
+    }
+
+    func testAccountInfoKeepsItsIdentityAndUsesTheBrowserRouteWithoutPhoneCollection() throws {
+        let record = try XCTUnwrap(PlaybookCatalog.resolve("AccountInfo", in: temporary))
+        XCTAssertEqual(record.id, "accountinfo")
+        XCTAssertEqual(PlaybookCatalog.resolve("어카운트인포", in: temporary)?.id, record.id)
+        XCTAssertTrue(record.manifest.launch.isBrowser)
+        let url = try XCTUnwrap(record.manifest.launch.browserURL)
+        XCTAssertEqual(url.scheme, "https")
+        XCTAssertNotNil(url.host)
+        XCTAssertNil(url.user)
+        XCTAssertNil(url.password)
+        XCTAssertNil(record.manifest.collection)
+        XCTAssertNotEqual(record.manifest.version, "0.1.0", "The Android procedure's evidence must not count as validation of the new web route")
+    }
+
+    func testWindowsTargetPackageValidatesResolvesAndRefusesThePhoneRoute() throws {
+        var value = manifest(id: "hometax-like", name: "Windows 사이트")
+        value.launch = .init(search: "https://example.com/exe", target: "windows")
+        XCTAssertNoThrow(try PlaybookCatalog.validate(value))
+        XCTAssertTrue(value.launch.isWindows)
+        XCTAssertFalse(value.launch.isBrowser)
+        XCTAssertNil(value.launch.browserURL)
+        XCTAssertEqual(value.launch.windowsURL?.absoluteString, "https://example.com/exe")
+        var bad = value; bad.launch.search = "https://user:secret@example.com/"
+        XCTAssertThrowsError(try PlaybookCatalog.validate(bad))
+        bad = value; bad.collection = .init(key: "HOMETAX_LIKE", account: "계좌")
+        XCTAssertThrowsError(try PlaybookCatalog.validate(bad))
+
+        let runtime = temporary.appendingPathComponent("runtime")
+        _ = try PlaybookCatalog.install(from: package(value), in: runtime)
+        XCTAssertEqual(PlaybookCatalog.resolve("HOMETAX-LIKE", in: runtime)?.id, "hometax-like")
+
+        let tools = try Tools(db: DB(path: temporary.appendingPathComponent("ledger.db").path, writable: true))
+        tools.footprintDir = runtime
+        tools.openBrowser = { _ in XCTFail("a Windows package must not open Mac Chrome") }
+        defer { Tools.fake = nil }
+        var hands: [[String]] = []
+        Tools.fake = (screen: { [] }, hand: { hands.append($0) })
+        XCTAssertTrue(tools.execute("phone_open", ["app": "hometax-like"]).contains("windows_open"))
+        XCTAssertTrue(tools.execute("phone_installed", ["names": "hometax-like"]).contains("windows_open"))
+        XCTAssertTrue(tools.execute("run_combo", ["app": "hometax-like"]).contains("windows_open"))
+        XCTAssertEqual(tools.execute("browser_open", ["app": "hometax-like"]), "오류: Windows 패키지 · windows_open")
+        XCTAssertTrue(hands.isEmpty)
+        tools.currentText = "해줘"
+        XCTAssertTrue(tools.execute("windows_open", ["app": "hometax-like"]).hasPrefix("열었다"))
+        XCTAssertEqual(hands, [["open", "https://example.com/exe"]])
     }
 
     func testNewAppInstallsAndCollectorUsesManifestWithoutCodeChanges() throws {

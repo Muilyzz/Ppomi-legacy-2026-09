@@ -1,0 +1,27 @@
+/* 작업대 뼈대 스타일. 색은 tokens.css, 간격 값은 하나(.75rem), 고정 높이 없음. 제어 열 폭 = 대상 창 폭(--target), 없으면 15rem. */
+.workbench { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100dvh; gap: .75rem; padding: .75rem; background: var(--bg); }
+.workspace { display: grid; grid-template-columns: minmax(0, 1fr) max(15rem, var(--target, 0px)); gap: .75rem; min-height: 0; }
+.workspace > section, .records-page { display: flex; flex-direction: column; gap: .75rem; min-height: 0; min-width: 0; }
+.workspace .agent-shell { height: auto; min-height: 0; flex: 1 1 0; padding: 0; }
+.control-header, .records-header, .turn { display: flex; align-items: center; gap: .75rem; }
+.control-header > :nth-child(2) { margin-left: auto; }
+.control-header select { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: .25rem .5rem; }
+.control-slot { flex: 1 1 0; min-height: 0; display: grid; place-items: center; border-radius: var(--r); color: var(--fg-2); text-align: center; }
+.control-slot.turn { border: 2px solid var(--turn); }
+.turn { justify-content: flex-end; font-size: var(--fs-3); }
+.control-header [role="tablist"], .records-header [role="tablist"] { display: flex; gap: .75rem; overflow-x: auto; }
+.control-header [role="tab"], .records-header [role="tab"] { background: none; color: var(--fg-2); padding: .25rem 0; }
+.control-header [role="tab"][aria-selected="true"], .records-header [role="tab"][aria-selected="true"] { color: var(--fg); font-weight: 500; border-bottom: 2px solid var(--fg); }
+.records-body { flex: 1 1 0; min-height: 0; overflow: auto; color: var(--fg-2); }
+
+/* 크기 클래스 둘(축은 기기가 아니라 가용 폭). 840px = Android WindowSizeClass expanded 경계.
+   compact(< 840: 닫힌 폴드·작은 Mac 창) — 제어 열이 대화 위 레일 한 줄(대상 ▾ · 기록 · 상태 한 줄)로 접히고 구멍은 없다(대상은 화면 전체·별도 창).
+   expanded(≥ 840: 펼친 폴드·큰 Mac 창) — 왼쪽은 compact 화면 그대로, 오른쪽 제어 열 = 대상 창 폭. 차례 띠는 두 상태 모두 접히지 않는다. */
+.workbench { container-type: inline-size; }
+@container (max-width: 839px) {
+  .workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .workspace > .control { order: -1; flex-direction: row; align-items: center; }   /* .workspace > section 의 column 을 이긴다 */
+  .control-header { flex: 1 1 auto; }
+  .control-slot { flex: 0 0 auto; padding: .25rem .5rem; }
+  .control .records-body { display: none; }   /* 아이패드 세로: 장부 본문은 접히고 탭만 레일에 */
+}

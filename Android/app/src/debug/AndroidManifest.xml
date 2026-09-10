@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- DUMP is held by ADB shell/privileged callers, not ordinary installed apps. -->
+        <activity android:name=".DebugProvisioningActivity" android:exported="true"
+            android:permission="android.permission.DUMP"
+            android:excludeFromRecents="true" android:noHistory="true"
+            android:theme="@android:style/Theme.NoDisplay" />
+        <receiver android:name=".DebugRingReceiver" android:exported="true" android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="com.ppomi.androidbridge.DEBUG_RING" />
+                <action android:name="com.ppomi.androidbridge.DEBUG_TURN" />
+                <action android:name="com.ppomi.androidbridge.DEBUG_HEARD" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

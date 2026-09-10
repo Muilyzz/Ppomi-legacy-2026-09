@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "id": "wetax",
+  "name": "위택스",
+  "version": "0.1.0",
+  "aliases": ["WETAX", "wetax.go.kr", "지방세 위택스", "스마트위택스"],
+  "launch": { "search": "https://www.wetax.go.kr/main/", "target": "windows" },
+  "capabilities": [
+    {
+      "id": "pay-unpaid-local-tax",
+      "title": "지방세 미납 조회 · 납부",
+      "description": "Parallels Windows에서 위택스를 열고 로그인 화면까지 준비합니다. 인증은 당사자가 처리하고, 로그인 뒤 나의 할일 → 지방세에서 미납 건을 읽어 보고합니다. 납부는 confirm_payment 승인 1회 뒤 windows_click 1회이며 결제 인증은 당사자가 마칩니다. 2026-09-10 홈·로그인 방식·나의 할일 메뉴만 확인했고 미납 목록·납부 화면은 미검증입니다.",
+      "inputs": [
+        { "name": "requesterContext", "label": "이번 당사자와 로그인 방식(민감정보 제외)", "required": true },
+        { "name": "scope", "label": "전체 미납 또는 특정 세목·연도", "required": false }
+      ],
+      "steps": [
+        { "id": "open", "title": "▶https://www.wetax.go.kr/main/ (windows_open · Parallels)", "kind": "open" },
+        { "id": "close-notice", "title": "⎋키보드보안 알림·공지 팝업", "kind": "close" },
+        { "id": "login-entry", "title": "⊙로그인 → 인증 방식(공동인증서|금융인증서|간편인증) 준비", "kind": "tap" },
+        { "id": "human-auth", "title": "👤인증서 암호·간편인증·주민번호 입력은 당사자", "kind": "human" },
+        { "id": "my-tasks", "title": "⊙나의 할일 → 지방세", "kind": "tap" },
+        { "id": "read-unpaid", "title": "📝미납 건·금액·납기 읽기", "kind": "read" },
+        { "id": "select", "title": "⊙납부할 건 선택 → 납부", "kind": "tap" },
+        { "id": "pay-method", "title": "⊙결제 수단(카드|계좌이체|간편결제) 선택", "kind": "payment-method" },
+        { "id": "approve", "title": "✋승인(최종 금액·수단·대상)", "kind": "human" },
+        { "id": "pay", "title": "⊙납부 (windows_click 1회)", "kind": "payment" },
+        { "id": "human-pay-auth", "title": "👤결제 인증은 당사자", "kind": "human" },
+        { "id": "report", "title": "📝납부 결과 읽고 record_spend", "kind": "read" }
+      ]
+    },
+    {
+      "id": "pay-by-epayment-number",
+      "title": "과태료 전자납부번호 납부",
+      "description": "고지서의 전자납부번호로 로그인 없이 납부대상을 조회하고 납부합니다. 2026-09-10 납부대상조회 페이지의 탭(전자납부번호·지방세 납세번호·납세자 간편납부번호·차량번호)과 CAPTCHA를 확인했습니다. CAPTCHA는 당사자가 풉니다. 조회 결과 화면·납부 흐름은 미검증입니다.",
+      "inputs": [
+        { "name": "ePaymentNumber", "label": "전자납부번호(17~19자리, 고지서)", "required": true }
+      ],
+      "steps": [
+        { "id": "open", "title": "▶https://www.wetax.go.kr/etq/etp/epi/E070101M01.do (windows_open 뒤 ctrl+l 이동)", "kind": "open" },
+        { "id": "close-notice", "title": "⎋키보드보안 알림", "kind": "close" },
+        { "id": "tab", "title": "⊙전자납부번호 탭", "kind": "tap" },
+        { "id": "type-number", "title": "⌨전자납부번호", "kind": "input" },
+        { "id": "human-captcha", "title": "👤CAPTCHA 입력은 당사자", "kind": "human" },
+        { "id": "search", "title": "⊙검색", "kind": "tap" },
+        { "id": "read-target", "title": "📝대상·금액·납기 확인", "kind": "read" },
+        { "id": "pay-method", "title": "⊙결제 수단 선택", "kind": "payment-method" },
+        { "id": "approve", "title": "✋승인(최종 금액·수단·대상)", "kind": "human" },
+        { "id": "pay", "title": "⊙납부 (windows_click 1회)", "kind": "payment" },
+        { "id": "human-pay-auth", "title": "👤결제 인증은 당사자", "kind": "human" },
+        { "id": "report", "title": "📝납부 결과 읽고 record_spend", "kind": "read" }
+      ]
+    },
+    {
+      "id": "issue-tax-certificate",
+      "title": "납세증명서 발급",
+      "description": "로그인 뒤 증명서 발급 메뉴에서 지방세 납세증명서를 발급해 PDF 저장·출력을 준비합니다. 2026-09-10 발급 메뉴의 정확한 경로·URL·용도 입력 항목은 미검증입니다. 현재 화면의 전체메뉴에서 증명서·발급 항목을 찾습니다.",
+      "inputs": [
+        { "name": "requesterContext", "label": "이번 당사자와 로그인 방식(민감정보 제외)", "required": true },
+        { "name": "purpose", "label": "제출처·용도(화면이 요구할 때)", "required": false }
+      ],
+      "steps": [
+        { "id": "open", "title": "▶https://www.wetax.go.kr/main/ (windows_open · Parallels)", "kind": "open" },
+        { "id": "login-entry", "title": "⊙로그인 → 인증 방식 준비", "kind": "tap" },
+        { "id": "human-auth", "title": "👤인증은 당사자", "kind": "human" },
+        { "id": "menu", "title": "⊙전체메뉴 → 증명서|발급 → 납세증명서 (미검증)", "kind": "tap" },
+        { "id": "form", "title": "⌨용도·제출처 등 허용된 일반 항목", "kind": "input" },
+        { "id": "issue", "title": "⊙발급|신청", "kind": "tap" },
+        { "id": "human-save", "title": "👤저장·인쇄 대화상자·새 권한은 당사자", "kind": "human" },
+        { "id": "report", "title": "📝발급 결과·유효기간 보고", "kind": "read" }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "자격 증명·인증서 암호·인증용 주민번호·OTP·CAPTCHA·생체인증은 당사자가 직접 처리합니다. 로그인 진입·인증 방식 선택·허용된 일반 항목 입력은 에이전트가 진행하고, 실제 값은 패키지나 발자국에 남기지 않습니다.",
+    "보안프로그램·인증서 관련 새 설치·관리자 인증·새 동의는 현재 화면의 대상·효과를 보여 주고 당사자가 처리합니다. 이미 허용된 준비는 반복 확인하지 않습니다.",
+    "납부 클릭은 confirm_payment 승인 1회에 windows_click 1회의 코드 경계를 따르며 결제 인증은 당사자가 마칩니다. 이체·송금은 하지 않습니다. Mac Chrome으로 여는 경우 최종 결제 버튼은 당사자가 누릅니다."
+  ],
+  "guide": "guide.md"
+}

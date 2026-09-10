@@ -1,0 +1,886 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ppomi.muilyzz.com/schemas/life-records.schema.json",
+  "title": "Ppomi private life records v1",
+  "description": "Local records and provenance; userConfirmed never grants execution or payment approval.",
+  "type": "object",
+  "properties": {
+    "formatVersion": {
+      "const": 1
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entity"
+      }
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/record"
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence"
+      }
+    },
+    "revisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/revision"
+      }
+    }
+  },
+  "required": [
+    "formatVersion",
+    "entities",
+    "records"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?(?:Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "entity": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "person",
+            "organization",
+            "account",
+            "property",
+            "device"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "metric": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "enum": [
+            "weight",
+            "bodyFatPercent",
+            "skeletalMuscleMass",
+            "bodyFatMass",
+            "bmi",
+            "waistHipRatio",
+            "extracellularWaterRatio",
+            "visceralFatLevel",
+            "energy",
+            "protein",
+            "carbohydrate",
+            "fat",
+            "duration",
+            "steps",
+            "distance",
+            "wellbeing",
+            "amount",
+            "balance"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "code",
+        "title",
+        "value",
+        "unit"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "weight"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "kg"
+                ]
+              },
+              "value": {
+                "exclusiveMinimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "bodyFatPercent"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "%"
+                ]
+              },
+              "value": {
+                "minimum": 0,
+                "maximum": 100
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "skeletalMuscleMass"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "kg"
+                ]
+              },
+              "value": {
+                "minimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "bodyFatMass"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "kg"
+                ]
+              },
+              "value": {
+                "minimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "bmi"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "kg/m2"
+                ]
+              },
+              "value": {
+                "exclusiveMinimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "waistHipRatio"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "ratio"
+                ]
+              },
+              "value": {
+                "exclusiveMinimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "extracellularWaterRatio"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "ratio"
+                ]
+              },
+              "value": {
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "visceralFatLevel"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "level"
+                ]
+              },
+              "value": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "energy"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "kcal"
+                ]
+              },
+              "value": {
+                "minimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "protein"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "g"
+                ]
+              },
+              "value": {
+                "minimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "carbohydrate"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "g"
+                ]
+              },
+              "value": {
+                "minimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "fat"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "g"
+                ]
+              },
+              "value": {
+                "minimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "duration"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "min"
+                ]
+              },
+              "value": {
+                "minimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "steps"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "count"
+                ]
+              },
+              "value": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "distance"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "km"
+                ]
+              },
+              "value": {
+                "minimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "wellbeing"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "score/5"
+                ]
+              },
+              "value": {
+                "minimum": 1,
+                "maximum": 5
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "amount"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "KRW",
+                  "USD",
+                  "EUR",
+                  "JPY"
+                ]
+              },
+              "value": {}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "balance"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "enum": [
+                  "KRW",
+                  "USD",
+                  "EUR",
+                  "JPY"
+                ]
+              },
+              "value": {}
+            }
+          }
+        }
+      ]
+    },
+    "record": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subjectID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "measurement",
+            "meal",
+            "exercise",
+            "checkIn",
+            "financialSnapshot",
+            "financialTransaction",
+            "habit"
+          ]
+        },
+        "occurredAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "recordedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "sourceName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceRecordID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "method": {
+          "enum": [
+            "api",
+            "ocr",
+            "manual",
+            "legacyImport",
+            "aiEstimate"
+          ]
+        },
+        "review": {
+          "enum": [
+            "unreviewed",
+            "userConfirmed"
+          ]
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/metric"
+          }
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "device": {
+          "type": "string"
+        },
+        "evidenceIDs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "activityID": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._-]{0,99}$"
+        },
+        "activityStatus": {
+          "enum": [
+            "completed",
+            "retracted"
+          ]
+        },
+        "activityDay": {
+          "type": "string",
+          "format": "date",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "activityTimeZone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Time zone identifier for the activity date, e.g. Asia/Seoul; runtime validates it."
+        }
+      },
+      "required": [
+        "id",
+        "subjectID",
+        "kind",
+        "occurredAt",
+        "recordedAt",
+        "sourceName",
+        "method",
+        "review",
+        "metrics",
+        "evidenceIDs"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "measurement"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "metrics": {
+                "items": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "weight",
+                        "bodyFatPercent",
+                        "skeletalMuscleMass",
+                        "bodyFatMass",
+                        "bmi",
+                        "waistHipRatio",
+                        "extracellularWaterRatio",
+                        "visceralFatLevel"
+                      ]
+                    }
+                  }
+                },
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "meal"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "metrics": {
+                "items": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "energy",
+                        "protein",
+                        "carbohydrate",
+                        "fat"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "exercise"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "metrics": {
+                "items": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "duration",
+                        "steps",
+                        "distance",
+                        "energy"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "checkIn"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "metrics": {
+                "items": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "wellbeing"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "financialSnapshot"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "metrics": {
+                "items": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "balance"
+                      ]
+                    }
+                  }
+                },
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "financialTransaction"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "metrics": {
+                "items": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "amount"
+                      ]
+                    }
+                  }
+                },
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "habit"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "activityID",
+              "activityStatus",
+              "activityDay",
+              "activityTimeZone"
+            ],
+            "properties": {
+              "method": {
+                "const": "manual"
+              },
+              "metrics": {
+                "maxItems": 0
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "activityID"
+                  ]
+                },
+                {
+                  "required": [
+                    "activityStatus"
+                  ]
+                },
+                {
+                  "required": [
+                    "activityDay"
+                  ]
+                },
+                {
+                  "required": [
+                    "activityTimeZone"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "originalName": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "recordedAt": {
+          "$ref": "#/$defs/timestamp"
+        }
+      },
+      "required": [
+        "id",
+        "originalName",
+        "sha256",
+        "recordedAt"
+      ],
+      "additionalProperties": false
+    },
+    "revision": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recordID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "replacedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous": {
+          "$ref": "#/$defs/record"
+        }
+      },
+      "required": [
+        "id",
+        "recordID",
+        "replacedAt",
+        "reason",
+        "previous"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

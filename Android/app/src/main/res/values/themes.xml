@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash ground only; Compose paints everything else from Theme.kt. Colors come from theme_colors.xml (generated). -->
+    <style name="Theme.Ppomi" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:fontFamily">@font/pretendard_variable</item>
+        <item name="android:windowBackground">@color/ppomi_bg_light</item>
+    </style>
+</resources>

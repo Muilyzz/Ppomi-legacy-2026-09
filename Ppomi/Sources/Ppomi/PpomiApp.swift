@@ -1,19 +1,17 @@
-// 뽀미: menu bar app. Owns the one AppState, the mirroring watcher that feeds it, the workbench that follows state.kioskOn, and the
-// voice session (the wake word and the realtime client). The brain is outside (`--mcp`); this process is the console.
+// 뽀미 opens its own chat. The workbench remains available for records and explicit device control.
 import SwiftUI
 import AppKit
 
 /// A SwiftPM executable has no app bundle, so LaunchServices starts it background-only (.prohibited): claim .regular at
-/// launch for a Dock icon and a place in ⌘Tab. The 뽀미 window is the controller's panel (see Kiosk.swift); its green
-/// button expands that same window beneath iPhone Mirroring without entering a separate fullscreen Space.
+/// launch for a Dock icon and a place in ⌘Tab. Dock activation returns to the app-owned conversation.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static var pendingState: AppState?
     var state: AppState?
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        // Settings can be visible while the workbench is closed. Reopen the same panel in its current size mode.
+        // Reuse the conversation even when Settings or a device workbench is already visible.
         WindowDiagnostics.log("app.reopen", ["hasVisibleWindows": flag])
-        (state ?? Self.pendingState)?.reveal()
+        (state ?? Self.pendingState)?.openChat()
         return false                                    // the controller owns reopening; AppKit must not open another window
     }
 
@@ -32,6 +30,36 @@ struct PpomiApp: App {
     private let voice: VoiceSession?                      // app-long too: a tab must not take the microphone down with it
 
     init() {
+        if let index = CommandLine.arguments.firstIndex(of: "--configure-agent-endpoint") {
+            guard CommandLine.arguments.indices.contains(index + 1),
+                  let url = try? AgentNativePolicy.endpoint(CommandLine.arguments[index + 1]) else {
+                fputs("음성 에이전트의 HTTPS 서버 주소가 필요합니다.\n", stderr); exit(2)
+            }
+            UserDefaults.standard.set(url.absoluteString, forKey: AgentNativePolicy.endpointPreference)
+            print("음성 에이전트 서버 주소를 저장했습니다."); exit(0)
+        }
+        if CommandLine.arguments.contains("--verify-records") {
+            do { try SharedRecordsSource.verifyRemote(); exit(0) }
+            catch { fputs("서버 기록 대조 실패: \((error as? SharedRecordError)?.errorDescription ?? "서버 연결·키체인·원본 저장소를 확인하세요.")\n", stderr); exit(1) }
+        }
+        if CommandLine.arguments.contains("--migrate-records") {
+            do { try SharedRecordsSource.migrate(); print("상단 기록을 서버 확인 모드로 전환했습니다."); exit(0) }
+            catch { fputs("기록 이전을 완료하지 못했습니다. \((error as? SharedRecordError)?.errorDescription ?? "서버 연결·키체인·원본 저장소를 확인하세요.")\n", stderr); exit(1) }
+        }
+        if let index = CommandLine.arguments.firstIndex(of: "--configure-shared") {
+            guard CommandLine.arguments.indices.contains(index + 1) else {
+                fputs("공유 서버 설정 파일 경로가 필요합니다.\n", stderr)
+                exit(2)
+            }
+            do {
+                try SharedServerConfiguration.install(from: URL(fileURLWithPath: CommandLine.arguments[index + 1]))
+                print("공유 서버 설정을 키체인에 저장했습니다.")
+                exit(0)
+            } catch {
+                fputs("공유 서버 설정을 저장하지 못했습니다. 설정 파일과 키체인 접근을 확인하세요.\n", stderr)
+                exit(1)
+            }
+        }
         // `--mcp`: MCP server on stdin/stdout for an outside agent (Claude app / Claude Code), no UI. First thing, before any
         // GUI object: fd 1 is the protocol, so stray print()s (Mirroring, Collector) are sent to stderr and only MCPServer writes there.
         if CommandLine.arguments.contains("--mcp") {
@@ -47,17 +75,23 @@ struct PpomiApp: App {
             exit(0)
         }
         Self.replaceRunningInstance()
+        _ = Fonts.registered                            // before any window: every label and web page uses Pretendard
         let s = AppState()
         _state = StateObject(wrappedValue: s)
         s.reloadLedger()
-        kiosk = KioskController(state: s)
+        let conversation = AgentVoicePanel()
+        conversation.onSurfaceHint = { [weak s] surface in s?.selectSurface(surface) }   // the workbench docks the window the assistant is driving
+        let workbench = KioskController(state: s, conversation: conversation)
+        kiosk = workbench
+        conversation.onOverlay = { mark in workbench.showMark(mark) }   // taps, filled fields and reading drawn over the docked window
         s.watchAsks()                                   // questions from the MCP server / the voice tools → workbench buttons
-        do { voice = try VoiceSession(state: s) } catch { voice = nil; print("voice: \(error)") }
+        s.watchLedger()                                 // committed values appear in the records panel while control continues
+        do { voice = try VoiceSession(state: s, panel: conversation) } catch { voice = nil; print("voice: \(error)") }
         watcher = MirrorWatcher { s.mirroring($0) }
         watcher.start()
         AppDelegate.pendingState = s
-        // `--kiosk`: expand the workbench on launch. Defer until AppKit has wired the panel for events.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { CommandLine.arguments.contains("--kiosk") ? s.toggleKiosk() : s.reveal() }
+        // Ordinary launch opens chat. Explicit kiosk launch keeps its existing workbench route.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { s.openInitialScreen(kiosk: CommandLine.arguments.contains("--kiosk")) }
         // `--snapshot [APP …]`: collect and exit, no UI (launchd / cron / a terminal). Default: every app.
         if let i = CommandLine.arguments.firstIndex(of: "--snapshot") {
             let keys = Array(CommandLine.arguments[(i + 1)...])
@@ -96,12 +130,18 @@ private struct MenuContent: View {
     var body: some View {
         Text(state.statusLine)
         Divider()
+        Button("대화") { state.openChat() }
+        ForEach(WorkSurface.allCases) { surface in
+            Button("\(surface.displayName) 제어") { state.selectSurface(surface) }
+        }
+        Divider()
         Button("타임라인") { show(.timeline) }
         Button("증빙·전표") { show(.evidence) }
         Button("절차") { show(.playbooks) }
+        Button("몸과 생활") { show(.health) }
         Button(state.voiceOn ? "음성 끄기" : "음성 켜기 (뽀미야)") { state.voiceOn.toggle() }
-        Button(state.listening ? "그만 말하기" : "지금 말하기") { state.talk() }.keyboardShortcut(.space, modifiers: .option)   // VoiceSession's ⌥Space monitors do the real work
-        Toggle("도착 인사", isOn: Binding(get: { state.greetOnArrival }, set: { _ in state.toggleGreet() }))
+        Button("대화창") { state.talk() }.keyboardShortcut(.space, modifiers: .option)
+        Toggle("연결 시 대화 열기", isOn: Binding(get: { state.greetOnArrival }, set: { _ in state.toggleGreet() }))
         Button(state.kioskOn ? "키오스크 끄기" : "키오스크 켜기") { state.toggleKiosk() }.keyboardShortcut("f", modifiers: [.control, .command])
         Button("지금 수집") {
             DispatchQueue.global(qos: .userInitiated).async {
@@ -109,8 +149,7 @@ private struct MenuContent: View {
                 DispatchQueue.main.async { state.reloadLedger() }
             }
         }
-        Button("장부 다시 읽기") { state.reloadLedger() }
-        SettingsLink { Text("시작하기 확인…") }             // the 시작하기 section sits at the top of the settings window
+        Button("장부 새로 읽기") { state.reloadLedger() }
         SettingsLink { Text("설정…") }
         Divider()
         Button("종료") { NSApplication.shared.terminate(nil) }

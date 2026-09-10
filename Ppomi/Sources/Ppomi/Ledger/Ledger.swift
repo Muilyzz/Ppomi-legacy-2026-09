@@ -3,11 +3,9 @@
 import Foundation
 
 extension Ledger {
-    /// Every observation of every account as a step function, plus the journal with its accounts named by balance-sheet
-    /// label: enough to state the balance sheet at any instant and the flows of any range.
-    static func load(dbPath: String, me: String) throws -> Ledger {
-        let db = try DB(path: dbPath)
-        let snaps = try db.snapshots(), txs = try db.transactions()
+    /// Both the source adapter and the server reader use exactly the same accounting rules.
+    static func load(snapshots snaps: [(app: String, account: String, balance: Int, ts: Date)],
+                     transactions txs: [Transaction], me: String) -> Ledger {
         var app: [String: String] = [:], labels: [String] = []          // label → app, in first-seen order (Python dict order)
         var series: [String: [Observation]] = [:]
         for s in snaps {
@@ -32,7 +30,8 @@ extension Ledger {
         }
         return Ledger(accounts: app.map { Account(id: $0.key, app: $0.value, title: Rules.title($0.value)) }.sorted { ($0.app, $0.id) < ($1.app, $1.id) },
                       series: series, lines: lines,
-                      defaultLens: Lens(name: "내 것 전부", inside: Set(labels).union(["현금(수중)", "내 다른 계좌(미확인)"])))
+                      defaultLens: Lens(name: LegacyAccountingRules.bundled.defaultLensName,
+                                        inside: Set(labels).union(LegacyAccountingRules.bundled.defaultInside)))
     }
 
     /// The account's last observation at or before t.

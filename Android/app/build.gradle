@@ -1,0 +1,51 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
+}
+
+android {
+    useLibrary 'android.test.runner'
+    useLibrary 'android.test.base'
+    useLibrary 'android.test.mock'
+    namespace 'com.ppomi.androidbridge'
+    compileSdk 35
+    buildToolsVersion '34.0.0'
+    defaultConfig {
+        applicationId 'com.ppomi.androidbridge'
+        minSdk 28
+        targetSdk 35
+        versionCode 10
+        versionName '0.6.6'
+        testInstrumentationRunner 'android.test.InstrumentationTestRunner'
+    }
+    sourceSets.main.jniLibs.srcDirs += ['../swift-core/build/jniLibs']
+    sourceSets.main.assets.srcDirs += ['../swift-core/build/assets']
+    buildFeatures { buildConfig true; compose true }
+    kotlinOptions { jvmTarget = '17' }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    // A user-enabled accessibility service is required on each device; release control is disabled.
+    buildTypes { release { debuggable false } }
+}
+
+// Pin UI artifacts to the existing Android 35 toolchain.
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+    implementation platform('androidx.compose:compose-bom:2024.12.01')
+    implementation 'androidx.activity:activity-compose:1.9.3'
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.foundation:foundation'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.compose.material:material-icons-extended'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+}
+
+// The APK packages the canonical Swift engine and its required Android runtime.
+tasks.register('buildSharedAccounting', Exec) {
+    commandLine 'bash', file('../swift-core/build.sh').absolutePath, 'android'
+}
+tasks.named('preBuild').configure { dependsOn tasks.named('buildSharedAccounting') }

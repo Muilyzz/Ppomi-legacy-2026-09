@@ -1,0 +1,30 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "npx tsc --noEmit",
+  "outputDirectory": "public",
+  "regions": [
+    "icn1"
+  ],
+  "rewrites": [
+    {
+      "source": "/v1/:path*",
+      "destination": "/api/agent?route=/v1/:path*"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+# 아이패드 앱. xcodegen generate → xcodebuild. 대화 = 번들 agent 앱(Web/Agent, Mac·Android 와 같은 빌드) + 네이티브 다리(서버 대화만).
+# 장부 = Supabase 의 암호화 기록을 이 기기가 직접 읽어 Mac 과 같은 페이지(Web/timeline.html)로 그린다. 장부 코드는 Mac 타깃의 파일을 그대로 컴파일한다.
+name: PpomiPad
+options:
+  deploymentTarget: {iOS: "17.0"}
+targets:
+  PpomiPad:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+      - path: Web
+        buildPhase: resources
+      - path: ../Ppomi/Sources/Ppomi/Web/Agent
+        type: folder
+        buildPhase: resources
+      - path: ../Ppomi/Sources/Ppomi/AccountingData
+        type: folder
+        buildPhase: resources
+      - path: ../Ppomi/Sources/Ppomi/Web/timeline.html
+        buildPhase: resources
+      - path: ../Ppomi/Sources/Ppomi/Web/tokens.css
+        buildPhase: resources
+      - path: ../Ppomi/Sources/Ppomi/Web/theme.css
+        buildPhase: resources
+      - ../Ppomi/Sources/Ppomi/Ledger/Model.swift
+      - ../Ppomi/Sources/Ppomi/Ledger/Ledger.swift
+      - ../Ppomi/Sources/Ppomi/Ledger/Rules.swift
+      - ../Ppomi/Sources/Ppomi/Ledger/LedgerPage.swift
+      - ../Ppomi/Sources/Ppomi/Accounting/LegacyAccountingRules.swift
+      - ../Ppomi/Sources/Ppomi/Accounting/AccountingModel.swift
+      - ../Ppomi/Sources/Ppomi/Records/RecordScope.swift
+      - ../Ppomi/Sources/Ppomi/Records/LifeJSON.swift
+      - ../Ppomi/Sources/Ppomi/Shared/SharedRecordCrypto.swift
+      - ../Ppomi/Sources/Ppomi/Shared/SharedLedgerArchive.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.muilyzz.ppomi.pad
+        DEVELOPMENT_TEAM: AWLTDZ872S
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "2"
+        SWIFT_VERSION: "5.0"
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: 뽀미
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        NSCameraUsageDescription: Mac 화면의 연결 QR 을 읽습니다.
+        NSMicrophoneUsageDescription: 통화(음성 대화)에 씁니다.

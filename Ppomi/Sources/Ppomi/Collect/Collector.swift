@@ -15,6 +15,8 @@ final class Collector {
 
     let db: DB
     let log: (String) -> Void
+    /// Tests replace the complete phone session so a failed interlock cannot move a real window.
+    var phoneSessionOverride: ((() -> Void) -> Void)?
     private let loginWait: TimeInterval
     private var deadline = Date.distantFuture, asked = false
 
@@ -53,11 +55,27 @@ final class Collector {
         }
         let apps = keys.compactMap(Apps.config)
         guard !apps.isEmpty else { return }
-        withPhone {
-            for cfg in apps {
-                do { try collect(cfg) }
-                catch { log("\(cfg.key): \(error)"); if deadlinePassed { break } }
+        do {
+            let databases = try db.rows("PRAGMA database_list")
+            guard let path = databases.first(where: { $0[1] as? String == "main" })?[2] as? String,
+                  !path.isEmpty else {
+                log("실행 안 함: 화면 제어를 조정할 장부 파일이 없습니다.")
+                return
             }
+            guard let lease = try ScreenControlLease.beginControl(ledgerPath: path) else {
+                log(ScreenControlLease.blockedMessage)
+                return
+            }
+            defer { lease.release() }
+            // Direct CLI collection must acquire the same lease before withPhone moves any window.
+            withPhone {
+                for cfg in apps {
+                    do { try collect(cfg) }
+                    catch { log("\(cfg.key): \(error)"); if deadlinePassed { break } }
+                }
+            }
+        } catch {
+            log("실행 안 함: 화면 제어 잠금을 확인하지 못했습니다. \(error.localizedDescription)")
         }
     }
 
@@ -97,6 +115,7 @@ final class Collector {
 
     /// Stage Manager pulls the mirror on stage; give the user their app back afterwards.
     private func withPhone(_ body: () -> Void) {
+        if let phoneSessionOverride { phoneSessionOverride(body); return }
         let prev = (try? Phone.run(["front"]))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         _ = try? Phone.run(["place"] + (AppSettings.env("MIRROR_AT") ?? "center").split(separator: ",").map(String.init))   // the kiosk's spot
         deadline = Date(timeIntervalSinceNow: loginWait); asked = false

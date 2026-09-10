@@ -1,0 +1,264 @@
+{
+  "formatVersion": 1,
+  "books": [
+    {
+      "id": "example-money",
+      "name": "가상 예시 · 돈",
+      "ownerID": "example-person",
+      "scope": { "kind": "personal", "ownerID": "example-person" },
+      "kind": "financial",
+      "unit": {
+        "id": "KRW",
+        "name": "대한민국 원",
+        "symbol": "원",
+        "dimension": "currency",
+        "scale": 0
+      }
+    },
+    {
+      "id": "example-time",
+      "name": "가상 예시 · 시간",
+      "ownerID": "example-person",
+      "scope": { "kind": "personal", "ownerID": "example-person" },
+      "kind": "resource",
+      "unit": {
+        "id": "min",
+        "name": "분",
+        "symbol": "분",
+        "dimension": "time",
+        "scale": 0
+      }
+    },
+    {
+      "id": "example-business-money",
+      "name": "가상 예시 · 사업 돈",
+      "ownerID": "example-person",
+      "scope": { "kind": "business", "ownerID": "example-person", "businessID": "example-business" },
+      "kind": "financial",
+      "unit": {
+        "id": "KRW",
+        "name": "대한민국 원",
+        "symbol": "원",
+        "dimension": "currency",
+        "scale": 0
+      }
+    }
+  ],
+  "accounts": [
+    {
+      "id": "money-assets",
+      "bookID": "example-money",
+      "name": "자산",
+      "kind": "asset"
+    },
+    {
+      "id": "money-bank",
+      "bookID": "example-money",
+      "name": "예금",
+      "kind": "asset",
+      "parentID": "money-assets"
+    },
+    {
+      "id": "money-skill",
+      "bookID": "example-money",
+      "name": "역량 · 관리용 추정",
+      "kind": "asset",
+      "parentID": "money-assets"
+    },
+    {
+      "id": "money-equity",
+      "bookID": "example-money",
+      "name": "기초 자본",
+      "kind": "equity"
+    },
+    {
+      "id": "money-expenses",
+      "bookID": "example-money",
+      "name": "비용",
+      "kind": "expense"
+    },
+    {
+      "id": "money-learning",
+      "bookID": "example-money",
+      "name": "교육비",
+      "kind": "expense",
+      "parentID": "money-expenses"
+    },
+    {
+      "id": "time-budget",
+      "bookID": "example-time",
+      "name": "가용시간예산",
+      "kind": "asset"
+    },
+    {
+      "id": "time-learning-asset",
+      "bookID": "example-time",
+      "name": "미상각 학습투입",
+      "kind": "asset"
+    },
+    {
+      "id": "time-allocation",
+      "bookID": "example-time",
+      "name": "일일 시간배정",
+      "kind": "equity"
+    },
+    {
+      "id": "time-learning-expense",
+      "bookID": "example-time",
+      "name": "학습시간 사용",
+      "kind": "expense"
+    }
+  ],
+  "entries": [
+    {
+      "id": "example-opening",
+      "eventID": "example-opening-event",
+      "bookID": "example-money",
+      "occurredAt": "2026-09-08T00:00:00Z",
+      "recordedAt": "2026-09-08T00:00:00Z",
+      "memo": "가상 예시: 기초잔액",
+      "source": "synthetic-example",
+      "sourceRecordID": "example-opening",
+      "postings": [
+        {
+          "accountID": "money-bank",
+          "side": "debit",
+          "amount": 100000
+        },
+        {
+          "accountID": "money-equity",
+          "side": "credit",
+          "amount": 100000
+        }
+      ],
+      "layer": "recorded"
+    },
+    {
+      "id": "example-fee",
+      "eventID": "example-learning-event",
+      "bookID": "example-money",
+      "occurredAt": "2026-09-08T01:00:00Z",
+      "recordedAt": "2026-09-08T01:00:00Z",
+      "memo": "가상 예시: 강의료 10만 원",
+      "source": "synthetic-example",
+      "sourceRecordID": "example-fee",
+      "postings": [
+        {
+          "accountID": "money-learning",
+          "side": "debit",
+          "amount": 100000
+        },
+        {
+          "accountID": "money-bank",
+          "side": "credit",
+          "amount": 100000
+        }
+      ],
+      "layer": "recorded"
+    },
+    {
+      "id": "example-budget",
+      "eventID": "example-day-budget",
+      "bookID": "example-time",
+      "occurredAt": "2026-09-07T15:00:00Z",
+      "recordedAt": "2026-09-07T15:00:00Z",
+      "memo": "가상 예시: 하루 시간예산 배정",
+      "source": "synthetic-example",
+      "sourceRecordID": "example-budget",
+      "postings": [
+        {
+          "accountID": "time-budget",
+          "side": "debit",
+          "amount": 1440
+        },
+        {
+          "accountID": "time-allocation",
+          "side": "credit",
+          "amount": 1440
+        }
+      ],
+      "layer": "recorded"
+    },
+    {
+      "id": "example-duration",
+      "eventID": "example-learning-event",
+      "bookID": "example-time",
+      "occurredAt": "2026-09-08T01:00:00Z",
+      "recordedAt": "2026-09-08T01:00:00Z",
+      "memo": "가상 예시: 학습 120분",
+      "source": "synthetic-example",
+      "sourceRecordID": "example-duration",
+      "postings": [
+        {
+          "accountID": "time-learning-expense",
+          "side": "debit",
+          "amount": 120
+        },
+        {
+          "accountID": "time-budget",
+          "side": "credit",
+          "amount": 120
+        }
+      ],
+      "layer": "recorded"
+    },
+    {
+      "id": "example-money-estimate",
+      "eventID": "example-learning-event",
+      "bookID": "example-money",
+      "occurredAt": "2026-09-08T01:00:00Z",
+      "recordedAt": "2026-09-08T01:00:00Z",
+      "memo": "가상 예시: 투입량의 60%를 관리상 재분류",
+      "source": "synthetic-example",
+      "sourceRecordID": "example-money-estimate",
+      "postings": [
+        {
+          "accountID": "money-skill",
+          "side": "debit",
+          "amount": 60000
+        },
+        {
+          "accountID": "money-learning",
+          "side": "credit",
+          "amount": 60000
+        }
+      ],
+      "layer": "adjustment",
+      "assessment": {
+        "sourceEntryID": "example-fee",
+        "rationale": "설명을 위한 가정입니다. 실제 효율·역량가치가 아니며 기본 자산화 비율로 사용하지 않습니다.",
+        "confidenceBasisPoints": 5000,
+        "model": "가상 예시"
+      }
+    },
+    {
+      "id": "example-time-estimate",
+      "eventID": "example-learning-event",
+      "bookID": "example-time",
+      "occurredAt": "2026-09-08T01:00:00Z",
+      "recordedAt": "2026-09-08T01:00:00Z",
+      "memo": "가상 예시: 투입량의 60%를 관리상 재분류",
+      "source": "synthetic-example",
+      "sourceRecordID": "example-time-estimate",
+      "postings": [
+        {
+          "accountID": "time-learning-asset",
+          "side": "debit",
+          "amount": 72
+        },
+        {
+          "accountID": "time-learning-expense",
+          "side": "credit",
+          "amount": 72
+        }
+      ],
+      "layer": "adjustment",
+      "assessment": {
+        "sourceEntryID": "example-duration",
+        "rationale": "설명을 위한 가정입니다. 실제 효율·역량가치가 아니며 기본 자산화 비율로 사용하지 않습니다.",
+        "confidenceBasisPoints": 5000,
+        "model": "가상 예시"
+      }
+    }
+  ]
+}

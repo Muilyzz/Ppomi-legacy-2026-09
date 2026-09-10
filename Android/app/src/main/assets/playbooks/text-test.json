@@ -1,0 +1,19 @@
+{
+  "id": "android-text-test-v1",
+  "title": "별도 테스트 앱에 입력하고 결과 확인",
+  "modeLabel": "내장 절차 · AI 모델 미연결",
+  "steps": [
+    {"op": "open", "packageName": "com.ppomi.androidtarget"},
+    {"op": "observe", "packageName": "com.ppomi.androidtarget"},
+    {
+      "op": "approval",
+      "title": "테스트 앱에 입력하고 반영할까요?",
+      "description": "Ppomi Control Test 앱에 아래 내용을 입력하고 ‘Apply text’ 버튼을 누릅니다.\n\n${request}",
+      "action": "텍스트 입력 및 Apply text 클릭"
+    },
+    {"op": "type", "packageName": "com.ppomi.androidtarget", "selector": {"editable": true}, "text": "${request}"},
+    {"op": "click", "packageName": "com.ppomi.androidtarget", "selector": {"text": "APPLY TEXT", "clickable": true}},
+    {"op": "verify", "packageName": "com.ppomi.androidtarget", "selector": {"text": "Applied: ${request}"}},
+    {"op": "capture", "packageName": "com.ppomi.androidtarget"}
+  ]
+}

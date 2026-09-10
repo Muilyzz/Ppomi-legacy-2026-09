@@ -51,7 +51,7 @@
 3. 본문 13px/1.5 — 4페이지 공통(evidence 14, chat 13/1.26 → 통일).
 4. `.lbl` 12px meta / `.meta` 11px meta — 필드 라벨, 축, 배지 단어, 파일 경로, 생성 시각, 섹션 라벨, 진행 띠.
 
-컬러 이모지(👤🎟🔍✋📝👁🌐🏦)는 두 렌더러(chat.html glyph 맵, playbooks.html)에서 텍스트 단어로 치환한다(사용자/쿠폰/조회/승인/기록/화면/웹/수집). 단색 글리프 ▶⊙⌨↓⎋는 유지. md 파일과 시스템 프롬프트는 그대로.
+컬러 이모지(👤🎟🔍✋📝👁🌐🏦)는 렌더러(chat.html glyph 맵)에서 텍스트 단어로 치환한다(사용자/쿠폰/조회/승인/기록/화면/웹/수집). 단색 글리프 ▶⊙⌨↓⎋는 유지. md 파일과 시스템 프롬프트는 그대로.
 
 ## 3. 작업대 레이아웃
 
@@ -162,16 +162,6 @@
 | window.ask | `window.reply(html)`(요약만 말풍선에) 뒤 `var left=300; bar.innerHTML='<span>승인 대기</span>'+options.map(function(o,i){return '<button class="pill'+(i?'':' primary')+'">'+esc(o)+'</button>';}).join('')+'<span class="t" id="cd">5:00</span>'`; `run.timer=setInterval(…1초: left--; #cd = m:ss; left<=0이면 done() 후 bar='<span>시간 초과 · 결제 안 함</span>', 5초 뒤 비움)`; 각 버튼 `onclick`: `chat.addMessage({role:'user',text:o}); done(); post({chat:o})` — options[0] 원문('결제 승인 12,000원')을 그대로 보내야 Swift의 `hasPrefix("결제 승인")`이 통과 |
 | window.reply | 변경 없음(설정 열기 버튼 부착은 하지 않는다) |
 | Assistant.chatHTML | 변경 없음 |
-
-### 그룹 playbooks — `Web/playbooks.html`
-
-| 무엇을 | 어떻게 |
-|---|---|
-| `<style>` | `:root/body/h1/.note/.row/.badge/.file/pre/.combo .mv*` 삭제. 남김: `.head{display:flex;align-items:center;gap:12px;padding:0;cursor:pointer;user-select:none} .name{font-weight:500} .n{margin-left:auto} pre{display:none;margin-top:8px;padding:0;background:none;font:12px/1.55 var(--sans)} .card.open pre{display:block} .combo{display:flex;flex-wrap:wrap;gap:6px 0;align-items:center;margin:8px 0 0}` |
-| 마크업 | `<h1>`·`.note` 삭제 → `<div class="sec">앱별 절차<span class="r">data/playbooks/*.md · 고치면 바로 반영</span></div><div id="list"></div>` |
-| JS 정렬·접힘 | `(P||[]).slice().sort(function(a,b){return (a.app==='공통')-(b.app==='공통')}).forEach(…)`; `d.className='card'`(`open` 기본 삭제; 클릭으로 pre 토글, 콤보는 항상 보임) |
-| JS 헤더 | badge → `p.installed && p.installed!=='설치됨' ? '<span class="meta">'+p.installed+'</span>' : ''`; `.head`에 `title="'+esc(p.file)+'"`; `.n`에는 `lines+'단계'`만(`.file` 삭제). 공통 행 이름 `'공통 · 표기와 규칙'` |
-| JS 콤보 | `var K={'👤':'사용자','🎟':'쿠폰','🔍':'조회','✋':'승인','📝':'기록','👁':'화면','🌐':'웹','🏦':'수집'}`. 각 move: `cls = /👤|✋/.test(m) ? ' you' : ''`; 글리프 `g[1]`은 단색이면 그대로, 컬러 이모지는 `K[e]` 단어로 → `'<span class="chip'+cls+'"><span class="g">'+glyphOrWord+'</span>'+esc(rest)+'</span>'`; 구분자 `'<span class="sep">›</span>'` |
 
 ### 그룹 밖 — Serve/ 4줄 (오케스트레이터 또는 chrome 그룹이 별도 커밋으로)
 

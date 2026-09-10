@@ -1,5 +1,5 @@
 // 증빙·전표: the evidence column (Web/evidence.html) fed by what this app computed from data/shots — parse, register, mark —
-// with no report.py in between. The workbench window and the kiosk's left band show the same page. {timeline:1} from the page = '← 타임라인'.
+// with no report.py in between. The records area in either window mode shows the same page. {timeline:1} from the page = '← 타임라인'.
 import SwiftUI
 import AppKit
 
@@ -26,54 +26,20 @@ enum Evidence {
             apps.append(AppColumn(app: app, title: Rules.title(app), account: Rules.account[app]?.name ?? app, col: b.html,
                                   frames: frames.count, placed: placed.count, ok: b.drawn, bad: b.anomalies))
         }
-        let sub = "생성 \(TS.string(Date())) · 거래 \(inDB.count)건"
-        let json = String(data: try! JSONEncoder().encode(Page(sub: sub, apps: apps)), encoding: .utf8)!   // "/" is escaped, so no "</script>" can leak
+        let sub = "거래 \(inDB.count)건 · 화면용 증빙 · 원본 파일은 수집한 Mac에 보관"
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        let json = String(data: try! encoder.encode(Page(sub: sub, apps: apps)), encoding: .utf8)!   // "/" is escaped, so no "</script>" can leak
         let tpl = Web.page("evidence")
         return tpl.replacingOccurrences(of: "/*EVIDENCE*/null", with: json)
     }
 }
 
-/// The one workbench: tabs over the timeline, 증빙 or the playbooks. The window shows it at its own width, the kiosk's left
-/// band at the band's — same view, one UI, dark in both.
-struct Workbench: View {
-    @EnvironmentObject var state: AppState
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 32) {
-                HStack(spacing: 12) { tab("타임라인", .timeline); tab("증빙·전표", .evidence) }
-                tab("절차", .playbooks)
-                Spacer()
-            }
-            .font(.system(size: 12))
-            .buttonStyle(.plain)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
-            Rectangle().fill(Color.white.opacity(0.10)).frame(height: 1)
-            Group {
-                switch state.tab {
-                case .playbooks: PlaybooksView()
-                case .evidence: EvidenceView()
-                case .timeline: TimelineView()
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .background(Color.black)
-        .environment(\.colorScheme, .dark)
-    }
-
-    private func tab(_ title: String, _ t: AppState.Tab) -> some View {
-        let on = state.tab == t
-        return Button(title) { state.show(t) }
-            .foregroundStyle(on ? Color(white: 0.9) : Color(white: 0.54))
-            .overlay(alignment: .bottom) { Rectangle().fill(.white).frame(height: 1).offset(y: 3).opacity(on ? 1 : 0) }
-    }
-}
-
 struct EvidenceView: View {
     @EnvironmentObject var state: AppState
+    @Environment(\.recordsPageIsActive) private var isActive
     @State private var html: String? = nil
+    @State private var renderedVersion: Int?
+    @State private var error: String?
 
     var body: some View {
         Group {
@@ -81,16 +47,20 @@ struct EvidenceView: View {
                 WebPage(html: html, focus: state.evidenceFocus?.uid.map { Column.evidID($0) },
                         onMessage: { m in if (m as? [String: Any])?["timeline"] != nil { state.tab = .timeline } })   // '← 타임라인'
             }
-            else { ProgressView("스크린샷 읽는 중…") }
+            else if let error { Text(error).foregroundStyle(.fg2) }
+            else { ProgressView("증빙 읽는 중…") }
         }
-        .onAppear { if html == nil { rebuild() } }
-        .onChange(of: state.ledgerVersion) { _, _ in rebuild() }
+        .task(id: isActive ? state.ledgerVersion : nil) { await rebuild() }
     }
 
-    private func rebuild() {
-        DispatchQueue.global(qos: .userInitiated).async {
-            let h = Evidence.html()
-            DispatchQueue.main.async { html = h }
+    private func rebuild() async {
+        guard isActive, renderedVersion != state.ledgerVersion else { return }
+        let version = state.ledgerVersion, path = AppSettings.dbPath
+        let rendered = await Task.detached(priority: .userInitiated) { Result { try SharedRecordsSource.evidence(path: path) } }.value
+        guard !Task.isCancelled else { return }
+        switch rendered {
+        case .success(let value): html = value; renderedVersion = version; error = nil
+        case .failure: error = "확인된 서버 증빙을 읽지 못했습니다."
         }
     }
 }

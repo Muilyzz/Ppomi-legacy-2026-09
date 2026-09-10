@@ -41,7 +41,9 @@ done
 iconutil -c icns "$SET" -o "$APP/Contents/Resources/Ppomi.icns"; rm -rf "$SET"
 
 if [ -n "${LOCAL_SIGN_ID:-}" ]; then
-    codesign --force --sign "$LOCAL_SIGN_ID" --timestamp=none --identifier com.muilyzz.ppomi.phone "$APP/Contents/MacOS/phone"
+    # The helper posts keyboard events: TCC judges that by code-signing identifier, so it must share the app's own
+    # identifier (and its 손쉬운 사용 grant). A distinct helper identifier keeps clicks but silently drops every key.
+    codesign --force --sign "$LOCAL_SIGN_ID" --timestamp=none --identifier com.muilyzz.ppomi "$APP/Contents/MacOS/phone"
     codesign --force --sign "$LOCAL_SIGN_ID" --timestamp=none "$APP"
     codesign --verify --deep --strict "$APP"
     echo "$APP (local development signature; not notarized)"; exit 0

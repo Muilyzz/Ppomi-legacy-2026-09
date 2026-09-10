@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "id": "bokjiro",
+  "name": "복지로",
+  "version": "0.1.0",
+  "aliases": [
+    "Bokjiro",
+    "bokjiro.go.kr",
+    "복지포털",
+    "보건복지부 복지로"
+  ],
+  "launch": {
+    "search": "https://www.bokjiro.go.kr/",
+    "target": "windows"
+  },
+  "capabilities": [
+    {
+      "id": "apply-basic-pension",
+      "title": "기초연금 신청",
+      "description": "Parallels Windows 브라우저에서 복지로를 열고 로그인 진입까지 준비합니다. 로그인 인증은 당사자가 처리하고, 서비스 신청 → 복지서비스 신청 → 복지급여 신청 → 노년 → 기초연금 경로로 들어가 허용된 일반 항목만 채웁니다. 본인인증·동의·최종 제출은 당사자가 확정합니다. 로그인 이후 신청서 화면은 아직 미검증입니다.",
+      "inputs": [
+        { "name": "applicant", "label": "신청 당사자(본인·배우자)", "required": true },
+        { "name": "payout-account-owner", "label": "지급 계좌 명의(본인·배우자)", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.bokjiro.go.kr/ (windows_open · Parallels)", "kind": "open" },
+        { "id": "step-2", "title": "⎋팝업·공지", "kind": "close" },
+        { "id": "step-3", "title": "⊙로그인", "kind": "tap" },
+        { "id": "step-4", "title": "👤간편인증|공동인증서|금융인증서 로그인", "kind": "human" },
+        { "id": "step-5", "title": "⊙서비스 신청 → 복지서비스 신청 → 복지급여 신청", "kind": "tap" },
+        { "id": "step-6", "title": "⊙노년 → 기초연금 → 신청하기", "kind": "tap" },
+        { "id": "step-7", "title": "⌨신청서 일반 항목(허용된 정보만)", "kind": "input" },
+        { "id": "step-8", "title": "👤가구원 동의·본인인증·최종 제출", "kind": "human" },
+        { "id": "step-9", "title": "📝접수번호·처리 안내", "kind": "read" }
+      ]
+    },
+    {
+      "id": "check-application-status",
+      "title": "복지서비스 신청현황 조회",
+      "description": "로그인 뒤 복지지갑 → 서비스 신청 현황에서 신청 목록과 처리 단계를 읽어 보고합니다. 조회만 하며 취소·수정은 제출하지 않습니다. 메뉴 이름은 사이트맵에서 확인했고 로그인 이후 화면은 미검증입니다.",
+      "inputs": [
+        { "name": "service-name", "label": "확인할 서비스 이름(없으면 전체)", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.bokjiro.go.kr/ (windows_open · Parallels)", "kind": "open" },
+        { "id": "step-2", "title": "⊙로그인", "kind": "tap" },
+        { "id": "step-3", "title": "👤간편인증|공동인증서|금융인증서 로그인", "kind": "human" },
+        { "id": "step-4", "title": "⊙복지지갑 → 서비스 신청 현황", "kind": "tap" },
+        { "id": "step-5", "title": "↓신청 목록", "kind": "scroll" },
+        { "id": "step-6", "title": "📝서비스명·신청일·처리 단계", "kind": "read" }
+      ]
+    },
+    {
+      "id": "check-voucher-balance",
+      "title": "바우처 잔액 조회",
+      "description": "국민행복카드 등 전자바우처 잔액을 읽어 보고합니다. 공개 메뉴는 복지서비스 → 전자바우처서비스 안내 → 국민행복카드까지 확인했고, 잔액 조회 화면의 위치와 로그인 요건은 미검증입니다. 복지로에 없으면 카드사 앱·사회서비스 전자바우처 안내를 대안으로 보고합니다.",
+      "inputs": [
+        { "name": "voucher-type", "label": "바우처 종류(국민행복카드·에너지 등)", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.bokjiro.go.kr/ (windows_open · Parallels)", "kind": "open" },
+        { "id": "step-2", "title": "⊙로그인", "kind": "tap" },
+        { "id": "step-3", "title": "👤간편인증|공동인증서|금융인증서 로그인", "kind": "human" },
+        { "id": "step-4", "title": "⊙복지서비스 → 전자바우처서비스 안내 → 국민행복카드", "kind": "tap" },
+        { "id": "step-5", "title": "⊙잔액 조회|바우처 잔액 (미검증)", "kind": "tap" },
+        { "id": "step-6", "title": "📝바우처별 잔액·유효기간", "kind": "read" }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "간편인증·공동인증서·금융인증서 로그인, 인증서 암호, 인증에 쓰이는 주민번호, OTP·생체인증·CAPTCHA는 당사자가 직접 처리합니다. 로그인 화면 진입과 방식 확인, 사용자가 제공하고 이 사이트 사용을 허용한 일반 폼 정보 작성은 에이전트가 진행합니다. 실제 값은 공개 패키지나 발자국에 남기지 않습니다.",
+    "본인인증 서비스 개인정보 수집·이용 고지(필수), 가구원 동의, 새 보안 프로그램 접근 권한, 신청서 최종 제출은 구체적 화면에서 당사자가 확정합니다. 이미 허용된 보안 프로그램 설치 안내는 반복 확인하지 않고, 같은 신청을 중복 제출하지 않습니다.",
+    "수수료가 없는 조회·신청이 기본이며, 결제 화면이 나타나면 Windows에서는 confirm_payment 승인 1회에 windows_click 1회의 코드 경계를 따르고 결제 인증은 당사자가 마칩니다. 급여 지급 계좌 변경·이체·송금은 하지 않습니다."
+  ],
+  "guide": "guide.md"
+}

@@ -4,6 +4,24 @@ import Foundation
 import SQLite3
 
 final class DB {
+    private final class WeakAccess {
+        weak var lock: NSRecursiveLock?
+        init(_ lock: NSRecursiveLock) { self.lock = lock }
+    }
+    private static let registryLock = NSLock()
+    private static var fileLocks: [String: WeakAccess] = [:]
+
+    private static func accessForFile(_ path: String) -> NSRecursiveLock {
+        let key = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath().path
+        registryLock.lock()
+        defer { registryLock.unlock() }
+        if let lock = fileLocks[key]?.lock { return lock }
+        fileLocks = fileLocks.filter { $0.value.lock != nil }
+        let lock = NSRecursiveLock()
+        fileLocks[key] = WeakAccess(lock)
+        return lock
+    }
+
     enum Error: Swift.Error, CustomStringConvertible {
         case open(path: String, message: String), query(String)
         var description: String {
@@ -11,6 +29,7 @@ final class DB {
         }
     }
     private var db: OpaquePointer?
+    private let access: NSRecursiveLock
 
     static let schema = """
     CREATE TABLE IF NOT EXISTS transactions(
@@ -26,22 +45,57 @@ final class DB {
       country TEXT, currency TEXT, quantity REAL, last_price REAL, avg_price REAL, market_value_krw INTEGER, pnl_krw INTEGER, pnl_rate REAL);
     """
 
-    /// Read-only by default (the views). `writable` opens or creates the file and brings the schema up.
-    init(path: String, writable: Bool = false) throws {
+    /// Read-only by default. Writable connections initialize the ledger schema unless a separate store opts out.
+    init(path: String, writable: Bool = false, initializeLedgerSchema: Bool = true) throws {
+        access = Self.accessForFile(path)
+        access.lock()
+        defer { access.unlock() }
         let flags = writable ? SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE : SQLITE_OPEN_READONLY
         if writable { try? FileManager.default.createDirectory(atPath: (path as NSString).deletingLastPathComponent, withIntermediateDirectories: true) }
         guard sqlite3_open_v2(path, &db, flags, nil) == SQLITE_OK else {
-            let message = String(cString: sqlite3_errmsg(db)); sqlite3_close(db)
+            let message = String(cString: sqlite3_errmsg(db)); sqlite3_close(db); db = nil
             throw Error.open(path: path, message: message)
         }
         if writable {
-            try run(Self.schema)
-            for ddl in ["ALTER TABLE transactions ADD COLUMN status TEXT DEFAULT 'pending'",   // SMS rows are provisional
-                        "ALTER TABLE transactions ADD COLUMN uid TEXT",                          // app-screen rows: natural key
-                        "CREATE UNIQUE INDEX IF NOT EXISTS ux_tx_uid ON transactions(uid)"] { try? run(ddl) }
+            // A monitor holds a brief read snapshot. Let writes wait for it without changing readers' fail-fast policy.
+            sqlite3_busy_timeout(db, 1_000)
+            if initializeLedgerSchema {
+                try run(Self.schema)
+                for ddl in ["ALTER TABLE transactions ADD COLUMN status TEXT DEFAULT 'pending'",   // SMS rows are provisional
+                            "ALTER TABLE transactions ADD COLUMN uid TEXT",                          // app-screen rows: natural key
+                            "CREATE UNIQUE INDEX IF NOT EXISTS ux_tx_uid ON transactions(uid)"] { try? run(ddl) }
+            }
         }
     }
-    deinit { sqlite3_close(db) }
+    deinit {
+        access.lock()
+        sqlite3_close(db)
+        access.unlock()
+    }
+
+    /// Hold the file's process-local lock across a compound operation, including nested DB calls.
+    func withLockedAccess<T>(_ body: () throws -> T) rethrows -> T {
+        access.lock()
+        defer { access.unlock() }
+        return try body()
+    }
+
+    /// Keep one committed snapshot and its process-local lock across every table read.
+    /// macOS SQLite 3.51 can report IOERR_LOCK/EBADF when same-process read-only and writable handles overlap.
+    /// File-scoped serialization preserves read-only/journal policy; external writers use SQLite's busy timeout.
+    func withReadTransaction<T>(_ body: (DB) throws -> T) throws -> T {
+        try withLockedAccess {
+            try run("BEGIN DEFERRED TRANSACTION")
+            do {
+                let value = try body(self)
+                try run("COMMIT")
+                return value
+            } catch {
+                try? run("ROLLBACK")
+                throw error
+            }
+        }
+    }
 
     // ---------------------------------------------------------------- reads
     /// Every balance snapshot, in the order report.py reads them (ts, id).
@@ -90,6 +144,8 @@ final class DB {
 
     /// Any SELECT as (column names, rows); values are Int, Double, String or nil. 50 rows at most: this feeds messages.
     func table(_ sql: String, _ params: [Any?] = [], limit: Int = 50) throws -> (cols: [String], rows: [[Any?]]) {
+        access.lock()
+        defer { access.unlock() }
         let stmt = try prepare(sql, params)
         defer { sqlite3_finalize(stmt) }
         let n = sqlite3_column_count(stmt)
@@ -118,6 +174,8 @@ final class DB {
     // ---------------------------------------------------------------- plumbing
     /// Statements without parameters (schema).
     func run(_ sql: String) throws {
+        access.lock()
+        defer { access.unlock() }
         var err: UnsafeMutablePointer<CChar>?
         guard sqlite3_exec(db, sql, nil, nil, &err) == SQLITE_OK else {
             let m = err.map { String(cString: $0) } ?? "?"; sqlite3_free(err); throw Error.query(m)
@@ -127,6 +185,8 @@ final class DB {
     /// One parameterised statement; returns the rows it changed.
     @discardableResult
     func exec(_ sql: String, _ params: [Any?]) throws -> Int {
+        access.lock()
+        defer { access.unlock() }
         let stmt = try prepare(sql, params)
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_step(stmt) == SQLITE_DONE else { throw Error.query(String(cString: sqlite3_errmsg(db))) }
@@ -135,10 +195,17 @@ final class DB {
 
     /// Run one statement, mapping each row; a row the mapper rejects (nil) is left out.
     private func query<T>(_ sql: String, _ params: [Any?] = [], _ row: (OpaquePointer) -> T?) throws -> [T] {
+        access.lock()
+        defer { access.unlock() }
         let stmt = try prepare(sql, params)
         defer { sqlite3_finalize(stmt) }
         var out: [T] = []
-        while sqlite3_step(stmt) == SQLITE_ROW { if let v = row(stmt) { out.append(v) } }
+        var result = sqlite3_step(stmt)
+        while result == SQLITE_ROW {
+            if let v = row(stmt) { out.append(v) }
+            result = sqlite3_step(stmt)
+        }
+        guard result == SQLITE_DONE else { throw Error.query(String(cString: sqlite3_errmsg(db))) }
         return out
     }
 
@@ -164,3 +231,18 @@ final class DB {
 // Column readers; nil for SQL NULL.
 private func text(_ s: OpaquePointer, _ i: Int32) -> String? { sqlite3_column_text(s, i).map { String(cString: $0) } }
 private func int(_ s: OpaquePointer, _ i: Int32) -> Int? { sqlite3_column_type(s, i) == SQLITE_NULL ? nil : Int(sqlite3_column_int64(s, i)) }
+
+extension Ledger {
+    /// Every observation of every account as a step function, plus the journal with its accounts named by balance-sheet
+    /// label: enough to state the balance sheet at any instant and the flows of any range.
+    static func load(dbPath: String, me: String) throws -> Ledger {
+        let db = try DB(path: dbPath)
+        return try load(db: db, me: me)
+    }
+
+    /// A monitor can reuse its read-only connection and hold one read transaction across both tables.
+    static func load(db: DB, me: String) throws -> Ledger {
+        let snaps = try db.snapshots(), txs = try db.transactions()
+        return load(snapshots: snaps, transactions: txs, me: me)
+    }
+}

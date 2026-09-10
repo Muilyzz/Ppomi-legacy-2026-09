@@ -1,89 +1,95 @@
-/* Web/theme.css — 작업대 4페이지(타임라인·증빙·대화·절차) 공통. Web.page()가 각 페이지 <style>의 THEME 자리 자리에 넣는다.
-   검은 계기판: 링과 페이지가 같은 검정(#000), 무채 램프 5단, 상태 3색 — 금 = 뽀미가 폰을 잡고 있다 · 흰 = 당신 차례 · 회 = 대기.
-   금색은 이 뜻 하나뿐이다(림·[승인]은 흰). 페이지 <style>에는 그 페이지만의 규칙(SVG, 종이 열, Deep Chat 띠)만 남긴다. 외부 폰트 없음. */
-:root{
-  color-scheme:dark;
-  --bg:#000;                        /* 페이지 = 링 = 미러링 창의 검은 여백 */
-  --card:#131313;                   /* 카드 · 입력창 · <pre> */
-  --pick:rgba(255,255,255,.08);     /* 선택 · 호버 · 사용자 말풍선 · 차트 선택 칸 */
-  --line:rgba(255,255,255,.10);     /* 헤어라인: 구분선·테두리 색은 이것 하나 */
-  --line2:rgba(255,255,255,.25);    /* 컨트롤 테두리(버튼·dashed 칩·입력 포커스) */
-  --fg:#e6e6e3;                     /* 본문 */
-  --meta:#8a8a86;                   /* 라벨 · 메타 · 비활성 · 구분자 (4.9:1) */
-  --go:#c7a300;                     /* 진행: 뽀미가 폰을 잡고 있다. 웹 페이지에서는 쓸 곳이 없다(림·캡션은 AppKit) */
-  --turn:#e6e6e3;                   /* 승인: 사람 차례 = [승인] 버튼의 흰 채움 하나 */
-  --wait:rgba(255,255,255,.25);     /* 대기: 아무도 폰을 안 잡고 있다 */
-  --bad:#d33;                       /* 유일한 예외: 증빙 종이 위 '파서가 놓친 금액 행' 상자 */
-  --sans:-apple-system,'Apple SD Gothic Neo',sans-serif;
-  --mono:ui-monospace,'SF Mono',Menlo,monospace;
-  --r:6px;                          /* 컨트롤 */
-  --rc:8px;                         /* 카드 */
-}
-html,body{margin:0;background:var(--bg);color:var(--fg)}
-body{font:13px/1.5 var(--sans);max-width:640px;padding:16px 20px 24px;box-sizing:border-box;-webkit-font-smoothing:antialiased}   /* 본문 x = 12(inset)+20 = 탭 텍스트 x */
+/* Web/theme.css — 작업대 웹 페이지(타임라인·증빙·분개) 공통. Web.page()가 tokens.css 뒤에 <style>의 THEME 자리에 넣는다.
+   색은 tokens.css 토큰만(라이트/다크는 시스템), 글자·간격은 rem(--ui-scale). 상태 3색 — --go = 뽀미가 폰을 잡고 있다 · --turn = 당신 차례 · --wait = 대기.
+   페이지 <style>에는 그 페이지만의 규칙(SVG, 종이 열)만 남긴다. */
+body{max-width:40rem;padding:1rem 1.25rem 1.5rem;box-sizing:border-box}   /* 본문 x = 12(inset)+20 = 탭 텍스트 x */
 h1,h2,h3{font:inherit;margin:0}   /* 제목은 없다: 탭이 제목, 섹션은 .sec */
-p{margin:0 0 12px}
-b,strong{font-weight:600}
-a{color:var(--fg);text-decoration:underline;text-decoration-color:var(--line2);text-underline-offset:3px;cursor:pointer}
-a:hover{text-decoration-color:var(--meta)}
-code{font:12px/1.5 var(--mono);background:var(--card);padding:1px 5px;border-radius:4px}
-pre{margin:0;padding:12px 16px;background:var(--card);border-radius:var(--rc);white-space:pre-wrap;font:12px/1.5 var(--mono)}
-svg text{font-family:var(--sans)}
-::selection{background:rgba(255,255,255,.18)}
+p{margin:0 0 .75rem}
+b,strong{font-weight:500}
+a{color:var(--fg);text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:3px;cursor:pointer}
+a:hover{text-decoration-color:var(--fg-2)}
+code{font:var(--fs-2)/1.5 var(--mono);background:var(--surface);padding:1px 5px;border-radius:4px}
+pre{margin:0;padding:.75rem 1rem;background:var(--surface);border-radius:var(--rc);white-space:pre-wrap;font:var(--fs-2)/1.5 var(--mono)}
+svg text{font-family:var(--font);font-variant-numeric:tabular-nums}
 ::-webkit-scrollbar{width:6px;height:6px}
-::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:3px}
+::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:3px}
 ::-webkit-scrollbar-track{background:transparent}
 
-/* ---- 타이포 4단 (본문 13은 body). 숫자는 모노·tabular. */
-.disp{font:500 24px/1.2 var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}   /* 페이지당 1개: 숫자만, '원'은 옆에 .meta */
-.key{font-size:15px;font-weight:500;font-variant-numeric:tabular-nums}                          /* 방정식 3개 */
-.lbl{font-size:12px;color:var(--meta)}                                                          /* 필드 라벨 */
-.meta{font-size:11px;color:var(--meta)}                                                         /* 시각 · 건수 · 파일 · 근거 */
-.n,.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
-.mute{color:var(--meta)}
-.strong{font-weight:600}                                                                        /* 미관측 ≠ 0 처럼 색 없이 세우는 강조 */
+/* ---- 타이포 (본문은 body). 숫자는 본문 폰트의 tabular 숫자 — 모노는 코드·id만. */
+.disp{font:500 var(--fs-6)/1.25 var(--font);font-variant-numeric:tabular-nums;letter-spacing:-.01em}   /* 페이지당 1개: 숫자만, '원'은 옆에 .meta */
+.key{font-size:var(--fs-4);font-weight:500;font-variant-numeric:tabular-nums}                          /* 방정식 3개 */
+.lbl{font-size:var(--fs-2);color:var(--fg-2)}                                                          /* 필드 라벨 */
+.meta{font-size:var(--fs-1);color:var(--fg-2);font-variant-numeric:tabular-nums}                                                         /* 시각 · 건수 · 파일 · 근거 */
+.n,.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.mute{color:var(--fg-2)}
+.strong{font-weight:500}                                                                               /* 미관측 ≠ 0 처럼 색 없이 세우는 강조 */
 
-/* ---- 섹션 = 11px 회색 라벨 + 오른쪽으로 헤어라인 + (선택) 오른쪽 끝 .r 메타/범례/내비 */
-.sec{display:flex;align-items:center;gap:12px;margin:32px 0 8px;font-size:11px;color:var(--meta);white-space:nowrap}
+/* ---- 섹션 = 회색 라벨 + 오른쪽으로 헤어라인 + (선택) 오른쪽 끝 .r 메타/범례/내비 */
+.sec{display:flex;align-items:center;gap:.75rem;margin:2rem 0 .5rem;font-size:var(--fs-1);color:var(--fg-2);white-space:nowrap}
 .sec:first-child{margin-top:0}
 .sec::after{content:'';flex:1;height:1px;background:var(--line);order:1}
-.sec .r{order:2;display:inline-flex;gap:12px;align-items:center}
-.sec .r i{display:inline-block;width:10px;height:10px;box-sizing:border-box;vertical-align:-1px;margin-right:4px}   /* 범례 스와치: style로 background 또는 border */
-hr{border:0;border-top:1px solid var(--line);margin:16px 0}
+.sec .r{order:2;display:inline-flex;gap:.75rem;align-items:center}
+.sec .r i{display:inline-block;width:.625rem;height:.625rem;box-sizing:border-box;vertical-align:-1px;margin-right:.25rem}   /* 범례 스와치: style로 background 또는 border */
+hr{border:0;border-top:1px solid var(--line);margin:1rem 0}
 
-/* ---- 텍스트 내비(참고 디자인의 회색 내비 글자): 기간 선택, 증빙 앱 선택. .on 하나만 본문색 */
-.nav{display:flex;gap:16px;font-size:12px;color:var(--meta)}
+/* ---- 텍스트 내비: 기간 선택, 증빙 앱 선택. .on 하나만 본문색 */
+.nav{display:flex;gap:1rem;font-size:var(--fs-2);color:var(--fg-2)}
 .nav>*{cursor:pointer;background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;text-decoration:none}
 .nav>.on{color:var(--fg)}
 
-/* ---- 알약: secondary(투명+테두리) / .primary(흰 채움 — 화면에 하나, [승인]) */
-.pill{display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:var(--r);border:1px solid var(--line2);background:transparent;color:var(--fg);font:12px/1 var(--sans);cursor:pointer;white-space:nowrap}
-.pill:hover{background:var(--pick)}
-.pill.primary{background:var(--turn);color:#000;border-color:transparent;font-weight:600}
-
-/* ---- 칩: 정지된 계획표의 한 단계(절차 탭). .you = 사람이 하는 단계(로그인·Face ID·승인) */
-.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid var(--line);border-radius:var(--r);color:var(--fg);font-size:12px;line-height:18px;white-space:nowrap}
-.chip.you{border-style:dashed;border-color:var(--line2);color:var(--meta)}
-.chip .g{color:var(--meta);font-size:11px}   /* 글리프/접두어 단어 */
-.sep{color:var(--meta);margin:0 4px}
-
 /* ---- 카드 · 표 · 3열 격자 */
-.card{background:var(--card);border-radius:var(--rc);padding:12px 16px;margin:8px 0}
-table{border-collapse:collapse;width:100%;font-size:12px}
-th,td{padding:4px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;line-height:16px}   /* 행 24px */
-th{font-weight:500;color:var(--meta);font-size:11px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--rc);padding:.75rem 1rem;margin:.5rem 0}
+table{border-collapse:collapse;width:100%;font-size:var(--fs-2)}
+th,td{padding:.25rem .5rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-weight:500;color:var(--fg-2);font-size:var(--fs-1)}
 td.n,th.n{text-align:right}
-tr[data-uid]{cursor:pointer} tr[data-uid]:hover td{background:var(--pick)}
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 16px;margin:8px 0}
+tr[data-uid]{cursor:pointer} tr[data-uid]:hover td{background:var(--surface-2)}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem 1rem;margin:.5rem 0}
 .grid3 .lbl{display:block}
 
 /* ---- 접는 안내(native <details>) */
-details{margin:8px 0}
-summary{cursor:pointer;font-size:11px;color:var(--meta);list-style:none}
+details{margin:.5rem 0}
+summary{cursor:pointer;font-size:var(--fs-1);color:var(--fg-2);list-style:none}
 summary::-webkit-details-marker{display:none}
 summary::before{content:'▸ '} details[open] summary::before{content:'▾ '}
-details p{font-size:11px;color:var(--meta);margin:4px 0 0;max-width:60ch}
+details p{font-size:var(--fs-1);color:var(--fg-2);margin:.25rem 0 0;max-width:60ch}
 
 /* ---- 입력 */
-input,textarea{font:13px var(--sans);color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:6px 10px;outline:none}
-input:focus,textarea:focus{border-color:var(--line2)}
+input,textarea{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:.375rem .625rem;outline:none}
+input:focus,textarea:focus{border-color:var(--line-2)}
+
+/* ---- 분개(journal.js): 마크업엔 CSS가 없다 — 꾸밈은 여기서만. 기본 DOM으로도 읽히는 표에 헤어라인·합계·행 선택만 얹는다 */
+.jtitle{display:flex;align-items:baseline;gap:.5rem;margin:0 0 .25rem}
+.jnav{display:flex;flex-wrap:wrap;gap:1rem;align-items:center;margin:.5rem 0 1rem}
+.journal tfoot th{border-top:1px solid var(--line-2);border-bottom:0;color:var(--fg);font-size:var(--fs-2)}
+.journal td:nth-child(3),.journal th:nth-child(3){border-left:1px solid var(--line);padding-left:.75rem}
+tr[data-event]{cursor:pointer} tr[data-event]:hover td{background:var(--surface-2)}
+.entry{border:0;background:none;padding:0;color:inherit;font:inherit;text-align:inherit;cursor:pointer}
+.entry:focus-visible,.nav button:focus-visible{outline:1px solid var(--fg);outline-offset:3px}
+
+/* ---- 증거(evidence.js): 종이 위의 글자·근거 상자·깜박임 비교기. 위치·크기·잉크색은 inline(자료) — 여기는 종이와 상자의 꾸밈만.
+   종이는 흰 종이(#fff, radius 0): 글자 색은 폰의 (밝은) 픽셀에서 샘플링한 것이라 검은 계기판 위에 종이째로 놓는다 */
+.ev{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.ev-paper{flex:none;background:#fff;color:#222;border:1px solid #ddd;box-sizing:content-box;overflow:hidden}
+.ev-box{border:1px solid transparent;box-sizing:border-box;cursor:pointer}
+.ev-box.warn{border-style:dashed;border-color:color-mix(in srgb,var(--primary) 24%,white)} .ev-box.bad{border-color:color-mix(in srgb,var(--accent) 75%,black);background:color-mix(in srgb,var(--accent) 14%,white)}   /* 종이 위라 라이트 값 고정 */
+.ev-box.hit{outline:2px solid #111;outline-offset:2px}
+.ev-peek{border:1px solid #ddd;box-sizing:border-box;background:#fff;animation:blink 1.6s ease-in-out infinite}
+@keyframes blink{0%,40%{opacity:1} 50%,90%{opacity:0} 100%{opacity:1}}   /* 픽셀, 읽은 글자, 다시 픽셀 */
+.ev-records{flex:1;min-width:260px}
+.ev-table tr[data-record]{cursor:pointer} .ev-table tr[data-record]:hover td{background:var(--surface-2)} .ev-table tr[aria-selected="true"] td{background:var(--accent-soft)}
+.ev-box:focus-visible{outline:1px solid #111;outline-offset:3px}
+.ev-tags{flex-wrap:wrap;row-gap:4px} .ev-tags>button{white-space:nowrap}
+.ev-records{overflow-x:auto} .ev-table th,.ev-table td{white-space:nowrap}   /* 넓은 표는 제 칸 안에서 가로 스크롤, 글자를 세로로 부수지 않는다 */
+
+/* ---- 값 종류 뷰(facts.js): SVG 기하는 자료(inline), 여기는 꾸밈. 출처 등급은 선 무늬로 겹친다 — 추정은 긴 점선, 개략·AI 추정은 짧은 점선 */
+.fx svg{display:block;width:100%;height:auto;margin:4px 0} .fx svg text{fill:currentColor}
+.fx-node rect,.fx-span,.fx-place{cursor:pointer}
+.fx-node.deeper rect{stroke-width:1.5} .fx-node.hit rect{fill-opacity:.3}
+.fx-span.hit rect,.fx-span.hit circle,.fx-place.hit circle,.fx-place.hit polygon{fill-opacity:.7}
+.prov-estimated rect,.prov-estimated circle,.prov-estimated polygon{stroke-dasharray:4 3}
+.prov-schematic rect,.prov-schematic circle,.prov-schematic polygon,.prov-aiEstimate rect,.prov-aiEstimate circle,.prov-aiEstimate polygon,.prov-derived rect,.prov-derived circle,.prov-derived polygon{stroke-dasharray:1 3}
+small.prov{color:inherit;opacity:.7} small.prov.prov-estimated,small.prov.prov-aiEstimate,small.prov.prov-schematic,small.prov.prov-derived{font-style:italic}
+meter{width:72px;height:10px;vertical-align:middle}
+.fx{overflow-x:auto} .fx-table th,.fx-table td{white-space:nowrap}   /* 넓은 표는 제 칸 안에서 가로 스크롤 */
+/* ---- 절차 뷰(playbook.js): 명세 나무·발자국 그래프. 기하·잉크는 SVG 속성(자료), 여기는 크기·커서·가로 스크롤뿐 */
+.pb svg{display:block;width:100%;height:auto;margin:4px 0} .pb-step,.pb-screen,.pb-walk{cursor:pointer} .pb{overflow-x:auto}

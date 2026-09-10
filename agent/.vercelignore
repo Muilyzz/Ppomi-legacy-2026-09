@@ -1,0 +1,13 @@
+node_modules
+dist
+src
+/index.html
+vite.config.ts
+scripts
+PROTOCOL.md
+README.md
+.env*
+.vercel
+server/*.test.ts
+server/*.sql
+server/README.md

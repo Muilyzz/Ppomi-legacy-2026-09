@@ -1,27 +1,37 @@
-<!doctype html><meta charset="utf-8"><title>증빙·전표</title>
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><title>증빙·전표</title>
 <style>/*THEME*/
-/* the column and the peeked screenshot stay paper (#fff, radius 0) on the black sheet: the words' colours are sampled from the
+/* the column and the peeked screenshot stay paper (#fff, radius 0) in both schemes: the words' colours are sampled from the
    phone's (light) pixels and the column is a reproduction of that paper, not our UI. One app at a time (.nav picks). */
 .evidence{display:none} .evidence.on{display:block}
-#cols{margin-top:8px}
+#cols{margin-top:.5rem}
+#hd{margin-top:2rem}
 .col{position:relative;width:348px;background:#fff;border:0}
-.row{position:absolute;left:0;width:348px;color:#222} .row span{position:absolute;white-space:nowrap;line-height:1;font-size:15px;font-family:-apple-system,'Apple SD Gothic Neo',sans-serif}
+.row{position:absolute;left:0;width:348px;color:#222} .row span{position:absolute;white-space:nowrap;line-height:1;font-size:15px;font-family:var(--font)}
 .peek{position:absolute;left:0;width:348px;height:766px;opacity:0;z-index:5;pointer-events:none} .peek.on{animation:blink 1.6s ease-in-out infinite}
 @keyframes blink{0%,40%{opacity:1} 50%,90%{opacity:0} 100%{opacity:1}}   /* the pulse: pixels, then the reading, then pixels again */
 .peek img{display:block;width:348px;height:766px;border:1px solid #ddd;box-sizing:border-box;background:#fff}
 .box{position:absolute;left:4px;width:338px;border:1px solid;border-radius:0;box-sizing:border-box;background:none}
-.box.warn{border-style:dashed;border-color:#8a8a86} .box.bad{border-color:var(--bad);background:rgba(221,51,51,.10)}
-.row.hit{outline:2px solid #111;outline-offset:2px}
+.box.warn{border-style:dashed;border-color:color-mix(in srgb,var(--primary) 24%,white)} .box.bad{border-color:color-mix(in srgb,var(--accent) 75%,black);background:color-mix(in srgb,var(--accent) 14%,white)}   /* 종이 위라 라이트 값 고정 */
+.row.hit{outline:2px solid var(--primary);outline-offset:2px}
+.back{border:0;background:none;padding:0;color:var(--fg);font:inherit;text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:3px;cursor:pointer}
+.back:focus-visible,.nav button:focus-visible{outline:1px solid var(--fg);outline-offset:3px}
 </style>
-<nav class="nav" id="apps"></nav>
-<div class="sec" id="hd"></div>
+</head>
+<body>
+<main aria-label="증빙·전표">
+<nav class="nav" id="apps" aria-label="증빙 앱"></nav>
+<section aria-label="선택한 앱의 증빙">
+<header class="sec" id="hd"></header>
 <div class="meta" id="crumb"></div>
 <div id="cols"></div>
+</section>
 <details><summary>읽는 법</summary>
-<p>입력: 폰 화면 스크린샷과 그 OCR 결과(원시증빙). 출력: 옮겨 적은 거래 행(전표) = transactions 테이블. 글자가 보이면 OCR이 읽은 것이고 전표가 된 거래는 따로 표시하지 않습니다. 이상만 상자로: 점선 = 파싱됐지만 전표에 없음, 빨강 = 금액 행인데 파싱 안 됨.</p>
-<p>글자는 스크린샷에서 읽힌 그 위치에 놓이고, 색과 크기는 원본 픽셀에서 가져옵니다. 프레임 사이의 자리 맞추기는 두 프레임이 공유하는 행(시각+잔액)의 y 차이 중앙값이고, 같은 행은 한 번만 놓습니다.</p>
-<p>열 위에 마우스를 두면 그 높이가 가운데에 오는 원본 한 장이 글자 위에서 맥동처럼 나타났다 사라지기를 반복합니다. 블링크 비교기처럼 눈으로 대조하세요.</p>
+<p>글자 = OCR 원문(위치·색·크기는 원본 픽셀) · 점선 = 전표 없음 · 실선 = 금액 행 파싱 안 됨 · 열 위에 마우스 = 원본 깜빡임 대조</p>
 </details>
+</main>
 <script>
 // The data: Swift (Evidence.html) replaces the placeholder with {sub, apps:[{title, account, frames, placed, ok, bad, col}]},
 // col being the column markup Column.build made (rows at the screenshots' positions, boxes, one hidden <img> per frame).
@@ -30,16 +40,17 @@ function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&am
 function post(m){if(window.webkit&&webkit.messageHandlers&&webkit.messageHandlers.ppomi)webkit.messageHandlers.ppomi.postMessage(m);}
 var apps=document.getElementById('apps'),cols=document.getElementById('cols'),hd=document.getElementById('hd'),crumb=document.getElementById('crumb');
 E.apps.forEach(function(a,i){
-  var t=document.createElement('a');t.textContent=a.title;t.onclick=function(){show(i);};apps.appendChild(t);
+  var t=document.createElement('button');t.type='button';t.textContent=a.title;t.onclick=function(){show(i);};apps.appendChild(t);
   var d=document.createElement('div');d.className='evidence';d.innerHTML=a.col;cols.appendChild(d);});
 // show(i): one app's column at a time; the section label carries its counts and the two box meanings.
 function show(i){
   [apps,cols].forEach(function(p){Array.prototype.forEach.call(p.children,function(c,k){c.classList.toggle('on',k===i);});});
+  Array.prototype.forEach.call(apps.children,function(t,k){t.setAttribute('aria-pressed',String(k===i));});
   var a=E.apps[i];if(!a)return;
-  hd.innerHTML=esc(a.title+' · '+a.account)+'<span class="r">'+a.frames+'장 · 전표 '+a.ok+' · 이상 '+a.bad+'<span><i style="border:1px dashed #8a8a86"></i>전표 없음 <i style="border:1px solid #d33"></i>파싱 안 됨</span></span>';
+  hd.innerHTML='<h2>'+esc(a.title+' · '+a.account)+'</h2><span class="r">'+a.frames+'장 · 전표 '+a.ok+' · 이상 '+a.bad+'<span><i style="border:1px dashed color-mix(in srgb,var(--primary) 24%,white)"></i>전표 없음 <i style="border:1px solid color-mix(in srgb,var(--accent) 75%,black)"></i>파싱 안 됨</span></span>';
 }
 crumb.textContent=E.sub;
-if(E.apps.length)show(0);else cols.innerHTML='<p>거래 목록 프레임이 없습니다.</p>';
+if(E.apps.length)show(0);else cols.innerHTML='<p>프레임 없음</p>';
 // focus(id): the journal's row, outlined and scrolled to the middle, its app shown, its text in the crumb with a way back; null clears.
 function focus(id){
   document.querySelectorAll('.row.hit').forEach(function(r){r.classList.remove('hit');});
@@ -47,7 +58,7 @@ function focus(id){
   if(!r){crumb.textContent=E.sub;return;}
   r.classList.add('hit');
   show(Array.prototype.indexOf.call(cols.children,r.closest('.evidence')));
-  crumb.innerHTML=esc(r.textContent.trim().replace(/\s+/g,' '))+' · <a id="back">← 타임라인</a>';
+  crumb.innerHTML=esc(r.textContent.trim().replace(/\s+/g,' '))+' · <button class="back" type="button" id="back">← 타임라인</button>';
   document.getElementById('back').onclick=function(){post({timeline:1});};
   r.scrollIntoView({block:'center'});
 }
@@ -91,3 +102,5 @@ document.querySelectorAll('.col').forEach(function(col){
   col.addEventListener('mouseleave',function(){peek.classList.remove('on');cur=-1;});
 });
 </script>
+</body>
+</html>

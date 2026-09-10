@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "id": "car365",
+  "name": "자동차365",
+  "version": "0.1.0",
+  "aliases": [
+    "car365",
+    "자동차민원 대국민포털",
+    "car365.go.kr"
+  ],
+  "launch": {
+    "search": "https://www.car365.go.kr/",
+    "target": "browser"
+  },
+  "capabilities": [
+    {
+      "id": "read-vehicle-register",
+      "title": "자동차 등록증·등록원부·통합이력 조회",
+      "description": "Mac Chrome에서 진입점을 열고 로그인·본인인증을 준비합니다. 자동차 등록원부는 로그인 필요, 통합이력 본인차량조회는 인증 뒤 조회. 발급 수수료는 사람 승인 뒤 결제하며, 문서를 실제로 읽은 경우에만 보고합니다.",
+      "inputs": [
+        { "name": "plate", "label": "차량번호", "required": true },
+        { "name": "document", "label": "등록원부(갑·을)|등록증|통합이력(기본 통합이력)", "required": false },
+        { "name": "mode", "label": "열람 또는 발급(기본 열람)", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.car365.go.kr/ (browser_open · Mac Chrome)", "kind": "open" },
+        { "id": "step-2", "title": "⎋로그아웃알림·안내 팝업", "kind": "close" },
+        { "id": "step-3", "title": "⊙자주 찾는 서비스 자동차 등록원부|중고차의모든것 › 통합이력조회 › 본인차량조회", "kind": "tap" },
+        { "id": "step-4", "title": "로그인 준비(간편인증|휴대폰 본인인증|공동인증서) → 인증만 당사자", "kind": "human" },
+        { "id": "step-5", "title": "⌨차량번호", "kind": "input" },
+        { "id": "step-6", "title": "⊙조회|열람|발급", "kind": "tap" },
+        { "id": "step-7", "title": "✋승인(발급 수수료, 있을 때만)", "kind": "human" },
+        { "id": "step-8", "title": "⊙결제", "kind": "payment" },
+        { "id": "step-9", "title": "📝소유자 구분·최초등록일·저당·압류·이력 읽기", "kind": "read" }
+      ]
+    },
+    {
+      "id": "apply-transfer-cancel",
+      "title": "이전등록·말소등록 민원 신청",
+      "description": "민원찾아요 › 온라인민원신청 › 등록민원에서 이전(매수인 기준)·말소 신청을 준비합니다. 상대방 동의·서류·취득세·공채·수수료가 있어 승인 지점이 여럿입니다. 인증서·서명 단계가 Mac에서 막히면 Windows로 넘어갑니다. 실기 미검증.",
+      "inputs": [
+        { "name": "kind", "label": "이전|말소", "required": true },
+        { "name": "plate", "label": "차량번호", "required": true },
+        { "name": "reason", "label": "말소 사유(폐차·수출·도난 등)|이전 사유(매매·증여·상속)", "required": false },
+        { "name": "documents", "label": "준비된 서류·상대방 동의 여부", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.car365.go.kr/ (browser_open · Mac Chrome)", "kind": "open" },
+        { "id": "step-2", "title": "⊙민원찾아요 › 민원안내 › 민원신청안내 (요건·서류 확인)", "kind": "tap" },
+        { "id": "step-3", "title": "⊙온라인민원신청 › 등록민원 › 이전등록|말소등록", "kind": "tap" },
+        { "id": "step-4", "title": "로그인 준비 → 본인인증·인증서 암호는 당사자", "kind": "human" },
+        { "id": "step-5", "title": "⌨차량번호·사유·허용된 일반 정보", "kind": "input" },
+        { "id": "step-6", "title": "👤상대방 동의·전자서명·첨부 서류 확정", "kind": "human" },
+        { "id": "step-7", "title": "✋승인(취득세·공채·수수료 총액)", "kind": "human" },
+        { "id": "step-8", "title": "⊙결제", "kind": "payment" },
+        { "id": "step-9", "title": "📝민원신청결과 › 민원신청내역에서 접수번호·처리상태 읽기", "kind": "read" }
+      ]
+    },
+    {
+      "id": "check-used-car-price",
+      "title": "중고차 시세 조회",
+      "description": "로그인 없이 중고차의모든것 › 시세및매물차량 › 중고차 시세에서 구분·제조사·대표차명·모델명·연식으로 전월 거래 시세를 읽습니다. 차량번호 기반 평균매매가조회는 같은 메뉴에 있습니다.",
+      "inputs": [
+        { "name": "model", "label": "국산|수입 · 제조사 · 대표차명 · 모델명 · 연식", "required": true },
+        { "name": "plate", "label": "차량번호(평균매매가조회 때만)", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://www.car365.go.kr/ccpt/cmmn/menu/redirectMenu.do?menuId=M630101000 (browser_open · Mac Chrome)", "kind": "open" },
+        { "id": "step-2", "title": "⊙구분 › 제조사 › 대표차명 › 모델명 › 연식", "kind": "choice" },
+        { "id": "step-3", "title": "⊙검색", "kind": "tap" },
+        { "id": "step-4", "title": "↓펼쳐보기", "kind": "scroll" },
+        { "id": "step-5", "title": "📝연식별 시세 범위·기준월 읽기", "kind": "read" }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "자격 증명·비밀번호·인증서 암호·인증에 쓰이는 주민번호·OTP·생체인증·CAPTCHA·새 동의는 당사자가 직접 처리합니다. 로그인 진입·안내와 사용자가 제공하고 이 사이트 사용을 허용한 일반 폼 정보 작성은 에이전트가 진행합니다. 실제 값은 공개 패키지나 발자국에 남기지 않습니다.",
+    "이전·말소 민원은 제출 전 상대방 동의·전자서명·첨부 서류를 당사자가 확정합니다. 중복 신청하지 않습니다.",
+    "Mac Chrome의 최종 결제 버튼과 결제 인증은 당사자가 직접 처리합니다. 외부 브라우저 클릭에는 뽀미의 승인 코드 경계가 없으므로 승인 후 자동 결제를 지원하지 않습니다. Windows에서는 confirm_payment 승인 1회에 windows_click 결제 클릭 1회의 코드 경계를 따르고 결제 인증은 당사자가 마칩니다."
+  ],
+  "guide": "guide.md"
+}

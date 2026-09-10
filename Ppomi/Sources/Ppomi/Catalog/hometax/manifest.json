@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "id": "hometax",
+  "name": "홈택스",
+  "version": "0.1.0",
+  "aliases": ["Hometax", "국세청 홈택스", "hometax.go.kr", "국세청"],
+  "launch": { "search": "https://hometax.go.kr/", "target": "browser" },
+  "capabilities": [
+    {
+      "id": "yearend-simplified",
+      "title": "연말정산 간소화 자료 조회",
+      "description": "Mac Chrome에서 홈택스를 열고 장려금·연말정산 메뉴의 연말정산 간소화 자료 조회를 준비합니다. 로그인 인증은 당사자가 처리하며, 공제 자료 화면을 실제로 읽은 경우에만 항목별 금액을 보고합니다. 메뉴 경로와 조회 화면은 2026-09-10 공개 페이지에서 관찰하지 못해 미검증입니다.",
+      "inputs": [
+        { "name": "taxYear", "label": "귀속 연도", "required": false },
+        { "name": "categories", "label": "확인할 공제 항목(의료비·교육비·보험료 등)", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://hometax.go.kr/ (browser_open · Mac Chrome)", "kind": "open" },
+        { "id": "step-2", "title": "⎋공지·안내 팝업", "kind": "close" },
+        { "id": "step-3", "title": "⊙로그인", "kind": "tap" },
+        { "id": "step-4", "title": "👤간편인증|공동인증서 로그인", "kind": "human" },
+        { "id": "step-5", "title": "⊙장려금.*연말정산", "kind": "tap" },
+        { "id": "step-6", "title": "⊙연말정산 간소화", "kind": "tap" },
+        { "id": "step-7", "title": "⊙소득.*세액공제 자료 조회", "kind": "tap" },
+        { "id": "step-8", "title": "⌨귀속 연도·항목 선택", "kind": "input" },
+        { "id": "step-9", "title": "📝항목별 공제 금액 읽기", "kind": "read" }
+      ]
+    },
+    {
+      "id": "cash-receipt-history",
+      "title": "현금영수증 사용내역 조회",
+      "description": "계산서·영수증·카드 메뉴에서 근로자·소비자 현금영수증 사용내역을 조회합니다. 로그인 인증은 당사자가 처리하며 조회 결과 화면을 읽은 경우에만 기간별 합계를 보고합니다. 메뉴 경로는 2026-09-10 공개 페이지에서 관찰하지 못해 미검증입니다.",
+      "inputs": [
+        { "name": "period", "label": "조회 기간(월·분기·연도)", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://hometax.go.kr/ (browser_open · Mac Chrome)", "kind": "open" },
+        { "id": "step-2", "title": "⎋공지·안내 팝업", "kind": "close" },
+        { "id": "step-3", "title": "⊙로그인", "kind": "tap" },
+        { "id": "step-4", "title": "👤간편인증|공동인증서 로그인", "kind": "human" },
+        { "id": "step-5", "title": "⊙계산서.*영수증.*카드", "kind": "tap" },
+        { "id": "step-6", "title": "⊙현금영수증", "kind": "tap" },
+        { "id": "step-7", "title": "⊙근로자.*소비자 조회|사용내역", "kind": "tap" },
+        { "id": "step-8", "title": "⌨조회 기간", "kind": "input" },
+        { "id": "step-9", "title": "↓목록 끝까지", "kind": "scroll" },
+        { "id": "step-10", "title": "📝기간별 사용 합계 읽기", "kind": "read" }
+      ]
+    },
+    {
+      "id": "eitc-status",
+      "title": "근로·자녀장려금 신청 조회",
+      "description": "장려금 메뉴에서 근로·자녀장려금 신청 안내 대상 여부·신청 내역·심사 진행 상황을 조회합니다. 조회만 하며 신청 제출은 당사자가 화면을 확인한 뒤 직접 확정합니다. 메뉴 경로는 2026-09-10 공개 페이지에서 관찰하지 못해 미검증입니다.",
+      "inputs": [
+        { "name": "applicationRound", "label": "정기·반기 구분", "required": false }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶https://hometax.go.kr/ (browser_open · Mac Chrome)", "kind": "open" },
+        { "id": "step-2", "title": "⎋공지·안내 팝업", "kind": "close" },
+        { "id": "step-3", "title": "⊙로그인", "kind": "tap" },
+        { "id": "step-4", "title": "👤간편인증|공동인증서 로그인", "kind": "human" },
+        { "id": "step-5", "title": "⊙장려금.*연말정산", "kind": "tap" },
+        { "id": "step-6", "title": "⊙근로.*자녀장려금", "kind": "tap" },
+        { "id": "step-7", "title": "⊙신청안내 대상 조회|심사진행상황 조회", "kind": "tap" },
+        { "id": "step-8", "title": "📝대상 여부·신청 내역·심사 상태 읽기", "kind": "read" },
+        { "id": "step-9", "title": "👤신청 제출은 당사자 확정", "kind": "human" }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "자격 증명·비밀번호·인증서 암호·인증에 쓰이는 주민번호·OTP·생체인증·CAPTCHA는 당사자가 직접 처리합니다. 로그인 진입·메뉴 이동·조회 조건 선택은 에이전트가 진행하며 실제 값은 공개 패키지나 발자국에 남기지 않습니다.",
+    "새 약관 동의·새 접근 권한·보안 프로그램의 OS 관리자 인증은 당사자가 처리합니다. 이미 허용된 공식 안내·다운로드 준비는 반복 확인하지 않습니다.",
+    "장려금 신청 제출·수정·취소는 당사자가 화면의 대상·효과를 확인한 뒤 직접 확정합니다. 결제가 생기면 Mac Chrome의 최종 결제 버튼은 당사자가 누르고, Windows에서는 confirm_payment 승인 1회에 windows_click 1회의 코드 경계를 따릅니다."
+  ],
+  "guide": "guide.md"
+}
