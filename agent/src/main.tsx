@@ -152,19 +152,22 @@ function App() {
   /** 보내기. 바쁘면 대기열에 줄을 세우고, 실패는 거부로 알려 입력창이 글을 지우지 않게 한다. */
   const send = async (value: string) => {
     const text = value.trim();
-    if (!text || text.length > 12_000 || !boot?.configured || inCall) throw new Error("busy");
+    if (!text || text.length > 12_000 || inCall) throw new Error("busy");
     if (waiting) { setQueue((old) => [...old, text]); return; }
     const epoch = actionEpoch.current;
     setSending(true); setError("");
     try {
-      if (textState === "idle") await textController.current?.start(boot);
+      const b = boot ?? await booted.current;   // typed before the host answered: wait for it instead of failing
+      if (epoch !== actionEpoch.current) throw new Error("stale");
+      if (!b.configured) throw new Error("unconfigured");
+      if (textStateRef.current === "idle") await textController.current?.start(b);
       if (epoch !== actionEpoch.current || textStateRef.current !== "ready") throw new Error("not ready");
       void chat.sendMessage({ text });   // resolves when the turn ends; status tracks it
     } finally { if (epoch === actionEpoch.current) setSending(false); }
   };
   // 대기열: 차례가 오면 맨 앞 글을 보낸다. 실패한 글은 버리고 배너가 이유를 말한다.
   useEffect(() => {
-    if (!queue.length || waiting || inCall || !boot?.configured) return;
+    if (!queue.length || waiting || inCall || boot?.configured === false) return;
     const [next, ...rest] = queue;
     setQueue(rest);
     void send(next).catch(() => {});
@@ -173,15 +176,18 @@ function App() {
     applyUIScale(b); bootRef.current = b; setBoot(b);
     if (b.answerCall) void startCall(b.answerCall);   // answered on the OS call screen before the page was ready
   };
-  const load = async () => {
-    try {
-      apply(await bridge.call<Bootstrap>("bootstrap"));
-    } catch {
+  // 부트스트랩: 입력창은 이걸 기다리지 않는다(바로 타자 가능). 보내기만 첫 응답을 기다리고, 실패하면 5초마다 다시 시도한다.
+  const booted = useRef<Promise<Bootstrap>>(undefined as unknown as Promise<Bootstrap>);
+  const load = (): Promise<Bootstrap> => {
+    const attempt = bridge.call<Bootstrap>("bootstrap").then((b) => { apply(b); return b; }, (error) => {
       setError("서버 연결 실패");
-    }
+      return new Promise<Bootstrap>((resolve) => setTimeout(() => resolve(load()), 5_000));   // keep trying until the host answers
+    });
+    booted.current = attempt;
+    return attempt;
   };
   useEffect(() => {
-    void load();
+    if (!booted.current) void load();
     const refreshCapabilities = () => {
       if (document.visibilityState === "hidden") return;
       void bridge.call<Bootstrap>("bootstrap").then(apply).catch(() => {});
@@ -314,7 +320,7 @@ function App() {
         ? <CallBar word={callWords[state]} onEnd={() => void controller.current?.stop()} />
         : <>
           <Waiting items={queue} onRemove={(index) => setQueue((old) => old.filter((_, i) => i !== index))} />
-          <Composer status={status} disabled={!boot?.configured} onSend={send} onStop={() => void stopCurrent()}
+          <Composer status={status} disabled={boot?.configured === false} onSend={send} onStop={() => void stopCurrent()}
             onCall={() => void startCall()} callDisabled={settling} />
         </>}
     />} />;

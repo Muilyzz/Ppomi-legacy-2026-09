@@ -26,7 +26,10 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
     private let workspace = AgentWorkspace()
     private let queue = DispatchQueue(label: "ppomi.voice-agent.bridge")
     /// The MCP tool host in-process (fd -1: never speaks JSON-RPC). Same DB, gates and pay boundary as the outside agent; approvals go to the workbench buttons.
-    private lazy var mcp: MCPServer? = try? MCPServer(dbPath: AppSettings.dbPath, fd: -1)
+    // Built once at panel creation (not lazily inside a bridge call) so bootstrap never pays for it and the two queues below never race on it.
+    private let mcp: MCPServer? = try? MCPServer(dbPath: AppSettings.dbPath, fd: -1)
+    /// bootstrap only reads static/lazy state; it must not queue behind a two-minute model call or an OCR tool on the bridge queue.
+    private let bootstrapQueue = DispatchQueue(label: "ppomi.voice-agent.bootstrap")
     private let defaults: UserDefaults
     private let server: SharedServerClient
     private var terminationObserver: NSObjectProtocol?
@@ -231,7 +234,7 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
         let nativeRevision = session.revision
         let session = session, workspace = workspace, server = server, bankProfileRequests = bankProfileRequests
         pending.insert(id)
-        queue.async { [weak self] in
+        (method == "bootstrap" ? bootstrapQueue : queue).async { [weak self] in
             guard let self else { return }
             let outcome: Result<Any, Error> = Result {
                 guard session.revision == nativeRevision else { throw AgentNativeError.inactive }
