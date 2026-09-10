@@ -532,7 +532,9 @@ final class Tools {
         } catch { runtimeRecorder.emit(.failed, method: .vlm); throw error }
         runtimeRecorder.emit(.observed, method: .vlm)
         visualCache = (key, Date(), result)
-        onMark?(.note(result.split(whereSeparator: \.isNewline).first.map(String.init) ?? result))
+        // The one line worth drawing is the observation itself, not the JSON envelope around it.
+        let summary = (try? JSONSerialization.jsonObject(with: Data(result.utf8)) as? [String: Any])?["summary"] as? String
+        onMark?(.note(summary ?? result.split(whereSeparator: \.isNewline).first.map(String.init) ?? result))
         return result
     }
 

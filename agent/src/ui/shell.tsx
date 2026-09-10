@@ -171,8 +171,9 @@ function ComposerForm({ status, disabled, placeholder = "할 일", onSend, onSto
           <PhoneIcon className="size-4" />
         </PromptInputButton>}
       </PromptInputTools>
-      <PromptInputSubmit status={status} onStop={onStop} disabled={generating ? false : disabled || empty} size="sm"
-        aria-label={generating ? "진행 정지" : "메시지 보내기"} className="gap-1.5 rounded-full px-3">
+      {/* keyed by state: WebKit kept the old label painted under the new one when the same button swapped 보내기 ↔ 정지 */}
+      <PromptInputSubmit key={generating ? "stop" : "send"} status={status} onStop={onStop} disabled={generating ? false : disabled || empty} size="sm"
+        aria-label={generating ? "진행 정지" : "메시지 보내기"} className="gap-1.5 rounded-full px-3 transition-none">
         {generating ? <><SquareIcon className="size-3.5" />정지</> : <><CornerDownLeftIcon className="size-4" />보내기</>}
       </PromptInputSubmit>
     </PromptInputFooter>
