@@ -16,7 +16,6 @@ enum Permissions {
     static var microphone: Bool { AVCaptureDevice.authorizationStatus(for: .audio) == .authorized }
     static var mirroringInstalled: Bool { mirroringURL != nil }
     static var mirroringRunning: Bool { Mirroring.app() != nil }
-    static var hasKey: Bool { !(Chat.apiKey ?? "").isEmpty }
     /// The two grants without which nothing moves: the hand and the eye.
     static var ready: Bool { accessibility && screenCapture }
 
@@ -39,8 +38,8 @@ enum Permissions {
         if let u = mirroringURL { NSWorkspace.shared.openApplication(at: u, configuration: .init()) }
     }
 
-    /// The rows, top to bottom. `focusKey`: the settings form's own key field takes focus (the key lives there, in the Keychain).
-    static func items(focusKey: @escaping () -> Void) -> [Item] {
+    /// The rows, top to bottom.
+    static func items() -> [Item] {
         let mic = AVCaptureDevice.authorizationStatus(for: .audio)
         return [
             Item(id: "ax", name: "손쉬운 사용", ok: accessibility, note: "폰을 두드리고 창을 옮기는 손 · 필수", button: "설정 열기") {
@@ -59,24 +58,10 @@ enum Permissions {
                  button: mirroringInstalled ? "실행" : "") { launchMirroring() },
             Item(id: "relaunch", name: "다시 실행", ok: screenCapture ? true : nil, note: screenCapture ? "화면 기록 반영됨" : "macOS는 화면 기록 권한을 앱 시작 때 읽어요. 켰다면 여기서 다시 실행",
                  button: screenCapture ? "" : "뽀미 다시 실행") { relaunch() },
-            Item(id: "key", name: "OpenAI 키", ok: hasKey, note: "음성 대화에만 · 선택 (아래 연결 섹션)", button: "입력") { focusKey() },
             Item(id: "lock", name: "자동 잠금", ok: nil, note: "iPhone은 짧게(잠기면 뽀미가 이어감), Mac 화면 잠금은 길게(잠기면 미러링이 멈춤)",
                  button: "Mac 설정 열기") { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Lock-Screen-Settings.extension")!) },
         ]
     }
 }
 
-/// Rides in the menu bar label: alive from launch and inside the scene graph, which is what `openSettings` needs
-/// (macOS 14+ no longer answers `showSettingsWindow:`). 1.5 s after launch, a missing hand or eye opens the settings window.
-struct StartupCheck: View {
-    @EnvironmentObject private var state: AppState
-    @Environment(\.openSettings) private var openSettings
 
-    var body: some View {
-        Color.clear.frame(width: 0, height: 0)
-            .onReceive(state.$setupNeeded.dropFirst()) { _ in      // just-in-time: the first phone tool, not the launch
-                openSettings()
-                NSApp.activate()
-            }
-    }
-}

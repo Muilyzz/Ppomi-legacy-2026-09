@@ -2,10 +2,22 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Embedded into the executable (__TEXT,__info_plist) by Package.swift: a SwiftPM binary has no bundle, and macOS kills
-         any process that asks for the microphone or speech recognition without these strings. -->
-    <key>CFBundleName</key><string>Ppomi</string>
-    <key>NSMicrophoneUsageDescription</key><string>깨우기 말은 Mac에서 인식합니다. 음성 대화를 시작하면 답변과 작업 수행을 위해 소리를 AI 서비스로 전송하며, 뽀미는 대화 기록을 저장하지 않습니다.</string>
-    <key>NSSpeechRecognitionUsageDescription</key><string>깨우기 말을 Mac 안에서 인식하는 데 씁니다. 시작한 음성 대화는 별도로 AI 서비스에 연결됩니다.</string>
+	<key>CFBundleName</key>
+	<string>뽀미</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.muilyzz.ppomi</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ppomi</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>깨우기 말은 Mac에서 인식합니다. 음성 대화를 시작하면 답변과 작업 수행을 위해 소리를 AI 서비스로 전송하며, 뽀미는 대화 기록을 저장하지 않습니다.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>깨우기 말을 Mac 안에서 인식하는 데 씁니다. 시작한 음성 대화는 별도로 AI 서비스에 연결됩니다.</string>
 </dict>
 </plist>

@@ -1,9 +1,10 @@
 // 뽀미 opens its own chat. The workbench remains available for records and explicit device control.
 import SwiftUI
 import AppKit
+import Combine
 
-/// A SwiftPM executable has no app bundle, so LaunchServices starts it background-only (.prohibited): claim .regular at
-/// launch for a Dock icon and a place in ⌘Tab. Dock activation returns to the app-owned conversation.
+/// 보통 앱: Dock 아이콘 + 표준 메뉴, 메뉴 막대 아이콘 없음. A SwiftPM executable has no app bundle, so LaunchServices starts it background-only
+/// (.prohibited): claim .regular at launch for a Dock icon and a place in ⌘Tab. Dock activation returns to the app-owned conversation.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static var pendingState: AppState?
     var state: AppState?
@@ -18,7 +19,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ note: Notification) {
         state = Self.pendingState
         NSApp.setActivationPolicy(.regular)
+        // 손·눈 권한이 없어 폰 도구가 거부되면(state.setupNeeded) 그때 설정 › 시작하기를 연다 — 시작 때가 아니라 첫 도구 때.
+        setupWatch = state?.$setupNeeded.dropFirst().receive(on: RunLoop.main).sink { _ in
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            NSApp.activate()
+        }
     }
+    private var setupWatch: AnyCancellable?
+    /// OS 텍스트 크기가 바뀌었으면(설정 앱에 다녀온 뒤) 모든 글자·여백·웹 페이지가 따라간다.
+    func applicationDidBecomeActive(_ notification: Notification) {
+        let scale = AppSettings.uiScale
+        guard Fonts.scale.value != scale else { return }
+        Fonts.scale.value = scale
+        NotificationCenter.default.post(name: Fonts.scaleChanged, object: nil)
+    }
+
 }
 
 @main
@@ -115,46 +130,7 @@ struct PpomiApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra { MenuContent().environmentObject(state) } label: {
-            Label("뽀미", systemImage: state.menuIcon).labelStyle(.iconOnly)
-            StartupCheck().environmentObject(state)       // opens 설정 › 시작하기 when an agent's first phone tool is refused for missing 손·눈 (Permissions.swift)
-        }
         Settings { SettingsView().environmentObject(state) }
+            .commands { CommandGroup(replacing: .help) {} }   // 도움말 없음. 명령은 대화(도구)와 창 안에, 설정값은 설정 창에 — 따로 메뉴 없음
     }
-}
-
-/// The menu bar item's menu: tabs, workbench size, collection.
-private struct MenuContent: View {
-    @EnvironmentObject var state: AppState
-
-    var body: some View {
-        Text(state.statusLine)
-        Divider()
-        Button("대화") { state.openChat() }
-        ForEach(WorkSurface.allCases) { surface in
-            Button("\(surface.displayName) 제어") { state.selectSurface(surface) }
-        }
-        Divider()
-        Button("타임라인") { show(.timeline) }
-        Button("증빙·전표") { show(.evidence) }
-        Button("절차") { show(.playbooks) }
-        Button("몸과 생활") { show(.health) }
-        Button(state.voiceOn ? "음성 끄기" : "음성 켜기 (뽀미야)") { state.voiceOn.toggle() }
-        Button("대화창") { state.talk() }.keyboardShortcut(.space, modifiers: .option)
-        Toggle("연결 시 대화 열기", isOn: Binding(get: { state.greetOnArrival }, set: { _ in state.toggleGreet() }))
-        Button(state.kioskOn ? "키오스크 끄기" : "키오스크 켜기") { state.toggleKiosk() }.keyboardShortcut("f", modifiers: [.control, .command])
-        Button("지금 수집") {
-            DispatchQueue.global(qos: .userInitiated).async {
-                do { try Collector().snapshot(Apps.all.map(\.key) + Apps.api) } catch { print("snapshot: \(error)") }
-                DispatchQueue.main.async { state.reloadLedger() }
-            }
-        }
-        Button("장부 새로 읽기") { state.reloadLedger() }
-        SettingsLink { Text("설정…") }
-        Divider()
-        Button("종료") { NSApplication.shared.terminate(nil) }
-    }
-
-    /// Pick a tab and reveal the same workbench in either size mode.
-    private func show(_ t: AppState.Tab) { state.show(t); state.reveal() }
 }

@@ -1,4 +1,5 @@
 // Settings that are not secrets (UserDefaults). Moved out of Ledger/Model.swift so the model compiles into the iPad too.
+import AppKit
 import Foundation
 
 /// Settings that are not secrets (UserDefaults). The API key lives in the Keychain (Keychain.swift).
@@ -45,14 +46,11 @@ enum AppSettings {
         }
         return nil
     }
-    static var baseURL: String { get { d.string(forKey: "baseURL") ?? "https://api.openai.com/v1" } set { d.set(newValue, forKey: "baseURL") } }
-    static var model: String { get { d.string(forKey: "model") ?? "gpt-5-mini" } set { d.set(newValue, forKey: "model") } }
-    /// Explicit fallback calls only; ordinary OCR captures never cause an API request.
-    static var visionEnabled: Bool { get { d.bool(forKey: "visionEnabled") } set { d.set(newValue, forKey: "visionEnabled") } }
-    static var visionModel: String { env("OPENAI_VISION_MODEL") ?? VisualInspector.defaultModel }
-    /// Whole-UI size (glyphs, spacing, controls) for people who set their text very large; 1 = default, clamped 0.75–3.
-    static var uiScale: Double {
-        get { let v = d.double(forKey: "uiScale"); return v == 0 ? 1 : min(3, max(0.75, v)) }
-        set { d.set(newValue, forKey: "uiScale") }
-    }
+    /// "뽀미야" 깨우기 말 듣기(설정에 저장). 예전엔 메뉴의 세션 스위치였다.
+    static var wakeWord: Bool { get { d.bool(forKey: "wakeWord") } set { d.set(newValue, forKey: "wakeWord") } }
+    /// Whole-UI size (glyphs, spacing, controls) = the OS text size(시스템 설정 › 손쉬운 사용 › 디스플레이 › 텍스트 크기), like the iPad's Dynamic Type.
+    /// Body 13pt is 1; clamped 0.75–3. No app-level picker.
+    static var uiScale: Double { uiScaleOverride ?? min(3, max(0.75, NSFont.preferredFont(forTextStyle: .body).pointSize / 13)) }
+    /// 테스트 전용: OS 값 대신 고정 배율.
+    nonisolated(unsafe) static var uiScaleOverride: Double?
 }

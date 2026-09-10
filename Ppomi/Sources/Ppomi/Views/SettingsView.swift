@@ -1,32 +1,21 @@
-// 설정: 연결, 장부, 내 정보와 자동입력 기본정보. API 키와 자동입력 기본정보는 Keychain에 저장한다.
+// 설정: 시작하기(권한), 계정(구글 로그인), 음성, 장부, 자동입력 기본정보(Keychain). 글자 크기는 OS 텍스트 크기, 보조 눈의 모델·비용은 서버 몫.
 import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var state: AppState
 
-    @State private var apiKey = ""              // only what was pasted now; the stored key is never read back into a field
-    @State private var hasKey = false
-    @State private var baseURL = AppSettings.baseURL
-    @State private var model = AppSettings.model
-    @State private var agentEndpoint = UserDefaults.standard.string(forKey: AgentNativePolicy.endpointPreference) ?? ""
-    @State private var agentEndpointBad = false
-    @State private var visionEnabled = AppSettings.visionEnabled
-    @State private var pairing: String?                  // 아이패드 연결 QR 의 내용(초대 + 기록 키); 시트가 열린 동안만
-    @State private var pairingFailed = false
-    @State private var uiScale = AppSettings.uiScale
+    @State private var account = GoogleAccount.session      // 계정 = 구글 로그인(아이패드와 같은 흐름)
+    @State private var signingIn = false
+    @State private var accountError: String?
     @State private var dbPath = AppSettings.dbPath
     @State private var me = AppSettings.me
     @State private var applyingLedger = false
     @State private var ledgerSettingsError: String?
     @State private var ledgerSettingsApplied = false
-    @State private var checking = false
-    @State private var connection: Connection = .unknown
     @State private var items: [Permissions.Item] = []   // the 시작하기 rows, re-read every 2 s while the window is up
     @State private var telemetry = false                 // state table "telemetry:on" (Telemetry.swift reads it)
-    @FocusState private var keyFocus: Bool
     private let recheck = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
-    enum Connection { case unknown, ok(String), fail(String) }
 
     var body: some View {
         Form {
@@ -47,66 +36,23 @@ struct SettingsView: View {
                     try? DB(path: AppSettings.dbPath, writable: true).setState("telemetry:on", on ? "1" : "0")
                 }))
             }
-            Section("글자 크기") {
-                Picker("글자 크기", selection: $uiScale) {
-                    Text("1×").tag(1.0); Text("1.5×").tag(1.5); Text("2×").tag(2.0); Text("3×").tag(3.0)
-                }
-                .pickerStyle(.segmented).labelsHidden()
-                .accessibilityIdentifier("settings-ui-scale")
-                .onChange(of: uiScale) { _, scale in
-                    AppSettings.uiScale = scale
-                    Fonts.scale.value = scale                                               // every ppomiTheme() root re-renders
-                    NotificationCenter.default.post(name: Fonts.scaleChanged, object: nil)   // native labels and the chat page
-                }
-            }
-            Section("연결") {
-                SecureField("API 키", text: $apiKey, prompt: Text(hasKey ? "새 키" : "키 붙여넣기"))
-                    .focused($keyFocus)
-                if hasKey {
+            Section("계정") {
+                if let account {
+                    Text(account.registered ? "로그인됨 · \(account.email) · 기기 등록됨" : "로그인됨 · \(account.email) · 기기 등록 전").foregroundStyle(.fg2)
+                    Button("로그아웃", role: .destructive) { GoogleAccount.shared.signOut(); self.account = nil }
+                } else {
                     HStack {
-                        Text("키체인 저장됨").foregroundStyle(.fg2)
-                        Spacer()
-                        Button("삭제") { deleteKey() }
+                        Button("Google 계정으로 로그인") { Task { await signIn() } }.disabled(signingIn)
+                        if signingIn { ProgressView().controlSize(.ppomiSmall) }
                     }
+                    Text("아이패드와 같은 계정으로 로그인하면 같은 장부를 봅니다").font(.ppomi(1)).foregroundStyle(.fg2)
                 }
-                TextField("기본 URL", text: $baseURL)
-                TextField("모델", text: $model)
-                HStack {
-                    Button("저장·확인") { Task { await saveAndCheck() } }.disabled(checking)
-                    if checking { ProgressView().controlSize(.ppomiSmall) }
-                    connectionText
-                }
-                HStack {
-                    TextField("에이전트 서버", text: $agentEndpoint)
-                        .autocorrectionDisabled()
-                        .onSubmit(saveAgentEndpoint)
-                    if agentEndpointBad { Text("주소 확인").font(.ppomi(3)).foregroundStyle(.bad) }
-                }
+                if let accountError { Text(accountError).foregroundStyle(.bad) }
             }
-            Section("아이패드") {
-                Button("연결 QR 보이기") { pairing = try? PadPairing.payload(); pairingFailed = pairing == nil }
-                if pairingFailed { Text("서버 연결과 기록 암호화 키가 필요합니다").foregroundStyle(.bad) }
-                Text("아이패드 뽀미에서 구글 로그인 → 설정 › QR 읽기. 10분 안에 한 번만 쓸 수 있습니다").font(.ppomi(1)).foregroundStyle(.fg2)
-            }
-            .sheet(isPresented: Binding(get: { pairing != nil }, set: { if !$0 { pairing = nil } })) {
-                VStack(spacing: 16) {
-                    if let text = pairing, let image = PadPairing.qr(text) {
-                        Image(nsImage: image).interpolation(.none).resizable().frame(width: 320, height: 320)
-                        Text("초대는 10분 · 한 번. 기록 키가 들어 있으니 화면을 남기지 마세요").font(.ppomi(1)).foregroundStyle(.fg2)
-                    }
-                    Button("닫기") { pairing = nil }.keyboardShortcut(.cancelAction)
-                }.padding(24)
-            }
-            SharedServerSettingsView()
-            Section("화면 보조") {
-                Toggle("VLM 보조 눈", isOn: $visionEnabled)
-                    .onChange(of: visionEnabled) { _, enabled in AppSettings.visionEnabled = enabled }
-                Text("OCR 부족 시 화면을 OpenAI에 전송 · 비용 발생")
-                    .font(.ppomi(1)).foregroundStyle(.fg2)
-                Text("모델 \(AppSettings.visionModel) · 관찰만")
-                    .font(.ppomi(1)).foregroundStyle(.fg2)
-                Text("인증 화면 제외 · 개인정보 자동 가림 아님")
-                    .font(.ppomi(1)).foregroundStyle(.fg2)
+            Section("음성") {
+                Toggle("뽀미야 라고 부르면 듣기", isOn: Binding(get: { state.voiceOn }, set: { state.voiceOn = $0; AppSettings.wakeWord = $0 }))
+                Toggle("폰이 연결되면 뽀미가 먼저 말하기", isOn: Binding(get: { state.greetOnArrival }, set: { _ in state.toggleGreet() }))
+                Text("통화는 대화 입력창의 전화 버튼, 수집은 대화에서 \"수집해\"").font(.ppomi(1)).foregroundStyle(.fg2)
             }
             Section("장부") {
                 TextField("DB 경로", text: $dbPath)
@@ -129,10 +75,9 @@ struct SettingsView: View {
             IdentityProfilesView()
         }
         .formStyle(.grouped)
-        .frame(width: 480 * max(1, uiScale))
+        .frame(width: 480 * max(1, AppSettings.uiScale))
         .ppomiTheme()
         .onAppear {
-            hasKey = Keychain.apiKey() != nil
             telemetry = (try? DB(path: AppSettings.dbPath).state("telemetry:on")) == "1"
             recheckItems()
         }
@@ -140,7 +85,7 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in recheckItems() }   // back from System Settings: re-read at once
     }
 
-    private func recheckItems() { items = Permissions.items { keyFocus = true } }
+    private func recheckItems() { items = Permissions.items() }
 
     private func clearLedgerFeedback() {
         ledgerSettingsError = nil
@@ -165,13 +110,6 @@ struct SettingsView: View {
         }
     }
 
-    @ViewBuilder private var connectionText: some View {
-        switch connection {
-        case .unknown: EmptyView()
-        case .ok(let s): Text(s).foregroundStyle(.fg2)
-        case .fail(let s): Text(s).foregroundStyle(.bad)
-        }
-    }
 
     @ViewBuilder private var ledgerText: some View {
         if let e = state.ledgerError { Text(e).foregroundStyle(.bad).lineLimit(2) }
@@ -179,41 +117,15 @@ struct SettingsView: View {
     }
 
     /// Invalid input keeps the stored address; a valid one is normalized, stored and ends any live agent session.
-    private func saveAgentEndpoint() {
-        if let url = try? AgentNativePolicy.save(endpoint: agentEndpoint) {
-            agentEndpoint = url.absoluteString; agentEndpointBad = false
-        } else {
-            agentEndpoint = UserDefaults.standard.string(forKey: AgentNativePolicy.endpointPreference) ?? ""; agentEndpointBad = true
-        }
-    }
 
-    private func deleteKey() {
-        do { try Keychain.deleteAPIKey(); hasKey = false; connection = .unknown }
-        catch { connection = .fail(error.localizedDescription) }
-    }
 
-    /// Persist URL/model/key, then prove the connection: GET /models, and on a Vercel gateway also GET /credits.
-    @MainActor private func saveAndCheck() async {
-        checking = true
-        defer { checking = false }
-        AppSettings.baseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        AppSettings.model = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        let pasted = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !pasted.isEmpty {
-            do { try Keychain.setAPIKey(pasted); apiKey = ""; hasKey = true }
-            catch { connection = .fail(error.localizedDescription); return }
-        }
-        guard let key = Keychain.apiKey() else { connection = .fail("API 키 없음"); return }
-        guard let url = URL(string: AppSettings.baseURL), let host = url.host else { connection = .fail("URL 오류"); return }
-        let client = LLMClient(baseURL: url, apiKey: key)
-        do {
-            var line = "연결됨 · \(try await client.listModels().count)개 모델"
-            if host.contains("vercel"), let balance = try? await client.credits().balance {
-                line += " · 남은 예산 $\(String(format: "%.2f", balance))"
-            }
-            connection = .ok(line)
-        } catch {
-            connection = .fail(error.localizedDescription)
-        }
+}
+
+extension SettingsView {
+    func signIn() async {
+        signingIn = true; accountError = nil
+        do { account = try await GoogleAccount.shared.signIn() }
+        catch { accountError = "로그인 실패: " + SharedServerClient.safe(error).description }
+        signingIn = false
     }
 }

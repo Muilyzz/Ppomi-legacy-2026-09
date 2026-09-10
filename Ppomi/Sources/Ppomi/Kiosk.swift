@@ -8,6 +8,17 @@ import CoreGraphics
 /// Navigation leaves the mirroring app active; every explicit raise stays directly behind its window.
 /// The workbench window. Its control slot (and a docked agent area) are transparent holes, so a docked native window
 /// stays visible whether it is above or below this window; no cross-application z-ordering is attempted.
+extension NSApplication {
+    /// 앞으로 오기. macOS 14+ 의 activate(ignoringOtherApps:)는 우리가 방금 AX 로 앞세운 미러링 앱에서 활성을 되찾지 못한다(메뉴 막대가 미러링 것으로 남음).
+    /// 미러링 앱을 앞세울 때와 같은 AX frontmost 를 우리 자신에게 건다 — 손쉬운 사용 권한이 있을 때(폰 조종에 이미 필요한 권한).
+    func activateFront() {
+        activate(ignoringOtherApps: true)
+        if AXIsProcessTrusted() {
+            AXUIElementSetAttributeValue(AXUIElementCreateApplication(ProcessInfo.processInfo.processIdentifier), kAXFrontmostAttribute as CFString, kCFBooleanTrue)
+        }
+    }
+}
+
 final class MainPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
@@ -337,7 +348,7 @@ final class KioskController {
                     // Revealing can hand activation to the control app; take it back so typing stays in the chat.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         MainActor.assumeIsolated {
-                            NSApp.activate(ignoringOtherApps: true)
+                            NSApp.activateFront()
                             p.makeKey(); p.orderFront(nil)
                             WindowDiagnostics.panel("activate.reveal", p, fields: ["revealed": revealed])
                             self.revealingOnActivate = false
@@ -396,7 +407,7 @@ final class KioskController {
                 if Permissions.accessibility, let phone = surface.liveWindow(), !isSurfacePresented(phone.id) {
                     _ = surface.revealWindow()
                 }
-                NSApp.activate(ignoringOtherApps: true); main?.makeKey(); main?.orderFront(nil)
+                NSApp.activateFront(); main?.makeKey(); main?.orderFront(nil)
             }
         }
         let switched = displayedSurface != state.workSurface
@@ -441,7 +452,7 @@ final class KioskController {
                 content?.layoutSubtreeIfNeeded()
                 // The review needs the whole workbench in front: without a docked window it is opaque and covers
                 // a control window that could not be minimized.
-                NSApp.activate(ignoringOtherApps: true)
+                NSApp.activateFront()
                 main?.makeKeyAndOrderFront(nil)
             }
         } catch {
@@ -607,6 +618,7 @@ final class KioskController {
                 placementRequested = true
                 NSApp.unhideWithoutActivation()
                 if Permissions.accessibility { _ = surface.revealWindow() }
+                NSApp.activateFront()
             }
             updateImmersive()
             return
@@ -639,6 +651,8 @@ final class KioskController {
         }
         c.layoutSubtreeIfNeeded()
         p.orderFront(nil)
+        // 사람이 뽀미를 불렀다(실행·Dock·메뉴): 미러링 창을 앞세우느라 넘어간 활성을 되찾아 메뉴 막대와 타자가 뽀미에 남게 한다.
+        if stage { NSApp.activateFront(); p.makeKey() }
     }
 
     /// Move the same view objects between hosts, preserving the timeline page and pending human approval.
@@ -788,6 +802,7 @@ final class KioskController {
                     self.stagePullInFlight = false
                     self.lastDock = nil
                     self.placementRequested = true
+                    NSApp.activateFront(); p.makeKey()   // 썸네일을 끌어 놓는 합성 드래그가 미러링 앱을 활성화한다: 사람은 뽀미에 있다
                 }
             }
         }
@@ -1016,7 +1031,7 @@ final class KioskController {
                 lastRaiseReveal = now
                 WindowDiagnostics.panel("dock.raiseReveal", p)
                 _ = surface.revealWindow()
-                NSApp.activate(ignoringOtherApps: true)
+                NSApp.activateFront()
                 p.makeKey()
             }
         }

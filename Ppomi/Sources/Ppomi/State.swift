@@ -94,7 +94,7 @@ final class AppState: ObservableObject {
     @Published var evidenceFocus: EvidenceFocus? = nil   // the 증빙·전표 window; nil until first open
     enum Tab: String, CaseIterable { case timeline, evidence, accounting, playbooks, health, spatial }
     @Published var tab: Tab = .timeline                  // what the workbench shows in either size mode
-    @Published var voiceOn = false                       // the "뽀미야" listener (menu switch; this session only, not saved)
+    @Published var voiceOn = AppSettings.wakeWord        // the "뽀미야" listener (설정 › 음성, saved)
     @Published var listening = false                     // a voice conversation is open (after 뽀미야, until 그만 or 25 s quiet)
     /// A question from another process (the MCP server) or the voice session's tools, waiting for a workbench button.
     @Published var ask: (id: String, text: String, options: [String])? = nil
@@ -297,9 +297,6 @@ final class AppState: ObservableObject {
             }
             return "손에 든 iPhone · 잠그면 돌아옴" + (pendingJob.map { " · 이어서 \($0)" } ?? "")
         }
-    }
-    var menuIcon: String {
-        switch phase { case .idle: return "circle"; case .agent: return "circle.fill"; case .humanTurn: return "hand.raised.fill"; case .humanUse: return "iphone" }
     }
 
     /// Menu, green zoom, and ⌃⌘F switch the workbench size. Phone use does not hide or collapse the workbench.

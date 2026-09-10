@@ -13,20 +13,35 @@ final class SharedServerClient: @unchecked Sendable {
     private var accessToken: String?
     private var expiresAt = Date.distantPast
     private var context: [String: Any]?
+    /// 어느 자격으로 붙었는지: 구글 세션(기본) 또는 옛 기기 계정(--configure-shared).
+    private var mode: Mode?
+    private enum Mode { case session, legacy }
+    private struct Credentials { let url: String; let publishableKey: String; let deviceId: String; let mode: Mode }
 
     init(configuration: @escaping () throws -> SharedServerConfiguration? = SharedServerConfiguration.load,
          transport: @escaping Transport = SharedServerClient.send) {
         self.configuration = configuration; self.transport = transport
     }
 
+    /// 구글 세션이 있으면 그것, 없으면 옛 기기 계정. 둘 다 없으면 미설정.
+    var isConfigured: Bool { GoogleAccount.session != nil || (try? configuration()) != nil }
+    /// 세션·계정이 바뀌었다: 다음 요청에서 다시 붙는다.
+    func invalidate() { lock.lock(); accessToken = nil; context = nil; mode = nil; expiresAt = .distantPast; lock.unlock() }
+
     func status() throws -> [String: Any] {
         lock.lock(); defer { lock.unlock() }
-        guard let config = try configuration() else { return ["configured": false, "connected": false, "localDataImported": false] }
-        var status = config.safeStatus
+        var status: [String: Any]
+        if let s = GoogleAccount.session {
+            status = ["configured": true, "host": URL(string: PpomiServer.supabaseURL)?.host ?? "", "deviceId": GoogleAccount.deviceID, "authority": "server",
+                      "account": s.email, "localDataImported": SharedRecordVault.enabled, "recordsEncrypted": SharedRecordVault.enabled]
+        } else {
+            guard let config = try configuration() else { return ["configured": false, "connected": false, "localDataImported": false] }
+            status = config.safeStatus
+        }
         do {
-            try authenticate(config)
-            let response = try requestRPC("ppomi_context", arguments: [:], config: config)
-            try validateContext(response, config: config)
+            let credentials = try authenticate(legacy: false)
+            let response = try requestRPC("ppomi_context", arguments: [:], credentials: credentials)
+            try validateContext(response, deviceId: credentials.deviceId)
             status["connected"] = true
             status["context"] = response
         } catch {
@@ -36,42 +51,79 @@ final class SharedServerClient: @unchecked Sendable {
         return status
     }
 
-    func rpc(_ method: String, _ arguments: [String: Any]) throws -> Any {
-        guard SharedTools.rpcNames.contains(method) || SharedRecordVault.rpcNames.contains(method) || PadPairing.rpcNames.contains(method) else { throw SharedServerError.invalidArgument("RPC") }
+    /// `legacy`: 구글 세션이 있어도 옛 기기 계정으로(첫 로그인 때 기기를 넘기는 한 번).
+    func rpc(_ method: String, _ arguments: [String: Any], legacy: Bool = false) throws -> Any {
+        guard SharedTools.rpcNames.contains(method) || SharedRecordVault.rpcNames.contains(method) || GoogleAccount.rpcNames.contains(method) else { throw SharedServerError.invalidArgument("RPC") }
         lock.lock(); defer { lock.unlock() }
-        guard let config = try configuration() else { throw SharedServerError.unconfigured }
-        try authenticate(config)
-        return try requestRPC(method, arguments: arguments, config: config)
+        let credentials = try authenticate(legacy: legacy)
+        return try requestRPC(method, arguments: arguments, credentials: credentials)
     }
 
     /// The bundled voice client can call only the dedicated agent routes. Tokens stay native.
     func agentRequest(endpoint: String, path: String, body: [String: Any]) throws -> Any {
         let url = try AgentNativePolicy.requestURL(endpoint: endpoint, path: path)
         let data = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
-        guard data.count <= 1024 * 1024 else { throw AgentNativeError.invalidRequest }   // a Responses turn carries instructions, tools and history
+        guard data.count <= 4 * 1024 * 1024 else { throw AgentNativeError.invalidRequest }   // a Responses turn carries instructions, tools, history — or one screenshot
         lock.lock(); defer { lock.unlock() }
-        guard let config = try configuration() else { throw SharedServerError.unconfigured }
-        try authenticate(config)
+        let credentials = try authenticate(legacy: false)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"; request.timeoutInterval = path == "/v1/responses" ? 120 : 20   // one flagship-model turn may take a minute
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
         request.setValue("Bearer " + (accessToken ?? ""), forHTTPHeaderField: "Authorization")
+        if credentials.mode == .session { request.setValue(credentials.deviceId, forHTTPHeaderField: "X-Ppomi-Device") }
         request.httpBody = data
         let reply = try safeSend(request)
         if reply.status == 401 { accessToken = nil; context = nil; throw SharedServerError.authentication }
         return try Self.decode(reply)
     }
 
-    private func authenticate(_ config: SharedServerConfiguration) throws {
-        try config.validate()
-        if config != activeConfiguration {
-            activeConfiguration = config; accessToken = nil; context = nil; expiresAt = .distantPast
+    /// 자격을 고르고 토큰을 준비한다. 구글 세션: 만료 30초 전이면 refresh_token 으로 갱신(SupabaseAuth). 옛 기기 계정: 비밀번호 로그인 + ppomi_context 로 기기 확인.
+    /// 이미 만든 요청(보조 눈의 /v1/responses)에 로그인 세션과 기기 헤더만 붙여 보낸다. 주소는 에이전트 서버여야 한다. 응답은 그대로(호출자가 검증).
+    func agentSend(_ request: URLRequest) throws -> Reply {
+        guard let url = request.url, request.httpMethod == "POST", let body = request.httpBody, body.count <= 4 * 1024 * 1024,
+              let endpoint = try? AgentNativePolicy.endpoint(Chat.endpoint), url.host == endpoint.host, url.scheme == "https",
+              url.path.hasSuffix("/v1/responses") else { throw AgentNativeError.invalidRequest }
+        lock.lock(); defer { lock.unlock() }
+        let credentials = try authenticate(legacy: false)
+        var request = request
+        request.timeoutInterval = 120
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        request.setValue("Bearer " + (accessToken ?? ""), forHTTPHeaderField: "Authorization")
+        if credentials.mode == .session { request.setValue(credentials.deviceId, forHTTPHeaderField: "X-Ppomi-Device") }
+        let reply = try safeSend(request)
+        if reply.status == 401 { accessToken = nil; context = nil; throw SharedServerError.authentication }
+        return reply
+    }
+
+    private func authenticate(legacy: Bool) throws -> Credentials {
+        if !legacy, var session = GoogleAccount.session {
+            if mode != .session { accessToken = nil; context = nil; expiresAt = .distantPast; activeConfiguration = nil; mode = .session }
+            let credentials = Credentials(url: PpomiServer.supabaseURL, publishableKey: PpomiServer.publishableKey, deviceId: GoogleAccount.deviceID, mode: .session)
+            if accessToken != nil, expiresAt.timeIntervalSinceNow > 30 { return credentials }
+            if session.expiresAt.timeIntervalSinceNow <= 30 {
+                let tokens: SupabaseAuth.Tokens
+                do { tokens = try SupabaseAuth.refresh(session.refreshToken) }
+                catch SupabaseAuth.Failure.connection { throw SharedServerError.connection }
+                catch { throw SharedServerError.authentication }
+                session.accessToken = tokens.access; session.refreshToken = tokens.refresh; session.expiresAt = tokens.expiresAt
+                try? GoogleAccount.save(session)
+            }
+            accessToken = session.accessToken; expiresAt = session.expiresAt
+            return credentials
         }
-        if accessToken != nil, expiresAt.timeIntervalSinceNow > 30, context != nil { return }
+        guard let config = try configuration() else { throw SharedServerError.unconfigured }
+        try config.validate()
+        if mode != .legacy || config != activeConfiguration {
+            activeConfiguration = config; accessToken = nil; context = nil; expiresAt = .distantPast; mode = .legacy
+        }
+        let credentials = Credentials(url: config.url, publishableKey: config.publishableKey, deviceId: config.deviceId, mode: .legacy)
+        if accessToken != nil, expiresAt.timeIntervalSinceNow > 30, context != nil { return credentials }
         accessToken = nil; context = nil
-        var request = baseRequest(config, path: "auth/v1/token")
+        var request = baseRequest(credentials, path: "auth/v1/token")
         var components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!
         components.queryItems = [URLQueryItem(name: "grant_type", value: "password")]
         request.url = components.url
@@ -83,24 +135,26 @@ final class SharedServerClient: @unchecked Sendable {
               !token.contains(where: { $0.isWhitespace || $0.isNewline }),
               let ttl = body["expires_in"] as? NSNumber, ttl.doubleValue > 0 else { throw SharedServerError.authentication }
         accessToken = token; expiresAt = Date().addingTimeInterval(min(ttl.doubleValue, 86_400))
-        let response = try requestRPC("ppomi_context", arguments: [:], config: config)
-        try validateContext(response, config: config)
+        let response = try requestRPC("ppomi_context", arguments: [:], credentials: credentials)
+        try validateContext(response, deviceId: credentials.deviceId)
+        return credentials
     }
 
-    private func validateContext(_ response: Any, config: SharedServerConfiguration) throws {
+    private func validateContext(_ response: Any, deviceId: String) throws {
         guard let object = response as? [String: Any], let device = object["device"] as? [String: Any],
               let id = device["id"] as? String, let workspace = object["workspace"] as? [String: Any],
               let workspaceID = workspace["id"] as? String, UUID(uuidString: workspaceID) != nil,
               object["devices"] is [[String: Any]] else { throw SharedServerError.invalidResponse }
-        guard id.lowercased() == config.deviceId.lowercased() else {
+        guard id.lowercased() == deviceId.lowercased() else {
             accessToken = nil; context = nil; throw SharedServerError.deviceMismatch
         }
         context = object
     }
 
-    private func requestRPC(_ method: String, arguments: [String: Any], config: SharedServerConfiguration) throws -> Any {
-        var request = baseRequest(config, path: "rest/v1/rpc/" + method)
+    private func requestRPC(_ method: String, arguments: [String: Any], credentials: Credentials) throws -> Any {
+        var request = baseRequest(credentials, path: "rest/v1/rpc/" + method)
         request.setValue("Bearer " + (accessToken ?? ""), forHTTPHeaderField: "Authorization")
+        if credentials.mode == .session { request.setValue(credentials.deviceId, forHTTPHeaderField: "X-Ppomi-Device") }
         request.httpBody = try JSONSerialization.data(withJSONObject: arguments, options: [.sortedKeys])
         let reply = try safeSend(request)
         // A failed or interrupted mutation is never silently replayed. Caller-controlled IDs support explicit retries.
@@ -108,12 +162,12 @@ final class SharedServerClient: @unchecked Sendable {
         return try Self.decode(reply)
     }
 
-    private func baseRequest(_ config: SharedServerConfiguration, path: String) -> URLRequest {
-        var request = URLRequest(url: URL(string: config.url)!.appendingPathComponent(path))
+    private func baseRequest(_ credentials: Credentials, path: String) -> URLRequest {
+        var request = URLRequest(url: URL(string: credentials.url)!.appendingPathComponent(path))
         request.httpMethod = "POST"; request.timeoutInterval = 20
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(config.publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue(credentials.publishableKey, forHTTPHeaderField: "apikey")
         return request
     }
 

@@ -33,9 +33,9 @@ final class Tools {
     var androidCapture: () throws -> URL = { try AndroidRuntime.capture() }
     var lastAndroidPNG: URL?
     var openBrowser: (URL) throws -> Void = { try MacBrowser.open($0) }
-    var visualAssistanceEnabled: () -> Bool = { AppSettings.visionEnabled }
+    var visualAssistanceEnabled: () -> Bool = { true }   // 모델·비용은 서버가 정한다; 사용자 스위치 없음
     var captureVisualScreen: (Bool) throws -> (png: URL, words: [OCR.Word]) = { try Phone.screen(windows: $0) }
-    private lazy var visualInspector = VisualInspector(model: AppSettings.visionModel)
+    private lazy var visualInspector = VisualInspector()
     /// Tests inject an observer, never a hand. Observations cannot create an approval or replay step.
     var inspectVisualScreen: ((URL, [OCR.Word], String, String) throws -> String)? = nil
     private var visualCache: (key: String, at: Date, result: String)?

@@ -82,6 +82,12 @@ struct ControlTargetToolbar: View {
                 .controlSize(.ppomiSmall)
                 .disabled(!recordsAvailable)
                 .accessibilityIdentifier("records-open")
+            // 설정은 아이패드와 같은 자리의 톱니 하나. 메뉴에는 아무것도 더하지 않는다.
+            SettingsLink { Image(systemName: "gearshape") }
+                .buttonStyle(.plain)
+                .foregroundStyle(.fg2)
+                .accessibilityLabel("설정")
+                .accessibilityIdentifier("settings-open")
         }
         .font(.ppomi(2))
         .frame(maxWidth: .infinity, alignment: .leading)
