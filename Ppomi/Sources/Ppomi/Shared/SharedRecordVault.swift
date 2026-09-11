@@ -195,6 +195,16 @@ final class SharedRecordVault {
         guard SecItemAdd(query as CFDictionary, nil) == errSecSuccess else { throw SharedRecordError.key }
         return config
     }
+    /// 다른 기기가 감싸 준 키를 이 Mac 의 것으로 둔다(새 Mac). 있으면 덮어쓴다.
+    static func storeKey(_ config: Configuration) throws {
+        var query = keyQuery
+        let updates = [kSecValueData as String: try JSONEncoder().encode(config), kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly] as [String: Any]
+        let status = SecItemUpdate(query as CFDictionary, updates as CFDictionary)
+        if status == errSecItemNotFound {
+            updates.forEach { query[$0] = $1 }
+            guard SecItemAdd(query as CFDictionary, nil) == errSecSuccess else { throw SharedRecordError.key }
+        } else if status != errSecSuccess { throw SharedRecordError.key }
+    }
     static func loadKey() throws -> Configuration {
         guard let data = try keyData() else { throw SharedRecordError.key }
         return try JSONDecoder().decode(Configuration.self, from: data)

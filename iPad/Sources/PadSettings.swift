@@ -50,6 +50,9 @@ struct Session: Codable {
     var refreshToken: String
     var expiresAt: Date
     var registered: Bool
+    var email: String?       // 구글 프로필(표시용). 없으면 이니셜·실루엣
+    var name: String?
+    var avatarURL: String?
     static func load() -> Session? { Keychain.load(Session.self, account: "session") }
     func save() throws { try Keychain.save(self, account: "session") }
     static func clear() { Keychain.delete(account: "session"); Keychain.delete(account: "vault") }

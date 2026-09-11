@@ -79,8 +79,8 @@ final class ImmersiveKioskTests: XCTestCase {
                 let layout = ImmersiveDashboardLayout(screen: screen, phone: phone, controlWidth: 300, footerHeight: footer)
                 XCTAssertEqual(layout.controls.phone, phone)
                 XCTAssertEqual(layout.sidebar.minX, screen.minX)
-                XCTAssertEqual(layout.sidebar.width, screen.width - (300 + WorkbenchLayout.horizontalInset * 2))
-                XCTAssertEqual(layout.controlArea.width, 300)
+                XCTAssertEqual(layout.sidebar.width, WorkbenchLayout.conversationWidth, "대화 열은 폰 폭으로 고정")
+                XCTAssertEqual(layout.controlArea.width, screen.width - WorkbenchLayout.conversationWidth - WorkbenchLayout.horizontalInset * 2)
                 XCTAssertTrue(layout.recordsCover.isEmpty)
                 assertCoverage(screen: screen, covers: [layout.sidebar] + layout.controls.bands, holes: [phone])
             }

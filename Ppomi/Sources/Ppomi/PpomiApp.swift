@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ note: Notification) {
         state = Self.pendingState
         NSApp.setActivationPolicy(.regular)
+        GoogleAccount.shared.startSharing()
         // 손·눈 권한이 없어 폰 도구가 거부되면(state.setupNeeded) 그때 설정 › 시작하기를 연다 — 시작 때가 아니라 첫 도구 때.
         setupWatch = state?.$setupNeeded.dropFirst().receive(on: RunLoop.main).sink { _ in
             NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
@@ -28,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var setupWatch: AnyCancellable?
     /// OS 텍스트 크기가 바뀌었으면(설정 앱에 다녀온 뒤) 모든 글자·여백·웹 페이지가 따라간다.
     func applicationDidBecomeActive(_ notification: Notification) {
+        Task.detached { guard GoogleAccount.session != nil else { return }; try? GoogleAccount.exchangeKeys() }   // 기다리는 기기에 키를
         let scale = AppSettings.uiScale
         guard Fonts.scale.value != scale else { return }
         Fonts.scale.value = scale

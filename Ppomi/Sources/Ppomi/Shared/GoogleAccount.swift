@@ -1,6 +1,6 @@
 // Mac 의 구글 로그인: 아이패드와 같은 흐름(설정 › 계정 › Google 계정으로 로그인). 세션은 키체인, 기기는 모든 요청의 X-Ppomi-Device.
-// 이 Mac 에 옛 기기 계정(이메일·비밀번호, --configure-shared)이 있으면 첫 로그인 때 그 기기·작업 공간을 구글 사용자 것으로 넘기고(ppomi_rebind_device)
-// 기록 키를 작업 공간에 올린다 — 장부는 그대로, 아이패드가 같은 것을 본다. 없으면 새 기기로 등록한다(ppomi_register_device).
+// 이 Mac 에 옛 기기 계정(이메일·비밀번호, --configure-shared)이 있으면 첫 로그인 때 그 기기·작업 공간을 구글 사용자 것으로 넘긴다(ppomi_rebind_device).
+// 기록 키는 서버에 평문으로 안 올린다: 기기마다 X25519 공개키를 등록하고, 키를 가진 이 Mac 이 기다리는 기기의 공개키로 감싼 사본만 올린다(exchangeKeys).
 import AppKit
 import AuthenticationServices
 
@@ -10,11 +10,13 @@ struct MacSession: Codable {
     var expiresAt: Date
     var registered: Bool
     var email: String
+    var name: String?        // 구글 프로필 이름·사진(표시용). 없으면 이메일·이니셜
+    var avatarURL: String?
 }
 
 @MainActor final class GoogleAccount: NSObject, ASWebAuthenticationPresentationContextProviding {
     static let shared = GoogleAccount()
-    static let rpcNames: Set<String> = ["ppomi_rebind_device", "ppomi_register_device", "ppomi_key_put"]
+    static let rpcNames: Set<String> = ["ppomi_rebind_device", "ppomi_register_device", "ppomi_devices_waiting", "ppomi_key_wrap_put", "ppomi_key_get"]
     private static let service = "com.muilyzz.ppomi.google"
     private var web: ASWebAuthenticationSession?
 
@@ -47,26 +49,64 @@ struct MacSession: Codable {
         let tokens = try await Task.detached { try SupabaseAuth.exchange(code: code, verifier: pkce.verifier) }.value
         guard let sub = tokens.claims["sub"] as? String, UUID(uuidString: sub) != nil else { throw SharedServerError.authentication }
         let email = tokens.claims["email"] as? String ?? sub
+        let meta = tokens.claims["user_metadata"] as? [String: Any] ?? [:]
+        let name = (meta["full_name"] ?? meta["name"]) as? String, avatar = (meta["avatar_url"] ?? meta["picture"]) as? String
         let client = SharedServerClient.shared
         let legacy = (try? SharedServerConfiguration.load()) != nil
         let deviceID = Self.deviceID
         do {
             // 옛 기기 계정이 있으면 그 계정으로 한 번: 구글 사용자를 구성원으로, 이 기기를 구글 사용자 것으로.
             if legacy { _ = try await Task.detached { try client.rpc("ppomi_rebind_device", ["p_auth_user_id": sub], legacy: true) }.value }
-            try Self.save(MacSession(accessToken: tokens.access, refreshToken: tokens.refresh, expiresAt: tokens.expiresAt, registered: legacy, email: email))
+            try Self.save(MacSession(accessToken: tokens.access, refreshToken: tokens.refresh, expiresAt: tokens.expiresAt, registered: legacy, email: email, name: name, avatarURL: avatar))
             client.invalidate()   // 이제부터 구글 세션
             try await Task.detached {
-                if !legacy { _ = try client.rpc("ppomi_register_device", ["p_device_id": deviceID, "p_label": "Mac", "p_platform": "macos"]) }
-                if let key = try? SharedRecordVault.loadKey() {   // 아이패드 등이 같은 기록을 읽도록 작업 공간에
-                    _ = try client.rpc("ppomi_key_put", ["p_key_id": key.keyID, "p_key": key.key.base64EncodedString(), "p_records": key.records])
-                }
+                _ = try client.rpc("ppomi_register_device", ["p_device_id": deviceID, "p_label": "Mac", "p_platform": "macos", "p_public_key": try Self.publicKey()])
+                try Self.exchangeKeys(client)
             }.value
         } catch { Self.clear(); client.invalidate(); throw error }
-        let done = MacSession(accessToken: tokens.access, refreshToken: tokens.refresh, expiresAt: tokens.expiresAt, registered: true, email: email)
+        let done = MacSession(accessToken: tokens.access, refreshToken: tokens.refresh, expiresAt: tokens.expiresAt, registered: true, email: email, name: name, avatarURL: avatar)
         try Self.save(done); client.invalidate()
         return done
     }
     func signOut() { Self.clear(); SharedServerClient.shared.invalidate() }
+
+    /// 이 Mac 의 X25519 공개키(등록 때 서버로). 비밀키는 이 Mac 키체인에만.
+    nonisolated static func publicKey() throws -> String { try DeviceKey.publicKeyBase64(service: service) }
+
+    /// 기록 키 주고받기. 이 Mac 에 키가 있으면 기다리는 기기들의 공개키로 감싸 올리고, 없으면(새 Mac) 다른 기기가 감싸 준 것을 받는다. 서버엔 감싼 사본만.
+    nonisolated static func exchangeKeys(_ client: SharedServerClient = .shared) throws {
+        if let key = try? SharedRecordVault.loadKey() {
+            guard let waiting = try client.rpc("ppomi_devices_waiting", [:]) as? [[String: Any]] else { return }
+            for device in waiting {
+                guard let id = device["id"] as? String, let text = device["public_key"] as? String,
+                      let recipient = Data(base64Encoded: text), recipient.count == 32 else { continue }
+                let wrapped = try KeyWrap.wrap(key.key, for: recipient, workspaceID: key.workspaceID, keyID: key.keyID)
+                _ = try client.rpc("ppomi_key_wrap_put", ["p_device_id": id, "p_key_id": key.keyID, "p_records": key.records, "p_wrapped": wrapped.base64EncodedString()])
+            }
+            return
+        }
+        guard let reply = try client.rpc("ppomi_key_get", [:]) as? [String: Any], reply["found"] as? Bool == true,
+              let workspaceID = reply["workspace_id"] as? String, let keyID = reply["key_id"] as? String,
+              let records = reply["records"] as? [String: String], let text = reply["wrapped"] as? String, let blob = Data(base64Encoded: text) else { return }
+        let key = try KeyWrap.unwrap(blob, with: DeviceKey.privateKey(service: service), workspaceID: workspaceID, keyID: keyID)
+        try SharedRecordVault.storeKey(SharedRecordKey(workspaceID: workspaceID, deviceID: deviceID, keyID: keyID, key: key, records: records, sourcePath: ""))
+        UserDefaults.standard.set(true, forKey: "sharedRecordsEnabled.v1")
+    }
+
+    private var sharing: Timer?
+    /// 앱이 켜져 있는 동안 로그인돼 있으면 1분마다 키를 주고받는다 — 새 기기는 이 Mac 이 켜져 있을 때 받는다. 처음 한 번은 이 Mac 의 공개키도 등록한다.
+    func startSharing() {
+        guard sharing == nil else { return }
+        let deviceID = Self.deviceID
+        Task.detached {
+            guard Self.session != nil else { return }
+            _ = try? SharedServerClient.shared.rpc("ppomi_register_device", ["p_device_id": deviceID, "p_label": "Mac", "p_platform": "macos", "p_public_key": try Self.publicKey()])
+            try? Self.exchangeKeys()
+        }
+        sharing = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
+            Task.detached { guard Self.session != nil else { return }; try? Self.exchangeKeys() }
+        }
+    }
 
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         NSApp.keyWindow ?? NSApp.windows.first ?? ASPresentationAnchor()

@@ -30,41 +30,28 @@ struct IdentityProfilesView: View {
     fileprivate init(store: IdentityProfileViewStore) { self.store = store }
 
     var body: some View {
+        // 사람마다 자기 계정으로 로그인하므로 프로필은 "나" 하나뿐(가족은 각자). 추가·새로고침 버튼 없음: 보일 때 읽고, 대화·예금주 캡처가 채운다.
         Section("자동입력 기본정보") {
-            Text("대화 또는 ‘프로필 추가’").font(.ppomi(1)).foregroundStyle(.fg2)
-
             if let errorMessage {
                 Text(errorMessage).foregroundStyle(.bad)
                     .accessibilityIdentifier("identity-profiles-error")
             } else if !loaded {
                 ProgressView("불러오는 중")
-            } else if profiles.isEmpty {
-                Text("등록된 정보 없음")
-                    .foregroundStyle(.fg2)
-            }
-
-            ForEach(profiles) { profile in
+            } else if let profile = profiles.first(where: { $0.id == "self" }) {
                 HStack(spacing: 12) {
                     IdentityProfileSummary(profile: profile)
                     Spacer()
-                    Button("보기·편집") {
-                        editor = Editor(profile: profile, isNew: false)
-                    }
-                    .accessibilityLabel("\(profile.label) 기본정보 보기 및 편집")
+                    Button("보기·편집") { editor = Editor(profile: profile, isNew: false) }
+                        .accessibilityLabel("기본정보 보기 및 편집")
+                }
+            } else {
+                HStack {
+                    Text("등록된 정보 없음").foregroundStyle(.fg2)
+                    Spacer()
+                    Button("입력") { editor = Editor(profile: IdentityProfile(id: "self", label: "나"), isNew: true) }
                 }
             }
-
-            HStack {
-                Button("프로필 추가", systemImage: "person.badge.plus") { addProfile() }
-                    .disabled(!loaded)
-                Spacer()
-                Button("새로고침", systemImage: "arrow.clockwise") { reload() }
-                    .help("다시 불러오기")
-            }
-
-            Text("폼 자동 입력용 · 비밀번호·인증번호 저장 안 함")
-                .font(.ppomi(1)).foregroundStyle(.fg2)
-            Text("이 Mac 키체인 저장 · 목록은 일부 가림")
+            Text("폼 자동 입력용 · 대화에서 말하거나 은행 앱 예금주를 읽어 채움 · 비밀번호·인증번호 저장 안 함")
                 .font(.ppomi(1)).foregroundStyle(.fg2)
         }
         .task { reload() }
@@ -86,52 +73,44 @@ struct IdentityProfilesView: View {
         }
     }
 
-    private func addProfile() {
-        let profile = profiles.contains(where: { $0.id == "self" })
-            ? IdentityProfile(id: "family-" + UUID().uuidString.lowercased(), label: "가족")
-            : IdentityProfile(id: "self", label: "나")
-        editor = Editor(profile: profile, isNew: true)
-    }
 }
 
 private struct IdentityProfileSummary: View {
     let profile: IdentityProfile
 
+    /// 지문을 댄 뒤에만 보이는 자리라 값을 그대로 쓴다. 가림은 잠금 없이 목록이 보이던 때의 것이었다.
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(profile.label).fontWeight(.medium)
-            Text([maskedName, profile.birthDate == nil ? "생년월일 미등록" : "생년월일 ••••-••-••"].joined(separator: " · "))
+            Text(["이름 " + (profile.name ?? "미등록"), "생년월일 " + (profile.birthDate ?? "미등록")].joined(separator: " · "))
                 .font(.ppomi(1)).foregroundStyle(.fg2)
-            Text([maskedPhone, IdentityProfileCarrier.label(for: profile.carrier)].joined(separator: " · "))
+            Text(["휴대폰 " + (profile.phone.map(Self.phone) ?? "미등록"), IdentityProfileCarrier.label(for: profile.carrier)].joined(separator: " · "))
                 .font(.ppomi(1)).foregroundStyle(.fg2)
             if profile.businessName != nil || profile.businessRegistrationNumber != nil {
-                Text([profile.businessName == nil ? "상호 미등록" : "상호 등록됨",
-                      profile.businessRegistrationNumber == nil ? "사업자번호 미등록" : "사업자번호 등록됨"].joined(separator: " · "))
+                Text(["상호 " + (profile.businessName ?? "미등록"), "사업자번호 " + (profile.businessRegistrationNumber.map(Self.business) ?? "미등록")].joined(separator: " · "))
                     .font(.ppomi(1)).foregroundStyle(.fg2)
             }
             ForEach((profile.bankProfiles ?? [:]).keys.sorted(), id: \.self) { bankID in
                 if let bank = profile.bankProfiles?[bankID] {
-                    Text([IdentityProfileBank.label(for: bankID),
-                          bank.customerName == nil ? "고객명 미등록" : "고객명 등록됨",
-                          bank.accountNumber == nil ? "출금계좌 미등록" : "출금계좌 등록됨"].joined(separator: " · "))
+                    Text([IdentityProfileBank.label(for: bankID), "고객명 " + (bank.customerName ?? "미등록"), "출금계좌 " + (bank.accountNumber ?? "미등록")].joined(separator: " · "))
                         .font(.ppomi(1)).foregroundStyle(.fg2)
                         .accessibilityIdentifier("identity-bank-summary-\(bankID)")
                 }
             }
         }
+        .textSelection(.enabled)
         .accessibilityElement(children: .combine)
     }
 
-    private var maskedName: String {
-        guard let name = profile.name, !name.isEmpty else { return "이름 미등록" }
-        guard name.count > 1 else { return "이름 •" }
-        return "이름 \(name.prefix(1))\(String(repeating: "•", count: name.count - 1))"
+    /// 01012345678 → 010-1234-5678. 다른 길이는 그대로.
+    private static func phone(_ digits: String) -> String {
+        guard digits.count == 11, digits.allSatisfy(\.isNumber) else { return digits }
+        return digits.prefix(3) + "-" + digits.dropFirst(3).prefix(4) + "-" + digits.suffix(4)
     }
-
-    private var maskedPhone: String {
-        guard let phone = profile.phone, !phone.isEmpty else { return "휴대폰 미등록" }
-        guard phone.count > 4 else { return "휴대폰 ••••" }
-        return "휴대폰 •••-••••-\(phone.suffix(4))"
+    /// 1234567890 → 123-45-67890.
+    private static func business(_ digits: String) -> String {
+        guard digits.count == 10, digits.allSatisfy(\.isNumber) else { return digits }
+        return digits.prefix(3) + "-" + digits.dropFirst(3).prefix(2) + "-" + digits.suffix(5)
     }
 }
 

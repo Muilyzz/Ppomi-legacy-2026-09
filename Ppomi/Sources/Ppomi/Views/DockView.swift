@@ -3,7 +3,7 @@ import AppKit
 /// 제어 자리 while it is empty: one line (the target name with its connection state, or a hint).
 final class DockView: WorkbenchSurface {
     var surface: WorkSurface = .iphone { didSet { if surface != oldValue { updateContent() } } }
-    var hint = "" { didSet { if hint != oldValue { updateContent() } } }
+    var hint = "" { didSet { if hint != oldValue { updateContent(); superview?.needsLayout = true } } }
     private let line = WorkbenchLabel(labelWithString: "")
 
     override init(frame: NSRect) {

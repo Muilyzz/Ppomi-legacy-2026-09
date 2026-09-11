@@ -18,7 +18,10 @@ import UIKit
         }
         guard let code = SupabaseAuth.code(from: callback) else { throw URLError(.badServerResponse) }
         let tokens = try await Task.detached { try SupabaseAuth.exchange(code: code, verifier: pkce.verifier) }.value
-        let login = Session(accessToken: tokens.access, refreshToken: tokens.refresh, expiresAt: tokens.expiresAt, registered: false)
+        let meta = tokens.claims["user_metadata"] as? [String: Any] ?? [:]
+        let login = Session(accessToken: tokens.access, refreshToken: tokens.refresh, expiresAt: tokens.expiresAt, registered: false,
+                            email: tokens.claims["email"] as? String, name: (meta["full_name"] ?? meta["name"]) as? String,
+                            avatarURL: (meta["avatar_url"] ?? meta["picture"]) as? String)
         try login.save()
         // 기기 등록 + 작업 공간의 기록 키(Mac 이 "구글 계정 연결"을 눌렀으면 있다). 초대·QR 없음.
         try await Task.detached { try PadVault.enroll() }.value

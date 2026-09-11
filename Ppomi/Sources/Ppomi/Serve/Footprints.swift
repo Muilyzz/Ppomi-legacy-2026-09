@@ -26,7 +26,7 @@ struct Footprint: Codable, Equatable {
 
     static let replayable: Set<String> = ["▶", "⊙", "⌨", "↓", "⎋"]
     /// Tools.payWord's word list without its end anchor: a target is a regex ("결제|취소" would slip past `\s*$`).
-    static let payWord = Re(Tools.payWords)
+    static let payWord = Re("(?<!바로)(" + Tools.payWords + ")")
     static func isPayTarget(_ s: String) -> Bool { payWord.search(s) != nil }
 
     /// nil when the cerebellum may take this step itself; else why the brain gets it back.

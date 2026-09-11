@@ -59,3 +59,46 @@ enum SharedRecordCrypto {
     }
     static func hash(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
 }
+
+/// 기기 간 키 전달: 받는 기기의 X25519 공개키로 기록 키를 감싼다(임시 키쌍 → ECDH → HKDF-SHA256 → AES-GCM). 서버는 감싼 사본만 본다.
+/// 형식 ppomi-wrap-v1 = 임시 공개키 32바이트 + AES-GCM combined(nonce 12 · 키 32 · 태그 16) = 92바이트.
+enum KeyWrap {
+    static let version = "ppomi-wrap-v1"
+    static func wrap(_ key: Data, for recipient: Data, workspaceID: String, keyID: String) throws -> Data {
+        guard key.count == 32 else { throw SharedRecordError.invalid }
+        let recipientKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: recipient)
+        let ephemeral = Curve25519.KeyAgreement.PrivateKey()
+        let symmetric = try ephemeral.sharedSecretFromKeyAgreement(with: recipientKey)
+            .hkdfDerivedSymmetricKey(using: SHA256.self, salt: Data(workspaceID.lowercased().utf8), sharedInfo: info(keyID), outputByteCount: 32)
+        guard let sealed = try AES.GCM.seal(key, using: symmetric, authenticating: aad(workspaceID, keyID, recipient)).combined else { throw SharedRecordError.invalid }
+        return ephemeral.publicKey.rawRepresentation + sealed
+    }
+    static func unwrap(_ blob: Data, with privateKey: Curve25519.KeyAgreement.PrivateKey, workspaceID: String, keyID: String) throws -> Data {
+        guard blob.count == 32 + 12 + 32 + 16 else { throw SharedRecordError.invalid }
+        do {
+            let ephemeral = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: blob.prefix(32))
+            let symmetric = try privateKey.sharedSecretFromKeyAgreement(with: ephemeral)
+                .hkdfDerivedSymmetricKey(using: SHA256.self, salt: Data(workspaceID.lowercased().utf8), sharedInfo: info(keyID), outputByteCount: 32)
+            let key = try AES.GCM.open(AES.GCM.SealedBox(combined: blob.dropFirst(32)), using: symmetric,
+                                       authenticating: aad(workspaceID, keyID, privateKey.publicKey.rawRepresentation))
+            guard key.count == 32 else { throw SharedRecordError.invalid }
+            return key
+        } catch { throw SharedRecordError.invalid }
+    }
+    private static func info(_ keyID: String) -> Data { Data((version + "|" + keyID.lowercased()).utf8) }
+    private static func aad(_ workspaceID: String, _ keyID: String, _ recipient: Data) -> Data {
+        Data((version + "|" + workspaceID.lowercased() + "|" + keyID.lowercased() + "|").utf8) + recipient
+    }
+}
+
+/// 이 기기의 키쌍. 비밀키는 이 기기의 키체인에만, 공개키는 등록 때 서버로.
+enum DeviceKey {
+    static func privateKey(service: String) throws -> Curve25519.KeyAgreement.PrivateKey {
+        if let raw = SessionStore.load(Data.self, service: service, account: "device-key"),
+           let key = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: raw) { return key }
+        let key = Curve25519.KeyAgreement.PrivateKey()
+        try SessionStore.save(key.rawRepresentation, service: service, account: "device-key")
+        return key
+    }
+    static func publicKeyBase64(service: String) throws -> String { try privateKey(service: service).publicKey.rawRepresentation.base64EncodedString() }
+}
