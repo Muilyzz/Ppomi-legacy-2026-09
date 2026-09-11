@@ -9,6 +9,13 @@
 alter table public.ppomi_agent_memories
     alter column created_by_device_id drop not null;
 
+-- Direct SELECT (and Realtime) follow the same membership boundary as the
+-- RPCs; ppomi_current_workspace_id() would still require a device header
+-- and approval. Rows are at-rest envelopes, never plaintext.
+drop policy ppomi_agent_memories_workspace_read on public.ppomi_agent_memories;
+create policy ppomi_agent_memories_workspace_read on public.ppomi_agent_memories for select to authenticated
+    using (public.ppomi_is_workspace_member(workspace_id));
+
 create function public.ppomi_agent_memory_payload_valid(p_payload jsonb, p_id uuid, p_replaces uuid)
 returns boolean language plpgsql immutable set search_path = '' as $$
 begin
