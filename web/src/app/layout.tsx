@@ -10,6 +10,13 @@ export const metadata: Metadata = {
   description: 'MZZ-39 slice 1 — Clerk as primary auth. Supabase stays the data plane.',
 };
 
+/**
+ * Every route renders per request. Otherwise `isClerkConfigured()` is frozen
+ * into static HTML at build time, and keys supplied only at runtime would
+ * leave the pages on the setup panel while the middleware goes live.
+ */
+export const dynamic = 'force-dynamic';
+
 const appearance = {
   variables: {
     colorBackground: '#131313',

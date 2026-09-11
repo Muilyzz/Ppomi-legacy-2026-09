@@ -10,7 +10,9 @@ const live: NextMiddleware = clerkMiddleware(async (auth, request) => {
 
 const setup: NextMiddleware = () => NextResponse.next();
 
-const middleware: NextMiddleware = isClerkConfigured() ? live : setup;
+/** Decided per request so a key added or fixed at runtime is honoured without a rebuild. */
+const middleware: NextMiddleware = (request, event) =>
+  (isClerkConfigured() ? live : setup)(request, event);
 
 export default middleware;
 
