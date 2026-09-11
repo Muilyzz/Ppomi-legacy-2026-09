@@ -37,6 +37,7 @@ struct RuntimeEvent: Equatable, Identifiable, Sendable {
         "phone_screen": "아이폰 화면 읽기", "phone_tap": "아이폰 탭", "phone_key": "아이폰 키 입력",
         "phone_type": "아이폰 입력", "phone_open": "아이폰 앱 열기", "phone_wait": "아이폰 잠금 대기", "phone_scroll": "아이폰 스크롤",
         "phone_installed": "아이폰 앱 확인", "browser_open": "브라우저 열기",
+        "screen_read": "Mac 화면 읽기", "ui_tap": "Mac 화면 누르기", "ui_type": "Mac 텍스트 입력",
         "windows_screen": "Windows 화면 읽기", "windows_click": "Windows 클릭",
         "windows_type": "Windows 입력", "windows_key": "Windows 키 입력",
         "windows_scroll": "Windows 스크롤", "windows_open": "Windows 열기",

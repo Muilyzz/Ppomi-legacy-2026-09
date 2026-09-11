@@ -81,3 +81,21 @@ test("missing click target does not call ui_tap", () => {
     error instanceof Error && "code" in error && error.code === "target_not_on_screen");
   assert.deepEqual(fixtureToolNames(tools.calls), ["screen_read"]);
 });
+
+test("fixture accepts coordinate tap and focused type used by Mac MCP", () => {
+  const tools = new FixtureMacosNativeTools(window);
+  tools.screen_read({ app: "chrome" });
+  assert.equal(tools.ui_tap({ x: 40, y: 90 }).invoked, true);
+  tools.screen_read();
+  assert.equal(tools.ui_type({ text: "focused" }).typed, true);
+  assert.deepEqual(tools.calls.filter(call => call.name === "screen_read"), [
+    { name: "screen_read", args: { app: "chrome" } },
+    { name: "screen_read", args: {} },
+  ]);
+  assert.deepEqual(tools.calls.filter(call => call.name === "ui_tap"), [
+    { name: "ui_tap", args: { x: 40, y: 90 } },
+  ]);
+  assert.deepEqual(tools.calls.filter(call => call.name === "ui_type"), [
+    { name: "ui_type", args: { text: "focused" } },
+  ]);
+});

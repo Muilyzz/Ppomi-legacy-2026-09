@@ -23,7 +23,8 @@ final class ScreenControlLease: @unchecked Sendable {
 
     private static let visibleSurfacePrefixes = ["phone_", "windows_", "android_"]
     private static let visibleSurfaceTools: Set<String> = [
-        "run_combo", "inbody_capture", "collect_now", "screen_inspect", "profile_fill", "browser_open"
+        "run_combo", "inbody_capture", "collect_now", "screen_inspect", "profile_fill", "browser_open",
+        "screen_read", "ui_tap", "ui_type"
     ]
     // android_status asks the bridge for connection status without capturing or navigating UI.
     private static let surfaceIndependentTools: Set<String> = ["android_status"]

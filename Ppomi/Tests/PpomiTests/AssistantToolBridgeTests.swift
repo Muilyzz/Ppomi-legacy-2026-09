@@ -7,7 +7,7 @@ final class AssistantToolBridgeTests: XCTestCase {
         let specs = MCPServer.toolSpecs
         XCTAssertTrue(JSONSerialization.isValidJSONObject(specs))
         let names = specs.map { $0["name"] as! String }
-        for name in ["phone_screen", "phone_tap", "windows_screen", "windows_click", "profile_fill", "run_combo", "bank_profile_capture", "verify_step", "read_playbook"] {
+        for name in ["phone_screen", "phone_tap", "windows_screen", "windows_click", "profile_fill", "run_combo", "bank_profile_capture", "verify_step", "read_playbook", "screen_read", "ui_tap", "ui_type"] {
             XCTAssertTrue(names.contains(name), name)
         }
         let fill = try XCTUnwrap(specs.first { $0["name"] as? String == "profile_fill" })

@@ -117,7 +117,7 @@ final class MCPServer {
 
     // ---------------------------------------------------------------- tools
     private static let reused = ["phone_screen", "phone_tap", "phone_type", "phone_key", "phone_scroll", "phone_open", "phone_installed", "phone_wait", "run_combo",
-                                 "windows_screen", "windows_click", "windows_type", "windows_key", "windows_scroll", "windows_open", "browser_open", "screen_inspect",
+                                 "windows_screen", "windows_click", "windows_type", "windows_key", "windows_scroll", "windows_open", "browser_open", "screen_read", "ui_tap", "ui_type", "screen_inspect",
                                  "profile_save", "profile_status", "profile_delete", "profile_fill",
                                  "pay_preference", "confirm_payment", "record_spend", "balances", "today_spending", "ask_choice",
                                  "health_records", "record_health", "inbody_capture", "bank_profile_capture"] + AccountingTools.names.sorted() + AndroidTools.names.sorted() + SharedTools.names.sorted()
@@ -147,7 +147,7 @@ final class MCPServer {
             "\nAndroid는 android_status → android_open(packageName) → android_screen → android_click/android_type/android_tap/android_swipe/android_key를 쓴다. Android 앱의 접근성 서비스가 직접 제어하며 좌표는 실제 화면 픽셀이다. 매 조작 후 화면을 다시 읽고 최신 nodeId만 사용한다. 현재 에뮬레이터의 설정·뽀미 테스트 앱만 지원하며 Android 결제·은행 앱 제어는 지원하지 않는다." +
             "\n기본정보 등록의 주 경로는 대화→profile_save다. 사용자가 등록·수정하라고 직접 제공한 이름·생년월일·휴대폰·통신사·사업자 상호·사업자등록번호만 저장하고 모르는 값이나 다른 가족 정보를 추측하지 마라. 다른 가족은 해당 profile_id를 명시하고 대화의 사용 대상이 모호하면 먼저 확인한다. 이름만 아는 장부 설정을 본인 인증 프로필로 자동 복사하지 않는다. 비밀번호·주민등록번호·카드번호·인증번호는 등록하지 않는다. profile_status는 등록 여부만, profile_fill은 저장 값을 로컬에서 Windows 입력칸으로 전달한다. 지원 양식은 세움터 통신사 PASS(eais_pass), 사업자인증(eais_business), KB 개인사업자 ID 조회(kb_id_lookup, bank_id: kb), KB 기업 인증서 발급 1단계의 사업자등록번호(kb_certificate_identity)이다. KB 고객명·출금계좌번호는 뽀미 Mac 채팅의 은행정보 카드 또는 설정에서 직접 등록하며 profile_save 인자로 받지 않는다. 등록된 생년월일은 재사용하되 통장 고객명을 이름·상호에서 추측하지 않는다. KB 양식에는 bank_customer_name, birth_date, bank_account_number만 입력하며 계좌 비밀번호는 당사자가 공식 화면에서 직접 입력한다. 비공개 입력 후 일반 화면 수집으로 값을 기록하지 않는다. iPhone KB국민인증서(기업) 정보 입력은 form: kb_enterprise_certificate_info에서 business_registration_number(segment 1·2·3)와 phone만 지원한다. 휴대폰에는 010 뒤 8자리를 전달한다. 비밀번호·SMS 인증번호·발급 및 다음 버튼은 처리하지 않는다. 사업자번호의 세 칸은 segment 1·2·3을 지정한다. 각 항목을 최신 화면으로 확인해 입력하고 결과 검증 실패 시 재입력하지 않는다. 입력 결과는 원문을 대화로 복사하지 말고 항목별 성공 여부로 알린다. 저장·입력 성공을 실제 사업자 인증·가입 성공으로 보고하지 않는다. 이미 허용된 약관 동의와 인증 요청 준비는 이어가되 새 동의는 내용을 확인하고 비밀번호·인증번호 입력과 휴대폰 승인은 당사자에게 넘긴다. 대화로 보내기 원치 않는 정보는 설정의 가족 기본정보에서 직접 등록할 수 있다. 삭제 요청에는 profile_delete를 쓴다." +
             "\nOCR와 원본 이미지로 대상이나 상태를 판단하기 어렵거나 조작 후 변화가 불명확하면 screen_inspect(surface: phone|windows, question: 확인할 한 가지)를 보조로 호출한다. 작은 VLM의 유료 관찰이며 자동 재시도·클릭·승인을 하지 않는다. 관찰 결과와 좌표는 가설이므로 최신 원본 화면으로 검증하고 결제·인증·권한 규칙을 그대로 지켜라. 명확한 화면에서는 호출하지 않는다. 같은 조작이 반복해서 변화가 없으면 같은 클릭을 계속하지 말고 창 활성화·운영체제 반응·사이트 오류를 구분하라. 인증 정보가 포함된 질의나 화면을 VLM에 보내거나 거절을 우회하지 않는다." +
-            "\nlaunch.target=browser인 웹 플레이북은 browser_open(app: ID)으로 Mac의 Chrome에서 연다. 페이지 확인·입력은 호스트의 브라우저 도구로 이어간다. 뽀미 자체는 브라우저 DOM 조작·로그인·자동 재생을 제공하지 않는다. Mac에서 진행할 수 없는 단계가 확인됐을 때만 Parallels를 대안으로 사용한다. launch.target=windows인 플레이북(exe 설치·공동인증서 사이트)은 처음부터 windows_open(app: ID)으로 연다." +
+            "\nlaunch.target=browser인 웹 플레이북은 browser_open(app: ID)으로 Mac의 Chrome(또는 browser:safari)에서 연다. 페이지 확인·입력은 같은 MCP의 screen_read / ui_tap / ui_type으로 한다. screen_read는 전면 또는 app=chrome|safari 인 브라우저의 AX 트리(텍스트·좌표·nodeId)를 준다. ui_tap은 방금 읽은 nodeId 또는 x,y를 클릭하고, ui_type은 포커스된 칸 또는 nodeId에 입력한다. 로그인·자동 재생은 제공하지 않는다. 결제·구매 버튼과 비밀번호 칸은 당사자가 직접 처리한다. Mac에서 진행할 수 없는 단계가 확인됐을 때만 Parallels를 대안으로 사용한다. launch.target=windows인 플레이북(exe 설치·공동인증서 사이트)은 처음부터 windows_open(app: ID)으로 연다." +
             "\nParallels의 Windows 창은 windows_open(URL) → windows_screen → windows_click/windows_type/windows_key/windows_scroll 로 같은 기호(⊙ ⌨ ↓ ⎋ 👤 ✋)를 수행한다. 공식 보안 프로그램의 안내·다운로드·설치 준비는 이미 허용된 범위에서 이어간다. OS 관리자 인증·새 민감 접근 권한·인증서 비밀번호 등 실제 사람 단계만 사용자에게 넘긴다(👤). 결제 버튼은 confirm_payment 승인 뒤에만 windows_click 된다." +
             "\n건강 기록은 health_records/record_health, 본인 인바디 결과는 inbody_capture로 비공개 저장한다. 발생 시각·사람을 확인하고 사용자 보고와 AI 추정은 구분해 별도 기록한다. 추정·미검토·기기 변경을 숨기거나 미기록을 0으로 보지 마라. 검토 완료는 사용자가 앱에서 직접 표시한다." +
             "\n‘선크림 발랐어’ 같은 실제 사용자 보고만 record_health(kind=habit, activityID=sunscreen, activityStatus=completed, attribution=reported)로 기록한다. occurredAt은 보고 시각, activityDay/activityTimeZone은 실제 바른 날짜·시간대이며 어제 바르고 오늘 보고했다면 분리한다. 모호하면 묻고 알림·예정·사진·미래 날짜를 완료로 만들지 않는다." +
@@ -247,6 +247,13 @@ final class MCPServer {
                 catch { return text("문서에는 적었지만 발자국을 저장하지 못했다: \(error)", error: true) }
             }
             return text("절차에 적었다: \(str("app"))")
+        case "screen_read", "ui_tap", "ui_type":
+            let result = tools.execute(name, a)
+            if result.hasPrefix("오류:") || result.hasPrefix("실행 안 함:") { return text(result, error: true) }
+            if let data = result.data(using: .utf8), let obj = try? JSONSerialization.jsonObject(with: data) {
+                return ["content": [["type": "text", "text": result]], "structuredContent": obj]
+            }
+            return text(result)
         default:
             guard Self.reused.contains(name) else { return text("unknown tool \(name)", error: true) }
             let result = tools.execute(name, a)

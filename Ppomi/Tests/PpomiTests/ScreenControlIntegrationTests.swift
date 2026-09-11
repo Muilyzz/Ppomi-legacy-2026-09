@@ -40,7 +40,8 @@ final class ScreenControlIntegrationTests: XCTestCase {
         tools.lastPNG = directory.appendingPathComponent("previous.png")
         tools.lastAndroidPNG = directory.appendingPathComponent("previous-android.png")
         for name in ["phone_screen", "phone_tap", "phone_installed", "windows_screen", "windows_type",
-                     "android_screen", "android_click", "browser_open", "run_combo", "screen_inspect",
+                     "android_screen", "android_click", "browser_open", "screen_read", "ui_tap", "ui_type",
+                     "run_combo", "screen_inspect",
                      "inbody_capture", "profile_fill", "collect_now"] {
             events = []
             XCTAssertEqual(tools.execute(name, [:]), ScreenControlLease.blockedMessage, name)
