@@ -1,6 +1,8 @@
+import { isPublishableKey } from '@clerk/shared/keys';
+
 /** Placeholder tokens documented in `.env.example`. Never treat these as live keys. */
 const PLACEHOLDER = /REPLACE_ME|your[_-]?clerk|placeholder|\bxxx+\b/i;
-const PUBLISHABLE = /^pk_(test|live)_[A-Za-z0-9]{16,}$/;
+/** Clerk publishes no stricter public shape for secret keys than prefix + opaque token. */
 const SECRET = /^sk_(test|live)_[A-Za-z0-9]{16,}$/;
 
 export const CLERK_REQUIRED_KEYS = [
@@ -29,47 +31,77 @@ export const CLERK_ACCOUNT_REDIRECT = '/account';
 
 export type ClerkRequiredKey = (typeof CLERK_REQUIRED_KEYS)[number];
 
+/**
+ * `invalid` is a value that is neither empty nor a documented placeholder but
+ * fails Clerk's own shape check. Clerk would throw "Publishable key not valid."
+ * on every matched route, so it must keep the app in setup mode instead.
+ */
+export type ClerkKeyState = 'missing' | 'placeholder' | 'invalid' | 'valid';
+
 export type ClerkEnvSnapshot = {
   configured: boolean;
   missing: ClerkRequiredKey[];
   placeholders: ClerkRequiredKey[];
+  invalid: ClerkRequiredKey[];
+  keys: Record<ClerkRequiredKey, ClerkKeyState>;
 };
 
 export function isPlaceholderValue(value: string | undefined): boolean {
   return !value || PLACEHOLDER.test(value);
 }
 
+/** Clerk's validator: prefix, base64 Frontend API domain, `$` terminator. */
 export function looksLikePublishableKey(value: string | undefined): boolean {
-  return Boolean(value && PUBLISHABLE.test(value) && !isPlaceholderValue(value));
+  return Boolean(value) && !isPlaceholderValue(value) && isPublishableKey(value);
 }
 
 export function looksLikeSecretKey(value: string | undefined): boolean {
   return Boolean(value && SECRET.test(value) && !isPlaceholderValue(value));
 }
 
+function keyState(value: string | undefined, valid: (value: string) => boolean): ClerkKeyState {
+  if (!value) return 'missing';
+  if (isPlaceholderValue(value)) return 'placeholder';
+  return valid(value) ? 'valid' : 'invalid';
+}
+
+/** Evaluate per call: pages and middleware read the live process env, never a build-time snapshot. */
 export function readClerkEnv(env: NodeJS.Dict<string> = process.env): ClerkEnvSnapshot {
-  const publishable = env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-  const secret = env.CLERK_SECRET_KEY;
-  const missing: ClerkRequiredKey[] = [];
-  const placeholders: ClerkRequiredKey[] = [];
-  if (!publishable) missing.push('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY');
-  else if (isPlaceholderValue(publishable) || !PUBLISHABLE.test(publishable)) {
-    placeholders.push('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY');
-  }
-  if (!secret) missing.push('CLERK_SECRET_KEY');
-  else if (isPlaceholderValue(secret) || !SECRET.test(secret)) {
-    placeholders.push('CLERK_SECRET_KEY');
-  }
+  const keys: Record<ClerkRequiredKey, ClerkKeyState> = {
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: keyState(env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, isPublishableKey),
+    CLERK_SECRET_KEY: keyState(env.CLERK_SECRET_KEY, value => SECRET.test(value)),
+  };
+  const withState = (state: ClerkKeyState): ClerkRequiredKey[] =>
+    CLERK_REQUIRED_KEYS.filter(key => keys[key] === state);
   return {
-    configured: missing.length === 0 && placeholders.length === 0
-      && looksLikePublishableKey(publishable) && looksLikeSecretKey(secret),
-    missing,
-    placeholders,
+    configured: CLERK_REQUIRED_KEYS.every(key => keys[key] === 'valid'),
+    missing: withState('missing'),
+    placeholders: withState('placeholder'),
+    invalid: withState('invalid'),
+    keys,
   };
 }
 
 export function isClerkConfigured(env: NodeJS.Dict<string> = process.env): boolean {
   return readClerkEnv(env).configured;
+}
+
+/** Human-readable state for the setup panel. Never renders the value itself. */
+export function describeKeyState(state: ClerkKeyState): string {
+  switch (state) {
+    case 'missing':
+      return '없음';
+    case 'placeholder':
+      return '예시 값 그대로';
+    case 'invalid':
+      return '형식이 맞지 않음 (Clerk 검증 실패)';
+    case 'valid':
+      return '확인됨';
+    default: {
+      const exhaustive: never = state;
+      return exhaustive;
+    }
+  }
 }
 
 /** Secrets a human must paste into `.env.local`. This spike never invents values. */

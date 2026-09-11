@@ -5,6 +5,7 @@ import {
   CLERK_DEFAULT_ROUTES,
   CLERK_REQUIRED_KEYS,
   SECRETS_THE_OPERATOR_MUST_ADD,
+  describeKeyState,
   isClerkConfigured,
   isPlaceholderValue,
   looksLikePublishableKey,
@@ -12,39 +13,74 @@ import {
   readClerkEnv,
 } from '../src/lib/clerk-env.ts';
 
+// Clerk's documentation placeholder domain, encoded the way Clerk encodes a
+// publishable key (base64 of `<frontend-api>$`). Not an instance anyone owns.
+const placeholderPublishable = 'pk_test_' + Buffer.from('example.clerk.accounts.dev$').toString('base64');
+const shapeOnlySecret = 'sk_test_clerkfake00bridge01';
+
 test('placeholder example values are not live Clerk keys', () => {
   assert.equal(isPlaceholderValue('pk_test_REPLACE_ME'), true);
   assert.equal(looksLikePublishableKey('pk_test_REPLACE_ME'), false);
   assert.equal(looksLikeSecretKey('sk_test_REPLACE_ME'), false);
-  assert.equal(isClerkConfigured({
+  const snapshot = readClerkEnv({
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_REPLACE_ME',
     CLERK_SECRET_KEY: 'sk_test_REPLACE_ME',
-  }), false);
+  });
+  assert.equal(snapshot.configured, false);
+  assert.deepEqual(snapshot.placeholders, [...CLERK_REQUIRED_KEYS]);
+  assert.deepEqual(snapshot.invalid, []);
 });
 
 test('empty env is a documented setup state, not a crash', () => {
   const snapshot = readClerkEnv({});
   assert.equal(snapshot.configured, false);
   assert.deepEqual(snapshot.missing, [...CLERK_REQUIRED_KEYS]);
+  assert.deepEqual(snapshot.keys, {
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'missing',
+    CLERK_SECRET_KEY: 'missing',
+  });
   assert.deepEqual(SECRETS_THE_OPERATOR_MUST_ADD.map(item => item.name), [...CLERK_REQUIRED_KEYS]);
 });
 
-test('shape-valid test keys count as configured; invented junk does not', () => {
-  const suffix = 'clerkfake00bridge01';
-  const publishable = ['pk', 'test', suffix].join('_');
-  const secret = ['sk', 'test', suffix].join('_');
+test('a prefix-shaped but undecodable publishable key is invalid, not configured', () => {
+  // The fixture the spike accepted; Clerk rejects it with "Publishable key not valid."
+  const fixture = 'pk_test_clerkfake00bridge01';
+  assert.equal(looksLikePublishableKey(fixture), false);
+  const snapshot = readClerkEnv({
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: fixture,
+    CLERK_SECRET_KEY: shapeOnlySecret,
+  });
+  assert.equal(snapshot.configured, false);
+  assert.deepEqual(snapshot.invalid, ['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY']);
+  assert.equal(snapshot.keys.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, 'invalid');
+  assert.equal(snapshot.keys.CLERK_SECRET_KEY, 'valid');
+});
+
+test('a key that passes Clerk’s own validator counts as configured; wrong kinds do not', () => {
+  assert.equal(looksLikePublishableKey(placeholderPublishable), true);
   assert.equal(isClerkConfigured({
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: publishable,
-    CLERK_SECRET_KEY: secret,
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: placeholderPublishable,
+    CLERK_SECRET_KEY: shapeOnlySecret,
   }), true);
   assert.equal(isClerkConfigured({
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'not-a-clerk-key',
-    CLERK_SECRET_KEY: secret,
+    CLERK_SECRET_KEY: shapeOnlySecret,
   }), false);
   assert.equal(isClerkConfigured({
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: publishable,
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: placeholderPublishable,
     CLERK_SECRET_KEY: 'pk_test_wrong_kind_of_key_here',
   }), false);
+  assert.equal(isClerkConfigured({
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: placeholderPublishable,
+  }), false);
+});
+
+test('the setup panel describes key state without echoing values', () => {
+  for (const state of ['missing', 'placeholder', 'invalid', 'valid'] as const) {
+    const text = describeKeyState(state);
+    assert.ok(text.length > 0);
+    assert.doesNotMatch(text, /pk_|sk_/);
+  }
 });
 
 test('embedded routes stay on this Next app', () => {

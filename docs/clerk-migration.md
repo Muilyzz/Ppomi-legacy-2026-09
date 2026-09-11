@@ -19,9 +19,11 @@
 | Android · 에이전트 스모크 · `shared-server.py` | 기기 이메일/비밀번호 `grant_type=password` |
 | 에이전트 서버 | Bearer Supabase access token → `ppomi_context` |
 | `hub/` | 세션 없음 (공개 카탈로그) |
-| Windows | 네이티브 Auth 없음. Parallels 게스트는 Mac 세션이 조종 |
+| Windows (main) | 네이티브 Auth 없음. Parallels 게스트는 Mac 세션이 조종 |
+| Windows ([PR #4](https://github.com/Muilyzz/Ppomi/pull/4) `feat/windows-google-login`, 미머지) | Supabase Auth Google OAuth (PKCE), 시스템 브라우저 → `ppomi://auth` → `ppomi_register_device(platform windows)`. [PR #9](https://github.com/Muilyzz/Ppomi/pull/9)가 Mac 승인 없이 자동 승인 |
+| 웹 기기 (PR #4 `20260911020000_web_record_devices.sql`, 미머지) | GoTrue 계정 JWT + `X-Ppomi-Device`로 `web` 플랫폼 기기 등록, 기록 읽기 전용. **Clerk 웹 세션과 나란한 두 번째 웹 인증 평면** — 슬라이스 2에서 하나만 남긴다 |
 
-RLS/RPC는 `auth.uid()` (UUID, `auth.users`)와 `ppomi_members.auth_user_id` / `ppomi_devices.auth_user_id`에 묶여 있다.
+RLS/RPC는 `auth.uid()` (UUID, `auth.users`)와 `ppomi_members.auth_user_id` / `ppomi_devices.auth_user_id`에 묶여 있다. PR #4/#5/#9의 새 마이그레이션(기기 승인, 서버 키 대화 기록)도 같은 `auth.uid()` 헬퍼를 쓴다. `web/src/lib/auth-inventory.ts`의 Windows 항목은 main 기준이며 PR #4가 착륙하면 갱신한다.
 
 ## 목표 구조
 
@@ -40,9 +42,9 @@ Postgres RLS  (select auth.jwt() ->> 'sub')
 Vault / 서버 키 암호문   ← 신원과 분리 (MZZ-27)
 ```
 
-`auth.uid()`는 `sub`를 uuid로 캐스팅한다. Clerk id(`user_2…`)에서는 NULL이거나 `22P02`가 난다. **RLS는 `auth.jwt()->>'sub'`를 text로 비교한다.**
+`auth.uid()`는 `sub` claim을 uuid로 캐스팅한다. Clerk id(`user_2…`)에서는 **항상 `22P02 invalid input syntax for type uuid`가 난다. NULL이 되는 경우는 없다.** 그래서 기존 RPC의 `if auth.uid() is null then raise 42501` 가드보다 먼저 오류가 나고, 아홉 개 SELECT 정책이 모두 거치는 `ppomi_current_workspace_id()` → `ppomi_private_device()`도 같은 오류로 끝난다. 서드파티 Clerk를 켠 뒤 Clerk 토큰으로 기존 `ppomi_*` 테이블·RPC를 부르면 조용히 빈 결과가 아니라 400 오류다(누출은 없다: `anon` grant 없음, 정책 없는 테이블은 RLS로 전부 거절). **RLS는 `auth.jwt()->>'iss'`와 `auth.jwt()->>'sub'`를 text로 비교한다.** 슬라이스 5는 모든 RPC가 `auth.uid()` 앞에서 부르는 주체 해석 함수(`iss`+`sub` → 매핑 → uuid) 하나로 시작한다.
 
-구 Clerk JWT 템플릿(프로젝트 JWT secret을 Clerk에 붙여 HS256을 찍는 방식)은 2025-04-01 폐기. 스파이크는 **서드파티 Clerk(JWKS)** 만 증명한다. 템플릿은 롤백 메모에만 남긴다.
+구 Clerk JWT 템플릿(프로젝트 JWT secret을 Clerk에 붙여 HS256을 찍는 방식)은 2025-04-01 폐기(비밀 공유·회전 다운타임·추가 지연). 스파이크는 **서드파티 Clerk(JWKS)** 만 증명한다. 템플릿은 **롤백 경로도 아니다** — 아래 롤백 절 참고.
 
 ## `web/` 스파이크
 
@@ -55,7 +57,7 @@ Next.js App Router + `@clerk/nextjs`.
 | `/account` | `auth.protect()` + UserButton. Clerk `sub` 표시 |
 | `/account/profile` | `<UserProfile />` (연결 계정 UI는 여기) |
 
-키가 없으면 ClerkProvider/middleware는 켜지지 않는다. 빌드·테스트는 비밀 없이 통과해야 한다.
+키가 없거나 예시 값이거나 **Clerk 자체 검증(`isPublishableKey`: 접두어 + base64 Frontend API 도메인 + `$`)을 통과하지 못하면** ClerkProvider/middleware는 켜지지 않고 설정 패널이 키별 상태(없음·예시 값·형식 오류)만 보여준다. 값은 절대 화면에 찍지 않는다. 판정은 요청마다 런타임 환경에서 하며(`layout.tsx`의 `dynamic = 'force-dynamic'`, middleware는 요청별 분기) 빌드 시점에 고정되지 않는다 — 빌드 뒤에 키를 넣는 배포도 동작한다. 빌드·테스트는 비밀 없이 통과해야 한다.
 
 ```sh
 cd web
@@ -125,9 +127,11 @@ using (clerk_user_id = (select auth.jwt() ->> 'sub'));
 
 선택 초안: [`supabase/drafts/clerk_user_map.sql`](../supabase/drafts/clerk_user_map.sql)
 
-- `ppomi_clerk_identities(clerk_user_id text, auth_user_id uuid)`
-- `db push` 대상이 아님. 슬라이스 5 백필 때 적용.
-- 자기 `sub` 행만 읽는 RLS 증명 정책 포함.
+- `ppomi_identity_subjects(issuer text, subject text, auth_user_id uuid, …)` — 기본키 `(issuer, subject)`. 테이블·컬럼에 벤더 이름을 넣지 않는다(IdP는 이미 한 번 바뀌었다).
+- `auth_user_id … references auth.users(id) on delete set null` — GoTrue 사용자를 지워도 실패하지 않고 신원 행은 남는다.
+- 자기 `(iss, sub)` 행만 읽는 RLS 증명 정책 포함(`iss` 고정). 쓰기 정책 없음(슬라이스 5 백필은 security definer RPC 또는 service role).
+- `supabase/drafts/`에만 둔다. `migrations/`로 옮기지 않고 `db push` 대상이 아님. 슬라이스 5 백필 때 검토 후 적용.
+- 신원은 `RecordScope`가 아니다: 개인/사업 귀속은 여기서 정하지 않는다. 슬라이스 4의 Clerk Organization id도 `ownerID`/`businessID`로 바로 쓰지 않는다([기록 구분](record-scopes.md)).
 
 ## 호출 지점 목록 (슬라이스 2–3)
 
@@ -171,12 +175,14 @@ using (clerk_user_id = (select auth.jwt() ->> 'sub'));
 | 표면 | 상태 |
 |---|---|
 | `hub/` | 세션 없음. 슬라이스 2가 이 Next 앱으로 허브 세션을 연다. footprint API는 그대로. |
-| Windows | Auth 클라이언트 없음. Mac이 게스트를 조종. |
+| 웹 기기 (PR #4, 미머지) | `supabase/migrations/20260911020000_web_record_devices.sql` — GoTrue JWT + `X-Ppomi-Device`, `web` 플랫폼, 읽기 전용. 슬라이스 2가 Clerk 세션과 둘 중 하나를 정리한다. |
+| Windows (main) | Auth 클라이언트 없음. Mac이 게스트를 조종. |
+| Windows (PR #4/#9, 미머지) | `executors/windows/Core/GoogleAccount.cs`, `Supabase.cs` — Google PKCE, `ppomi://auth`(Tauri 셸), DPAPI 세션, 자동 승인. 슬라이스 3 대상. |
 | `agent/server/handler.ts` | Bearer + `ppomi_context` |
 | `agent/scripts/*-smoke.ts` | password grant |
 | `scripts/shared-server.py` | CLI admin 사용자 생성 + password grant |
 
-슬라이스 2: 웹 세션만 Clerk. 슬라이스 3: Mac/iPad 딥링크·토큰 교환, Android password grant 교체. `X-Ppomi-Device`와 기기 등록 RPC는 남긴다.
+슬라이스 2: 웹 세션만 Clerk — PR #4의 GoTrue 웹 기기와 이 Clerk 세션 중 하나만 남긴다. 슬라이스 3 (MZZ-39: "Mac/Windows 클라이언트 딥링크·토큰 교환"): Mac/iPad/**Windows** 딥링크·토큰 교환(PR #4의 Windows PKCE 포함), Android password grant 교체. `X-Ppomi-Device`와 기기 등록 RPC는 남긴다.
 
 ## 하지 않는 일 (이 PR)
 
@@ -192,7 +198,7 @@ using (clerk_user_id = (select auth.jwt() ->> 'sub'));
 1. `web/`을 배포에서 빼고 `hub/` 랜딩만 둔다. 네이티브는 그대로 Google/비밀번호.
 2. Supabase Third-party Clerk를 끄면 Clerk JWT는 `authenticated`가 되지 않는다. 기존 Supabase Auth 토큰은 영향 없다.
 3. `supabase/drafts/clerk_user_map.sql`을 적용했다면 테이블만 drop. 기존 `ppomi_*` 행은 건드리지 말 것.
-4. JWT 템플릿+공유 JWT secret으로 돌아가지 말 것. secret 유출·로테이션 다운타임이 이유다.
+4. JWT 템플릿+공유 JWT secret으로 돌아가지 말 것. 2025-04-01 폐기된 통합이고 롤백 경로가 아니다. secret 유출·로테이션 다운타임이 이유다.
 5. `CLERK_*`를 저장소에 커밋한 적이 있으면 키를 회전하고 git history를 검사한다. 이 스파이크는 예시 값만 넣는다.
 
 ## 검증

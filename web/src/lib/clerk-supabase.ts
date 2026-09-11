@@ -1,8 +1,10 @@
 /**
  * Clerk ↔ Supabase identity bridge.
  *
- * Clerk `sub` is `user_<id>`, not a UUID. `auth.uid()` casts `sub` to uuid and
- * returns NULL (or errors) for Clerk tokens. RLS must read `auth.jwt()->>'sub'`.
+ * Clerk `sub` is `user_<id>`, not a UUID. `auth.uid()` casts `sub` to uuid, so for
+ * a Clerk token it always raises `22P02 invalid input syntax for type uuid` — it
+ * never returns NULL, and pre-empts every `if auth.uid() is null` guard. RLS must
+ * read `auth.jwt()->>'iss'` and `auth.jwt()->>'sub'`.
  *
  * Preferred path: Supabase third-party Clerk (JWKS). The old Clerk JWT template
  * that shared the project's JWT secret is deprecated (2025-04-01).
