@@ -1,5 +1,5 @@
 import { isAdapterTimeout } from "./adapter-timeout.ts";
-import type { BrowserPageAdapter, PageSnapshot } from "./browser-page-adapter.ts";
+import type { BrowserPageDriver, PageSnapshot } from "./browser-page-adapter.ts";
 import { emitNotExecutedRest, emitStepResult } from "./emit-step-result.ts";
 import { defaultPagePermission, type PermissionGate } from "./permissions.ts";
 import type {
@@ -10,23 +10,23 @@ import type { RunResult, StepEvidence, StepOutcome } from "./playbook.ts";
 import type { StepResult, StepTarget } from "./step-result.ts";
 
 /**
- * Runs declared in-page steps against one `BrowserPageAdapter`.
- * Authors: web DOM, forms, locator waits (`adapter-playwright`).
- * Native windows and cert UI use `PlaybookRuntime` + `OsAdapter`.
+ * Runs declared in-page steps against one `BrowserPageDriver`.
+ * Authors: web DOM, forms, locator waits (`driver-playwright`).
+ * Native windows and cert UI use `PlaybookRuntime` + `OsUiDriver`.
  * Do not `waitFor` a locator that only appears after a native modal.
  * See `docs/adapter-selection.md`.
  * Permission and page preconditions are fail-closed: the run stops
  * and later steps are not sent to the adapter.
  * `RunResult.evidence` is the runner log. `RunResult.stepResults` is
  * one `StepResult` per declared step (`attempt` distinguishes timeout
- * from not_executed). Does not call `OsAdapter`. There is no
+ * from not_executed). Does not call `OsUiDriver`. There is no
  * device-approval input.
  */
 export class PagePlaybookRuntime {
-  private readonly adapter: BrowserPageAdapter;
+  private readonly adapter: BrowserPageDriver;
   private readonly permissions: PermissionGate;
 
-  constructor(adapter: BrowserPageAdapter, permissions: PermissionGate) {
+  constructor(adapter: BrowserPageDriver, permissions: PermissionGate) {
     this.adapter = adapter;
     this.permissions = permissions;
   }
@@ -94,7 +94,7 @@ export class PagePlaybookRuntime {
   }
 }
 
-function apply(adapter: BrowserPageAdapter, step: PagePlaybookStep): void {
+function apply(adapter: BrowserPageDriver, step: PagePlaybookStep): void {
   switch (step.kind) {
     case "read":
       return;

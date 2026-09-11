@@ -49,7 +49,7 @@ const approvalTools = [
   "setControlApps",
 ];
 
-test("smoke: PagePlaybookRuntime drives fixture Playwright tools through adapter-playwright", () => {
+test("smoke: PagePlaybookRuntime drives fixture Playwright tools through driver-playwright", () => {
   const tools = new FixturePlaywrightPage(documents);
   const adapter = new PlaywrightPageAdapter(tools);
   const runtime = new PagePlaybookRuntime(

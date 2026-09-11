@@ -47,7 +47,7 @@ test("createPlaywrightPageAiTools exposes only in-page operations", () => {
   for (const name of playwrightPageAiToolNames) {
     const description = tools[name]?.description ?? "";
     assert.match(description, /in-page/i);
-    assert.match(description, /OsAdapter/);
+    assert.match(description, /OsUiDriver/);
     assert.match(description, /not a Vercel \/ cloud browser/i);
   }
 });

@@ -28,7 +28,7 @@ async function main(): Promise<void> {
       throw new Error(`expected Example Domain title, got ${JSON.stringify(snapshot.title)}`);
     }
 
-    console.log("adapter-playwright live smoke: PASS");
+    console.log("driver-playwright live smoke: PASS");
     console.log(`  goto ${EXAMPLE_URL}`);
     console.log("  waitFor h1");
     console.log(`  title ${snapshot.title}`);
@@ -74,7 +74,7 @@ function installChromium(): void {
 
 main().catch(error => {
   const message = error instanceof Error ? error.message : String(error);
-  console.error("adapter-playwright live smoke: FAIL");
+  console.error("driver-playwright live smoke: FAIL");
   console.error(`  ${message}`);
   process.exitCode = 1;
 });

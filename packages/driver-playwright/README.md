@@ -1,8 +1,10 @@
-# adapter-playwright
+# driver-playwright
 
-In-page `BrowserPageAdapter` for `playbook-runtime`. Maps `goto` / `click` / `fill` / `waitFor` onto Playwright page methods.
+In-page `BrowserPageDriver` for `playbook-runtime` (**ppomi-body**). Maps `goto` / `click` / `fill` / `waitFor` onto Playwright page methods.
 
-This is not `OsAdapter`, not a second playbook-runtime package, and not a generic `adapter` / `browser-util` package.
+Product names: [`playbook-runtime` glossary](../playbook-runtime/docs/glossary.md).
+
+This is not `OsUiDriver`, not a second playbook-runtime package, and not a generic `adapter` / `browser-util` package.
 
 ## When to use Playwright vs an OS adapter
 
@@ -10,14 +12,14 @@ Hybrid agent automation. Pick the port from the **surface**, not the app name. C
 
 | Surface | Runner | Port | Package |
 | --- | --- | --- | --- |
-| In-page web DOM, forms, locator waits | `PagePlaybookRuntime` | `BrowserPageAdapter` | **this package** |
-| Native windows, system dialogs, cert UI, non-DOM chrome | `PlaybookRuntime` | `OsAdapter` (`readScreen` / `focus` / `click` / `type`) | `adapter-windows` (UIA), `adapter-macos` (AX) |
+| In-page web DOM, forms, locator waits | `PagePlaybookRuntime` | `BrowserPageDriver` | **this package** |
+| Native windows, system dialogs, cert UI, non-DOM chrome | `PlaybookRuntime` | `OsUiDriver` (`readScreen` / `focus` / `click` / `type`) | `driver-windows` (UIA), `driver-macos` (AX) |
 
 Do **not** replace the OS adapters with Playwright. A Korean certificate window, a native file picker, or a browser OS dialog is still UIA/AX. An in-page "Next" button is Playwright.
 
-`PlaybookRuntime` drives `OsAdapter`. `PagePlaybookRuntime` drives `BrowserPageAdapter`. Same permissions, stop, and evidence. Different step shape (`target` vs `locator` / `url`). Do not raise a single multi-platform library as the playbook contract.
+`PlaybookRuntime` drives `OsUiDriver`. `PagePlaybookRuntime` drives `BrowserPageDriver`. Same permissions, stop, and evidence. Different step shape (`target` vs `locator` / `url`). Do not raise a single multi-platform library as the playbook contract.
 
-**Hybrid handoff:** in-page request → watch for the native window (`OsAdapter.readScreen`) → OS adapter steps → back to this package for the page result. Do not leave Playwright blocked in `waitFor` on a locator that only appears after a native modal is dismissed. The modal is not in the DOM; Playwright cannot close it. Do not treat that timeout as "the native step never ran" and retry a signing step.
+**Hybrid handoff:** in-page request → watch for the native window (`OsUiDriver.readScreen`) → OS adapter steps → back to this package for the page result. Do not leave Playwright blocked in `waitFor` on a locator that only appears after a native modal is dismissed. The modal is not in the DOM; Playwright cannot close it. Do not treat that timeout as "the native step never ran" and retry a signing step.
 
 Permanent playbook contracts are locators / URL (this package) and accessibility text `target` (OS). Do **not** store click coordinates, pixel boxes, or session node IDs as selectors. Vision, OCR, and VLM are fallbacks when the DOM or accessibility tree is missing — not the default control path.
 
@@ -29,7 +31,7 @@ Runs on the user's machine (or a device-local VM). This is **not** a Vercel / cl
 
 ## Mapping
 
-| `BrowserPageAdapter` | Live Playwright (`LivePlaywrightPage`) | Fixture (`FixturePlaywrightPage`) |
+| `BrowserPageDriver` | Live Playwright (`LivePlaywrightPage`) | Fixture (`FixturePlaywrightPage`) |
 | --- | --- | --- |
 | `goto(url)` | `page.goto(url)` | switch in-memory document |
 | `click(locator)` | `page.locator(locator).click()` | click a fixture node |
@@ -37,36 +39,36 @@ Runs on the user's machine (or a device-local VM). This is **not** a Vercel / cl
 | `waitFor(locator)` | `page.locator(locator).waitFor()` | require a visible fixture node |
 | `readPage()` | url / title / visible `h1` text | in-memory snapshot |
 
-`PlaywrightPageAdapter` stays a sync `BrowserPageAdapter` for fixtures and `PagePlaybookRuntime`. Live callers `await` `LivePlaywrightPage` (Playwright's `Page` is async).
+`PlaywrightPageAdapter` stays a sync `BrowserPageDriver` for fixtures and `PagePlaybookRuntime`. Live callers `await` `LivePlaywrightPage` (Playwright's `Page` is async).
 
 ## Local AI SDK tools
 
 `createPlaywrightPageAiTools(page)` wraps the same five operations as Vercel AI SDK `tool()` entries (`inputSchema` + `execute`, same helper as `agent/src/chat.ts`). Pass the set to `ToolLoopAgent` / `generateText` **on this machine**. `execute` calls `PlaywrightPageTools` (fixture or live Playwright). It does not open a Vercel / cloud browser.
 
-These tools are in-page DOM only. Native windows, cert UI, and system dialogs stay on `OsAdapter` (`readScreen` / `focus` / `click` / `type`). Do not merge those names into this set.
+These tools are in-page DOM only. Native windows, cert UI, and system dialogs stay on `OsUiDriver` (`readScreen` / `focus` / `click` / `type`). Do not merge those names into this set.
 
 ```ts
 import { ToolLoopAgent } from "ai";
-import { LivePlaywrightPage, createPlaywrightPageAiTools } from "adapter-playwright";
+import { LivePlaywrightPage, createPlaywrightPageAiTools } from "driver-playwright";
 
 // `page` is a device-local Playwright Page. Not a Vercel / cloud browser.
 const tools = createPlaywrightPageAiTools(new LivePlaywrightPage(page));
 const agent = new ToolLoopAgent({ model, tools });
 ```
 
-`OsAdapter` tools (`readScreen` / `focus` / `click` / `type`) are a separate set. Do not fold them into this object.
+`OsUiDriver` tools (`readScreen` / `focus` / `click` / `type`) are a separate set. Do not fold them into this object.
 
 ## Out of scope
 
 - Agent session / hub login wiring
 - `playbook-kr-cert` content
-- Replacing `adapter-windows` / `adapter-macos`
+- Replacing `driver-windows` / `driver-macos`
 - Device-approval / Mac-approver / hub login
 - Package titles `core`, `common`, `engine`, `util`, `shared`, `adapter`, `runtime`, or `browser-util`
 
 ```ts
 import { chromium } from "playwright";
-import { LivePlaywrightPage } from "adapter-playwright";
+import { LivePlaywrightPage } from "driver-playwright";
 
 const browser = await chromium.launch();
 const tools = new LivePlaywrightPage(await browser.newPage());
@@ -78,7 +80,7 @@ await browser.close();
 
 ```ts
 import { FixedPermissionGate, PagePlaybookRuntime } from "../playbook-runtime/src/index.ts";
-import { FixturePlaywrightPage, PlaywrightPageAdapter } from "adapter-playwright";
+import { FixturePlaywrightPage, PlaywrightPageAdapter } from "driver-playwright";
 
 const tools = new FixturePlaywrightPage([
   {
@@ -101,15 +103,15 @@ const result = new PagePlaybookRuntime(
 Hermetic unit tests (no browser):
 
 ```sh
-npm --prefix packages/adapter-playwright test
+npm --prefix packages/driver-playwright test
 ```
 
 Live Chromium smoke on this machine (`https://example.com` → `waitFor(h1)` → read title). Installs Playwright's Chromium if it is missing. Not a Vercel browser.
 
 ```sh
-npm --prefix packages/adapter-playwright install
-npx --prefix packages/adapter-playwright playwright install chromium
-npm --prefix packages/adapter-playwright run test:live
+npm --prefix packages/driver-playwright install
+npx --prefix packages/driver-playwright playwright install chromium
+npm --prefix packages/driver-playwright run test:live
 # or
-PLAYWRIGHT_LIVE=1 npm --prefix packages/adapter-playwright run test:live
+PLAYWRIGHT_LIVE=1 npm --prefix packages/driver-playwright run test:live
 ```

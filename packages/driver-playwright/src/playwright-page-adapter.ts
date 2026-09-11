@@ -1,16 +1,16 @@
-import type { BrowserPageAdapter, PageSnapshot } from "../../playbook-runtime/src/index.ts";
+import type { BrowserPageDriver, PageSnapshot } from "../../playbook-runtime/src/index.ts";
 import type { PlaywrightPageTools } from "./playwright-page-tools.ts";
 import { PlaywrightPageError } from "./playwright-page-tools.ts";
 
 /**
- * `BrowserPageAdapter` over Playwright page tools (`goto` / `click` / `fill` / `waitFor`).
+ * `BrowserPageDriver` over Playwright page tools (`goto` / `click` / `fill` / `waitFor`).
  * Sync fixture tools only — it does not await `LivePlaywrightPage`.
  * Does not launch a browser itself and has no device-approval input.
- * Not `OsAdapter` — native/cert dialogs stay on `adapter-windows` / `adapter-macos`.
+ * Not `OsUiDriver` — native/cert dialogs stay on `driver-windows` / `driver-macos`.
  * Authors pick `PagePlaybookRuntime` here; `PlaybookRuntime` is the OS runner.
  * See `../playbook-runtime/docs/adapter-selection.md`.
  */
-export class PlaywrightPageAdapter implements BrowserPageAdapter {
+export class PlaywrightPageAdapter implements BrowserPageDriver {
   private readonly tools: PlaywrightPageTools;
   private lastPage: PageSnapshot | null = null;
 

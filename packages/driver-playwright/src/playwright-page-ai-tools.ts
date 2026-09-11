@@ -4,8 +4,8 @@ import type { PlaywrightPageTools } from "./playwright-page-tools.ts";
 /**
  * Local Vercel AI SDK tools for in-page Playwright (`goto` / `click` / `fill` / `waitFor` / `readPage`).
  * `execute` calls `PlaywrightPageTools` on this machine. Not a Vercel / cloud browser.
- * Not `OsAdapter` — native windows, cert UI, and system dialogs stay on
- * `adapter-windows` / `adapter-macos` (`readScreen` / `focus` / `click` / `type`).
+ * Not `OsUiDriver` — native windows, cert UI, and system dialogs stay on
+ * `driver-windows` / `driver-macos` (`readScreen` / `focus` / `click` / `type`).
  * See `../playbook-runtime/docs/adapter-selection.md`.
  */
 export const playwrightPageAiToolNames = ["goto", "click", "fill", "waitFor", "readPage"] as const;
@@ -13,7 +13,7 @@ export const playwrightPageAiToolNames = ["goto", "click", "fill", "waitFor", "r
 export type PlaywrightPageAiToolName = (typeof playwrightPageAiToolNames)[number];
 
 const pageOnly =
-  "In-page DOM on this machine via Playwright. Not OsAdapter (native windows, cert UI, UIA/AX). Not a Vercel / cloud browser.";
+  "In-page DOM on this machine via Playwright. Not OsUiDriver (native windows, cert UI, UIA/AX). Not a Vercel / cloud browser.";
 
 const urlInput = jsonSchema<{ url: string }>({
   type: "object",
@@ -57,22 +57,22 @@ export function createPlaywrightPageAiTools(page: PlaywrightPageTools) {
       execute: ({ url }) => page.goto({ url }),
     }),
     click: tool({
-      description: `${pageOnly} Click an in-page control. Native / cert chrome uses OsAdapter.click.`,
+      description: `${pageOnly} Click an in-page control. Native / cert chrome uses OsUiDriver.click.`,
       inputSchema: locatorInput,
       execute: ({ locator }) => page.click({ locator }),
     }),
     fill: tool({
-      description: `${pageOnly} Fill an in-page field. Native / cert chrome uses OsAdapter.type.`,
+      description: `${pageOnly} Fill an in-page field. Native / cert chrome uses OsUiDriver.type.`,
       inputSchema: fillInput,
       execute: ({ locator, text }) => page.fill({ locator, text }),
     }),
     waitFor: tool({
-      description: `${pageOnly} Wait until a locator is in the DOM. Do not wait for a native modal here — hand off to OsAdapter.readScreen first.`,
+      description: `${pageOnly} Wait until a locator is in the DOM. Do not wait for a native modal here — hand off to OsUiDriver.readScreen first.`,
       inputSchema: locatorInput,
       execute: ({ locator }) => page.waitFor({ locator }),
     }),
     readPage: tool({
-      description: `${pageOnly} Read url, title, visible text, and locators. Native screen text is OsAdapter.readScreen.`,
+      description: `${pageOnly} Read url, title, visible text, and locators. Native screen text is OsUiDriver.readScreen.`,
       inputSchema: emptyInput,
       execute: () => page.readPage(),
     }),

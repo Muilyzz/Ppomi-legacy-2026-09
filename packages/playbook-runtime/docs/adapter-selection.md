@@ -1,17 +1,17 @@
 # Playwright vs OS adapter
 
-Pick the port from the **surface**, not the app name or site. One playbook-runtime package; two ports; two runners. Do not fold Playwright into `OsAdapter`. Do not raise a single multi-platform library as the playbook contract.
+Pick the port from the **surface**, not the app name or site. One playbook-runtime package; two ports; two runners. Do not fold Playwright into `OsUiDriver`. Do not raise a single multi-platform library as the playbook contract.
 
 | Surface | Runner | Port | Package |
 | --- | --- | --- | --- |
-| In-page web DOM, forms, locator waits | `PagePlaybookRuntime` | `BrowserPageAdapter` (`goto` / `click` / `fill` / `waitFor` / `readPage`) | `adapter-playwright` |
-| Native windows, system dialogs, cert UI, non-DOM chrome | `PlaybookRuntime` | `OsAdapter` (`readScreen` / `focus` / `click` / `type`) | `adapter-windows` (UIA), `adapter-macos` (AX) |
+| In-page web DOM, forms, locator waits | `PagePlaybookRuntime` | `BrowserPageDriver` (`goto` / `click` / `fill` / `waitFor` / `readPage`) | `driver-playwright` |
+| Native windows, system dialogs, cert UI, non-DOM chrome | `PlaybookRuntime` | `OsUiDriver` (`readScreen` / `focus` / `click` / `type`) | `driver-windows` (UIA), `driver-macos` (AX) |
 
 Same `ui.read` / `ui.control`, fail-closed stop, and evidence. Different step shape: page `locator` / `url` vs OS `target`.
 
 ## In-page web → Playwright
 
-Use `PagePlaybookRuntime` + `adapter-playwright` when the control lives in the page DOM:
+Use `PagePlaybookRuntime` + `driver-playwright` when the control lives in the page DOM:
 
 - Navigate (`goto`)
 - Click an in-page button or link (`click` + locator)
@@ -23,7 +23,7 @@ An in-page "Next" button is Playwright. Do not drive that button through UIA/AX 
 
 ## Native / system chrome → OS adapter
 
-Use `PlaybookRuntime` + `adapter-windows` or `adapter-macos` when the control is outside the page DOM:
+Use `PlaybookRuntime` + `driver-windows` or `driver-macos` when the control is outside the page DOM:
 
 - Native application windows
 - System dialogs (file picker, permission, print)
@@ -38,7 +38,7 @@ A single user task may cross both surfaces. Sequence the two runtimes; do not me
 
 1. In-page: Playwright `goto` / `click` that *requests* a native flow (for example an in-page "인증서 로그인" button).
 2. Stop waiting on the page for a DOM result that cannot appear until the native window is dismissed.
-3. Watch for the native window with `OsAdapter.readScreen` (UIA/AX).
+3. Watch for the native window with `OsUiDriver.readScreen` (UIA/AX).
 4. Finish the native steps with `PlaybookRuntime`.
 5. Return to `PagePlaybookRuntime` to read the page result.
 
@@ -62,14 +62,14 @@ Vision, OCR, and VLM (`screen_inspect`) are **fallbacks** when the DOM or access
 - Coordinates as a permanent playbook contract
 - A large abstraction layer before a real hybrid flow exists (compose the two runtimes; do not invent a third)
 - Timeout = "not executed" → automatic retry, especially on signing
-- Implementing Playwright as `OsAdapter`, or replacing UIA/AX with Playwright
+- Implementing Playwright as `OsUiDriver`, or replacing UIA/AX with Playwright
 - Elevating one multi-platform automation library as the playbook contract
 
 ## Local AI SDK tools (in-page only)
 
-`adapter-playwright` exposes the page operations as local Vercel AI SDK tools (`createPlaywrightPageAiTools`: `goto` / `click` / `fill` / `waitFor` / `readPage`). Agents pass that tool set to `ToolLoopAgent` / `generateText` on this machine. The tools call Playwright here. They are not a Vercel / cloud browser.
+`driver-playwright` exposes the page operations as local Vercel AI SDK tools (`createPlaywrightPageAiTools`: `goto` / `click` / `fill` / `waitFor` / `readPage`). Agents pass that tool set to `ToolLoopAgent` / `generateText` on this machine. The tools call Playwright here. They are not a Vercel / cloud browser.
 
-These tools are in-page DOM only. Native windows, cert UI, and system dialogs stay on `OsAdapter` (`readScreen` / `focus` / `click` / `type`). Do not add those OS operations to the Playwright tool set.
+These tools are in-page DOM only. Native windows, cert UI, and system dialogs stay on `OsUiDriver` (`readScreen` / `focus` / `click` / `type`). Do not add those OS operations to the Playwright tool set.
 
 ## Out of scope here
 

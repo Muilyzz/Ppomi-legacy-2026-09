@@ -1,4 +1,4 @@
-import type { OsAdapter, OsAdapterKind, ScreenSnapshot } from "./os-adapter.ts";
+import type { OsUiDriver, OsUiDriverKind, ScreenSnapshot } from "./os-adapter.ts";
 
 export type DummyCall =
   | { readonly kind: "read" }
@@ -6,13 +6,13 @@ export type DummyCall =
   | { readonly kind: "click"; readonly target: string }
   | { readonly kind: "type"; readonly target: string; readonly text: string };
 
-/** In-memory adapter for unit tests. Not `adapter-windows`. */
-export class DummyAdapter implements OsAdapter {
-  readonly kind: OsAdapterKind;
+/** In-memory adapter for unit tests. Not `driver-windows`. */
+export class DummyAdapter implements OsUiDriver {
+  readonly kind: OsUiDriverKind;
   readonly calls: DummyCall[] = [];
   private screen: ScreenSnapshot;
 
-  constructor(screen: ScreenSnapshot, kind: OsAdapterKind = "os-windows") {
+  constructor(screen: ScreenSnapshot, kind: OsUiDriverKind = "os-windows") {
     this.kind = kind;
     this.screen = copyScreen(screen);
   }

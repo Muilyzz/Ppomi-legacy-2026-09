@@ -8,7 +8,7 @@ import {
   defaultPermission,
   dumpStepResults,
   parseStepResultsJson,
-  type OsAdapter,
+  type OsUiDriver,
   type Playbook,
   type ScreenSnapshot,
   type StepKind,
@@ -177,7 +177,7 @@ test("missing target stops without a mutation", () => {
   assert.equal(result.stepResults[1]?.attempt, "not_executed");
 });
 
-test("injected OsAdapter.kind is copied onto each StepResult", () => {
+test("injected OsUiDriver.kind is copied onto each StepResult", () => {
   const adapter = new DummyAdapter(screen, "os-macos");
   const runtime = new PlaybookRuntime(
     adapter,
@@ -233,7 +233,7 @@ test("OS click timeout is attempt timeout, later click is not_executed", () => {
   assert.notEqual(result.stepResults[0]?.attempt, result.stepResults[1]?.attempt);
 });
 
-class TimeoutClickAdapter implements OsAdapter {
+class TimeoutClickAdapter implements OsUiDriver {
   readonly kind = "os-windows" as const;
   readonly calls: Array<{ kind: "read" } | { kind: "click"; target: string }> = [];
   private readonly screen: ScreenSnapshot;

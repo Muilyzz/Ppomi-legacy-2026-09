@@ -8,7 +8,7 @@ import {
   defaultPagePermission,
   dumpStepResults,
   parseStepResultsJson,
-  type BrowserPageAdapter,
+  type BrowserPageDriver,
   type PagePlaybook,
   type PageSnapshot,
   type PageStepKind,
@@ -248,7 +248,7 @@ test("error named TimeoutError is a timeout without importing Playwright", () =>
   assert.equal(result.stepResults[0]?.status, "retryable");
 });
 
-class TimeoutWaitPageAdapter implements BrowserPageAdapter {
+class TimeoutWaitPageAdapter implements BrowserPageDriver {
   readonly calls: Array<{ kind: "read" } | { kind: "waitFor"; locator: string }> = [];
   private readonly page: PageSnapshot;
 
@@ -279,7 +279,7 @@ class TimeoutWaitPageAdapter implements BrowserPageAdapter {
   }
 }
 
-class NamedTimeoutPageAdapter implements BrowserPageAdapter {
+class NamedTimeoutPageAdapter implements BrowserPageDriver {
   private readonly page: PageSnapshot;
 
   constructor(page: PageSnapshot) {

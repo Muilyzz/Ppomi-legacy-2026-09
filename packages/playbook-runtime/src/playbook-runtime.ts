@@ -1,6 +1,6 @@
 import { isAdapterTimeout } from "./adapter-timeout.ts";
 import { emitNotExecutedRest, emitStepResult } from "./emit-step-result.ts";
-import type { OsAdapter, ScreenSnapshot } from "./os-adapter.ts";
+import type { OsUiDriver, ScreenSnapshot } from "./os-adapter.ts";
 import { defaultPermission, type PermissionGate } from "./permissions.ts";
 import type {
   Playbook,
@@ -14,20 +14,20 @@ import type { StepAdapter, StepResult, StepTarget } from "./step-result.ts";
 /**
  * Runs declared steps against one OS adapter.
  * Authors: native windows, system dialogs, cert UI, non-DOM chrome.
- * In-page DOM / forms / waits use `PagePlaybookRuntime` + `BrowserPageAdapter`.
+ * In-page DOM / forms / waits use `PagePlaybookRuntime` + `BrowserPageDriver`.
  * See `docs/adapter-selection.md`. Do not wait in Playwright for a native modal.
  * Permission and screen/target preconditions are fail-closed: the run stops
  * and later steps are not sent to the adapter.
  * `RunResult.evidence` is the runner log. `RunResult.stepResults` is one
  * `StepResult` per declared step (`attempt` distinguishes timeout from
- * not_executed). Adapter kind comes from the injected `OsAdapter`.
+ * not_executed). Adapter kind comes from the injected `OsUiDriver`.
  * There is no device-approval or Mac-approver input.
  */
 export class PlaybookRuntime {
-  private readonly adapter: OsAdapter;
+  private readonly adapter: OsUiDriver;
   private readonly permissions: PermissionGate;
 
-  constructor(adapter: OsAdapter, permissions: PermissionGate) {
+  constructor(adapter: OsUiDriver, permissions: PermissionGate) {
     this.adapter = adapter;
     this.permissions = permissions;
   }
@@ -106,7 +106,7 @@ export class PlaybookRuntime {
   }
 }
 
-function apply(adapter: OsAdapter, step: PlaybookStep): void {
+function apply(adapter: OsUiDriver, step: PlaybookStep): void {
   switch (step.kind) {
     case "read":
       return;

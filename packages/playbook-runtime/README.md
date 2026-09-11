@@ -1,6 +1,8 @@
 # playbook-runtime
 
-One package for playbook steps, permissions, stop, and evidence. Content packs and OS adapters stay in other packages.
+One package for playbook steps, permissions, stop, and evidence. Content packs and OS drivers stay in other packages.
+
+Product names (**ppomi-path**, **ppomi-body**) are locked in [docs/glossary.md](docs/glossary.md). This package is not a general SDK.
 
 Package titles are domain-specific. Do not add `core`, `common`, `engine`, `util`, `shared`, `runtime`, `adapter`, `playbook-core`, or `playbook-content`.
 
@@ -10,15 +12,15 @@ Package titles are domain-specific. Do not add `core`, `common`, `engine`, `util
 | --- | --- | --- |
 | `playbook-runtime` | one | Steps, permissions, stop, evidence. No OS or browser calls of its own. |
 | `playbook-kr-cert` | later, one of many | Korean certificate content (scenario + fixtures). Not this slice. |
-| `adapter-windows` | later, one OS | Windows click / type / read-screen / focus. Not this slice. |
-| `adapter-macos` | later, one OS | macOS click / type / read-screen / focus. Sibling OS package. |
-| `adapter-playwright` | one page | In-page web `goto` / `click` / `fill` / `waitFor`. Lives in `packages/adapter-playwright`. |
+| `driver-windows` | later, one OS | Windows click / type / read-screen / focus. Not this slice. |
+| `driver-macos` | later, one OS | macOS click / type / read-screen / focus. Sibling OS package. |
+| `driver-playwright` | one page | In-page web `goto` / `click` / `fill` / `waitFor`. Lives in `packages/driver-playwright`. |
 
-This package is `playbook-runtime` only. It ships `OsAdapter` + `DummyAdapter` and `BrowserPageAdapter` + `DummyPageAdapter` so each contract can be tested without UIA, Accessibility, a live browser, or hub login.
+This package is `playbook-runtime` only. It ships `OsUiDriver` + `DummyAdapter` and `BrowserPageDriver` + `DummyPageAdapter` so each contract can be tested without UIA, Accessibility, a live browser, or hub login.
 
-`OsAdapter` is native chrome: `readScreen` / `focus` / `click` / `type`. `BrowserPageAdapter` is the in-page port: `readPage` / `goto` / `click` / `fill` / `waitFor`. Do not implement Playwright as `OsAdapter`. Do not grow a second `playbook-runtime` package. `PagePlaybookRuntime` in this package runs page steps.
+`OsUiDriver` is native chrome: `readScreen` / `focus` / `click` / `type`. `BrowserPageDriver` is the in-page port: `readPage` / `goto` / `click` / `fill` / `waitFor`. Do not implement Playwright as `OsUiDriver`. Do not grow a second `playbook-runtime` package. `PagePlaybookRuntime` in this package runs page steps.
 
-A later `adapter-windows` package should wrap the existing `executors/windows` tools (`screen_read`, `ui_tap`, `ui_type`, `app_open`). `adapter-macos` maps the same OS port onto Mac native names. `adapter-playwright` implements `BrowserPageAdapter` and exposes those page operations as local Vercel AI SDK tools (`createPlaywrightPageAiTools`). Native / cert UI stays on `OsAdapter`.
+A later `driver-windows` package should wrap the existing `executors/windows` tools (`screen_read`, `ui_tap`, `ui_type`, `app_open`). `driver-macos` maps the same OS port onto Mac native names. `driver-playwright` implements `BrowserPageDriver` and exposes those page operations as local Vercel AI SDK tools (`createPlaywrightPageAiTools`). Native / cert UI stays on `OsUiDriver`.
 
 ## Playwright vs OS adapter
 
@@ -26,8 +28,8 @@ Pick the port from the **surface**, not the app name. Full rules: [docs/adapter-
 
 | Surface | Runner | Port | Package |
 | --- | --- | --- | --- |
-| In-page web DOM, forms, locator waits | `PagePlaybookRuntime` | `BrowserPageAdapter` | `adapter-playwright` |
-| Native windows, system dialogs, cert UI, non-DOM chrome | `PlaybookRuntime` | `OsAdapter` | `adapter-windows` (UIA), `adapter-macos` (AX) |
+| In-page web DOM, forms, locator waits | `PagePlaybookRuntime` | `BrowserPageDriver` | `driver-playwright` |
+| Native windows, system dialogs, cert UI, non-DOM chrome | `PlaybookRuntime` | `OsUiDriver` | `driver-windows` (UIA), `driver-macos` (AX) |
 
 An in-page "Next" button is Playwright. A Korean certificate window, a native file picker, or a browser OS dialog is UIA/AX. Do not replace the OS adapters with Playwright.
 
@@ -35,7 +37,7 @@ An in-page "Next" button is Playwright. A Korean certificate window, a native fi
 
 Permanent contracts are page locators / URL and OS accessibility text (`target`). Do **not** store coordinates, pixel boxes, or session node IDs as playbook selectors. Vision, OCR, and VLM are fallbacks when the DOM or accessibility tree is missing — not the default path.
 
-Ppomi onboarding and playbook packages have **no device-approval or Mac-approver gate**. Do not add approved-device checks to `playbook-runtime`, `adapter-windows`, `adapter-macos`, `adapter-playwright`, `playbook-kr-cert`, or their tests.
+Ppomi onboarding and playbook packages have **no device-approval or Mac-approver gate**. Do not add approved-device checks to `playbook-runtime`, `driver-windows`, `driver-macos`, `driver-playwright`, `playbook-kr-cert`, or their tests.
 
 ## Contract
 
@@ -56,7 +58,7 @@ for (const step of result.stepResults) {
 }
 ```
 
-`attempt` is `executed` | `timeout` | `not_executed`. A page `waitFor` timeout is `timeout`, not "the native step never ran". Adapters throw `AdapterTimeoutError` (or an error named `TimeoutError`); runtimes do not import Playwright or UIA. `target` is an observation-bound locator / URL / accessibility name. Coordinates and session node IDs are not a contract. OS `adapter` on each row comes from the injected `OsAdapter.kind`.
+`attempt` is `executed` | `timeout` | `not_executed`. A page `waitFor` timeout is `timeout`, not "the native step never ran". Adapters throw `AdapterTimeoutError` (or an error named `TimeoutError`); runtimes do not import Playwright or UIA. `target` is an observation-bound locator / URL / accessibility name. Coordinates and session node IDs are not a contract. OS `adapter` on each row comes from the injected `OsUiDriver.kind`.
 
 ```ts
 import { DummyAdapter, FixedPermissionGate, PlaybookRuntime } from "playbook-runtime";
@@ -69,7 +71,7 @@ const result = runtime.run({
 });
 ```
 
-In-page steps use `PagePlaybookRuntime` and a `BrowserPageAdapter` (`DummyPageAdapter` here; `adapter-playwright` in that package):
+In-page steps use `PagePlaybookRuntime` and a `BrowserPageDriver` (`DummyPageAdapter` here; `driver-playwright` in that package):
 
 ```ts
 import { DummyPageAdapter, FixedPermissionGate, PagePlaybookRuntime } from "playbook-runtime";

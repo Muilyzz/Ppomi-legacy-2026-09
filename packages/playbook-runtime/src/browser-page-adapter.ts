@@ -1,4 +1,4 @@
-/** In-page web port (`PagePlaybookRuntime`, `adapter-playwright`). Not `OsAdapter`. See `docs/adapter-selection.md`. No device-approval input. */
+/** In-page web port (`PagePlaybookRuntime`, `driver-playwright`). Not `OsUiDriver`. See `docs/adapter-selection.md`. No device-approval input. */
 export interface PageSnapshot {
   readonly url: string;
   readonly title: string;
@@ -6,7 +6,7 @@ export interface PageSnapshot {
   readonly locators: readonly string[];
 }
 
-export interface BrowserPageAdapter {
+export interface BrowserPageDriver {
   readPage(): PageSnapshot;
   goto(url: string): void;
   click(locator: string): void;

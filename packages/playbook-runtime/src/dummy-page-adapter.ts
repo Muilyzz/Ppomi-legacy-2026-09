@@ -1,4 +1,4 @@
-import type { BrowserPageAdapter, PageSnapshot } from "./browser-page-adapter.ts";
+import type { BrowserPageDriver, PageSnapshot } from "./browser-page-adapter.ts";
 
 export type DummyPageCall =
   | { readonly kind: "read" }
@@ -7,8 +7,8 @@ export type DummyPageCall =
   | { readonly kind: "fill"; readonly locator: string; readonly text: string }
   | { readonly kind: "waitFor"; readonly locator: string };
 
-/** In-memory page adapter for unit tests. Not a live browser. Not `OsAdapter`. */
-export class DummyPageAdapter implements BrowserPageAdapter {
+/** In-memory page adapter for unit tests. Not a live browser. Not `OsUiDriver`. */
+export class DummyPageAdapter implements BrowserPageDriver {
   readonly calls: DummyPageCall[] = [];
   private page: PageSnapshot;
 
