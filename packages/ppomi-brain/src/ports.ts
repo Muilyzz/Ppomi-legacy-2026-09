@@ -51,6 +51,43 @@ export interface AccountSession {
   ): GrantDecision | Promise<GrantDecision>;
 }
 
+/** App-logged-in machines. Clerk says who; this says where. Account-only is not a fleet. */
+export const DEVICE_OS = ["macos", "windows", "android", "ios"] as const;
+export type DeviceOs = (typeof DEVICE_OS)[number];
+
+export interface FleetDevice {
+  readonly id: string;
+  readonly os: DeviceOs;
+  readonly online: boolean;
+  readonly lastSeen: string;
+  readonly ownerId: string;
+  readonly orgId?: string;
+}
+
+/** Login / session attach. Mac and Windows each call this to appear in the fleet. */
+export interface DeviceSessionAttach {
+  readonly deviceId: string;
+  readonly os: DeviceOs;
+  readonly ownerId: string;
+  readonly orgId?: string;
+  /** Test clock. Production callers omit this; attach stamps now. */
+  readonly lastSeen?: string;
+}
+
+export interface DeviceListScope {
+  readonly ownerId: string;
+  readonly orgId?: string;
+}
+
+/**
+ * Device registry port. In-memory fake for tests; a later store implements the same upsert.
+ * Do not put tokens, passwords, or keys on this port.
+ */
+export interface DeviceRegistry {
+  attach(input: DeviceSessionAttach): FleetDevice | Promise<FleetDevice>;
+  list(scope: DeviceListScope): readonly FleetDevice[] | Promise<readonly FleetDevice[]>;
+}
+
 export interface MemoryEvent {
   readonly kind: "run";
   readonly pathId: string;

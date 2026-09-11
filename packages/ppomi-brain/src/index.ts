@@ -16,13 +16,27 @@ export type {
   BodyStepStatus,
   BodyStopReason,
   BrainPorts,
+  DeviceListScope,
+  DeviceOs,
+  DeviceRegistry,
+  DeviceSessionAttach,
+  FleetDevice,
   Memory,
   MemoryEvent,
   PathCatalog,
   PathLoader,
 } from "./ports.ts";
+export { DEVICE_OS } from "./ports.ts";
 export type { OrchestrationResult, OrchestrationStatus } from "./orchestrate.ts";
 export { PpomiBrain, orchestrate } from "./orchestrate.ts";
+export type { BodyRoute, BodyRouteSurface } from "./fleet.ts";
+export {
+  InMemoryDeviceRegistry,
+  isDeviceOs,
+  preferredOsForSurface,
+  routeBody,
+  routeBodyForSurface,
+} from "./fleet.ts";
 export type {
   LegacyPlaybook,
   LegacyPlaybookRunner,
