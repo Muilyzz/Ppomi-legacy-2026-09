@@ -39,7 +39,9 @@ Android는 앱이 보이는 상태에서 사용자가 시작한 대화를 유지
 
 ## 플레이북 스텝 기록 뷰 (DI)
 
-`src/ui/highlight-overlay.tsx`와 `src/ui/step-timeline.tsx`는 `StepResult` / `Evidence`를 props로만 받는다. 픽스처 JSON은 `src/ui/fixtures/`. 스토리는 `storybook/step-result-views.stories.jsx`. 작업대 제어 자리·라이브 캡처·런타임 방출은 아직 붙이지 않는다. 오케스트레이터가 나중에 조합한다.
+`src/ui/highlight-overlay.tsx`와 `src/ui/step-timeline.tsx`는 `StepResult` / `Evidence`를 props로만 받는다. 픽스처 JSON은 `src/ui/fixtures/`. 스토리는 `storybook/step-result-views.stories.jsx`. 작업대 제어 자리·라이브 캡처는 아직 붙이지 않는다.
+
+`src/ui/step-record-panel.tsx`의 `StepRecordPanel`(「스텝 기록」)이 둘을 조합한다. `RunResult.stepResults`를 `steps`로 받고 선택 상태를 스스로 갖는다(카드 클릭, ↑↓·Home·End). 증빙 스크린샷은 `screenshots` 리졸버가 브라우저가 그릴 수 있는 URL(object/data/https)로 바꿔 줄 때만 보이고, 기록된 경로 문자열은 DOM에 넣지 않는다. 라이브 대화·에이전트 루프에는 아직 연결하지 않는다 — 오케스트레이터가 나중에 붙인다.
 
 ## 개발
 
