@@ -58,28 +58,28 @@ export function probeNpki(options: NpkiProbeOptions = {}): NpkiProbe {
   const stack = [root];
   while (stack.length > 0) {
     const dir = stack.pop()!;
-    let entries: ReturnType<typeof readdirSync>;
+    let names: string[];
     try {
-      entries = readdirSync(dir, { withFileTypes: true });
+      names = readdirSync(dir);
     } catch {
       continue;
     }
-    for (const entry of entries) {
-      const next = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(next);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-      fileCount += 1;
-      let mtimeMs = 0;
+    for (const name of names) {
+      const next = join(dir, name);
+      let st: ReturnType<typeof statSync>;
       try {
-        mtimeMs = statSync(next).mtimeMs;
+        st = statSync(next);
       } catch {
         continue;
       }
-      if (newestMtimeMs === null || mtimeMs > newestMtimeMs) newestMtimeMs = mtimeMs;
-      if (options.sinceMs !== undefined && mtimeMs >= options.sinceMs) newerThanCount += 1;
+      if (st.isDirectory()) {
+        stack.push(next);
+        continue;
+      }
+      if (!st.isFile()) continue;
+      fileCount += 1;
+      if (newestMtimeMs === null || st.mtimeMs > newestMtimeMs) newestMtimeMs = st.mtimeMs;
+      if (options.sinceMs !== undefined && st.mtimeMs >= options.sinceMs) newerThanCount += 1;
     }
   }
 
