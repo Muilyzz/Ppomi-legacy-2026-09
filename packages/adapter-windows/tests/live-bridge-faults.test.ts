@@ -40,3 +40,17 @@ test("faults: a late reply after bridge_timeout does not break the next call", a
     tools.close();
   }
 });
+
+// A wedged executor (alive but no longer reading stdin, so it never exits on EOF) must not leak, and
+// writing into its broken pipe must surface as an error rather than an unhandled EPIPE that crashes.
+test("faults: close() reaps a wedged executor and a broken write surfaces as an error", async () => {
+  const tools = start();
+  const pid = tools.executorPid;
+  assert.equal(typeof pid, "number");
+  tools.listApps("wedge"); // replies once, then stops reading stdin and stays alive
+  const blocked = caught(() => tools.listApps(""));
+  assert.ok(blocked !== null && blocked.code !== undefined, `expected a WindowsAdapterError, got ${JSON.stringify(blocked)}`);
+  tools.close(); // closes stdin, then force-kills because EOF is never observed
+  await sleep(200);
+  assert.throws(() => process.kill(pid!, 0), /ESRCH/); // the executor process is gone, not leaked
+});

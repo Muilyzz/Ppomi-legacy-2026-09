@@ -35,6 +35,9 @@ const flag = new Int32Array(signal);
 const pending = new Map<string, (reply: ExecutorReply) => void>();
 let alive = false;
 
+/** Grace period after stdin EOF before the executor is force-killed on close (it exits on EOF normally). */
+const CLOSE_GRACE_MS = 1_000;
+
 function wake(): void {
   // A monotonic counter, not a 0/1 flag: the main thread waits on the value it last saw, so a reply
   // that lands after its request already timed out still advances the counter and is drained, instead
@@ -55,7 +58,7 @@ const child = spawn(command, [...args], {
 
 child.once("spawn", () => {
   alive = true;
-  port.postMessage({ ready: true });
+  port.postMessage({ ready: true, pid: child.pid });
   wake();
 });
 
@@ -69,6 +72,13 @@ child.once("error", error => {
 child.on("exit", (code, signalName) => {
   alive = false;
   failAll("native_unavailable", `executor exited (${code ?? signalName ?? "unknown"})`);
+});
+
+// A broken write pipe (the executor stopped reading or died) must fail pending work, never throw an
+// unhandled 'error' that would take down this worker (and, unhandled there, the whole process).
+child.stdin.on("error", error => {
+  alive = false;
+  failAll("native_unavailable", `executor stdin error: ${error.message}`);
 });
 
 createInterface({ input: child.stdout }).on("line", line => {
@@ -87,8 +97,13 @@ createInterface({ input: child.stdout }).on("line", line => {
 
 port.on("message", (message: WorkerRequest | { readonly close: true }) => {
   if ("close" in message) {
-    child.stdin.end();
-    child.kill();
+    let acked = false;
+    // Ack only after the child is actually gone, so the main thread can wait before dropping the worker.
+    const ack = (): void => { if (acked) return; acked = true; port.postMessage({ closed: true }); wake(); };
+    if (!alive) return ack();
+    const hardKill = setTimeout(() => child.kill(), CLOSE_GRACE_MS);
+    child.once("exit", () => { clearTimeout(hardKill); ack(); });
+    child.stdin.end(); // EOF: the executor ends its own session and exits; killed above if it will not
     return;
   }
   const answer = (reply: ExecutorReply): void => {
@@ -100,5 +115,11 @@ port.on("message", (message: WorkerRequest | { readonly close: true }) => {
     return;
   }
   pending.set(message.id, answer);
-  child.stdin.write(`${JSON.stringify({ id: message.id, method: message.method, args: message.args })}\n`);
+  child.stdin.write(`${JSON.stringify({ id: message.id, method: message.method, args: message.args })}\n`, error => {
+    if (!error) return;
+    const resolve = pending.get(message.id);
+    if (resolve === undefined) return;
+    pending.delete(message.id);
+    resolve({ id: message.id, error: { code: "native_unavailable", message: `executor write failed: ${error.message}` } });
+  });
 });

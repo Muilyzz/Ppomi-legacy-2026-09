@@ -51,6 +51,7 @@ interface BridgeReply {
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
 const START_TIMEOUT_MS = 30_000;
+const CLOSE_TIMEOUT_MS = 5_000;
 
 /**
  * `WindowsExecutorTools` over the real `ppomi-executor` JSONL protocol.
@@ -81,6 +82,14 @@ export class LiveWindowsExecutorTools implements WindowsExecutorTools {
   private latestSnapshotId: string | null = null;
   private latestReadAt = Number.NEGATIVE_INFINITY;
   private addressable = false;
+  private childPid: number | undefined = undefined;
+  /** Set when the worker thread itself fails; every later call rethrows it instead of hanging. */
+  private workerError: WindowsAdapterError | null = null;
+
+  /** PID of the spawned executor process (diagnostics/tests); `undefined` before it starts. */
+  get executorPid(): number | undefined {
+    return this.childPid;
+  }
 
   private constructor(worker: Worker, port: MessagePort, flag: Int32Array, options: LiveWindowsExecutorOptions) {
     this.worker = worker;
@@ -106,16 +115,25 @@ export class LiveWindowsExecutorTools implements WindowsExecutorTools {
     });
     worker.unref();
     port1.unref();
+    const tools = new LiveWindowsExecutorTools(worker, port1, flag, options);
+    // A Worker 'error' with no listener is thrown on the main thread and crashes the process; capture
+    // it so a blocked wait wakes and every subsequent call fails with native_unavailable instead.
+    worker.on("error", error => tools.onWorkerError(error));
     if (Atomics.wait(flag, 0, 0, START_TIMEOUT_MS) === "timed-out") {
       void worker.terminate();
       throw new WindowsAdapterError("native_unavailable", "executor did not start in time");
     }
-    const ready = receiveMessageOnPort(port1)?.message as { ready: boolean; error?: { code?: string; message?: string } } | undefined;
+    if (tools.workerError !== null) {
+      void worker.terminate();
+      throw tools.workerError;
+    }
+    const ready = receiveMessageOnPort(port1)?.message as { ready: boolean; pid?: number; error?: { code?: string; message?: string } } | undefined;
     if (ready === undefined || !ready.ready) {
       void worker.terminate();
       throw new WindowsAdapterError(ready?.error?.code ?? "native_unavailable", ready?.error?.message ?? "executor failed to start");
     }
-    return new LiveWindowsExecutorTools(worker, port1, flag, options);
+    tools.childPid = ready.pid;
+    return tools;
   }
 
   /** Visible running applications as the executor reports them (`app_list`); needs an active session. */
@@ -169,16 +187,27 @@ export class LiveWindowsExecutorTools implements WindowsExecutorTools {
     return { typed: result.typed, requiresScreenRead: result.requiresScreenRead ?? true };
   }
 
-  /** Ends the session (best effort) and stops the executor process. */
+  /** Stops the executor process, then drops the worker thread. Idempotent and never throws. */
   close(): void {
     if (this.closed) return;
     this.closed = true;
-    try {
-      this.ensureIdle();
-    } catch {
-      // The executor may already be gone; closing must not throw.
+    if (this.workerError === null) {
+      // Have the worker close the child's stdin and, if it will not exit, kill it; wait for the ack so
+      // a wedged executor is reaped before the worker thread (which owns the child) is terminated.
+      const deadline = Date.now() + CLOSE_TIMEOUT_MS;
+      let seen = Atomics.load(this.flag, 0);
+      this.port.postMessage({ close: true });
+      for (;;) {
+        let message = receiveMessageOnPort(this.port)?.message as { readonly closed?: boolean } | undefined;
+        while (message !== undefined && message.closed !== true) {
+          message = receiveMessageOnPort(this.port)?.message as { readonly closed?: boolean } | undefined;
+        }
+        if (message?.closed === true) break;
+        const remaining = deadline - Date.now();
+        if (remaining <= 0 || Atomics.wait(this.flag, 0, seen, remaining) === "timed-out") break;
+        seen = Atomics.load(this.flag, 0);
+      }
     }
-    this.port.postMessage({ close: true });
     void this.worker.terminate();
   }
 
@@ -210,6 +239,7 @@ export class LiveWindowsExecutorTools implements WindowsExecutorTools {
 
   /** One synchronous round trip: post the request, block until the worker signals, read this seq's reply. */
   private request(method: string, args: unknown): unknown {
+    if (this.workerError !== null) throw this.workerError;
     if (this.closed) throw new WindowsAdapterError("native_unavailable", "executor tools are closed");
     this.seq += 1;
     const seq = this.seq;
@@ -227,12 +257,19 @@ export class LiveWindowsExecutorTools implements WindowsExecutorTools {
         if (error !== undefined) throw new WindowsAdapterError(error.code ?? "tool_failed", error.message);
         return result;
       }
+      if (this.workerError !== null) throw this.workerError;
       const remaining = deadline - Date.now();
       if (remaining <= 0 || Atomics.wait(this.flag, 0, seen, remaining) === "timed-out") {
         throw new WindowsAdapterError("bridge_timeout", `${method} did not answer within ${this.requestTimeoutMs} ms`);
       }
       seen = Atomics.load(this.flag, 0);
     }
+  }
+
+  private onWorkerError(error: Error): void {
+    if (this.workerError === null) this.workerError = new WindowsAdapterError("native_unavailable", `executor worker failed: ${error.message}`);
+    Atomics.add(this.flag, 0, 1);
+    Atomics.notify(this.flag, 0);
   }
 }
 
