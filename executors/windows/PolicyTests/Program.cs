@@ -177,7 +177,11 @@ Check(parsed.Sub == subject && parsed.DisplayName == "합성 사용자" && parse
 Reject(() => GoogleSignIn.ParseTokens(Object(JsonSerializer.Serialize(new { access_token = Jwt(new { email = "x@example.invalid" }), refresh_token = "r", expires_in = 3600 }))), "token without subject rejected", "server_auth");
 Reject(() => GoogleSignIn.ParseTokens(Object(JsonSerializer.Serialize(new { access_token = "not a jwt at all!", refresh_token = "r", expires_in = 3600 }))), "malformed access token rejected", "server_auth");
 
-// --- Sign-in → pending → approval → wrapped key, against a fake Supabase and agent ------------------------------------------
+Check(new AccountSnapshot(true, true, false, false, "합성").Configured && new AccountSnapshot(true, true, false, false, "합성").PendingApproval,
+    "leftover unapproved flag does not block conversation");
+Check(!new AccountSnapshot(true, false, false, false, "합성").Configured, "registration is still required");
+
+// --- Sign-in → connected → optional ledger key, against a fake Supabase and agent ------------------------------------------
 var memory = new MemoryStore();
 var server = new FakeSupabase(subject);
 using var http = NativeHttp.Create(new FakeHandler(server.Respond));
@@ -192,45 +196,44 @@ await RejectAsync(() => google.CompleteSignIn("https://auth?code=synthetic-code-
 server.AcceptCode = "synthetic-code-1234";
 begun = JsonSerializer.SerializeToElement(google.BeginSignIn());   // a rejected callback consumed the attempt; a new one starts cleanly
 server.Challenge = new Uri(begun.GetProperty("url").GetString()!).Query.Split('&').Select(p => p.Split('=')).First(p => p[0].TrimStart('?') == "code_challenge")[1];
-var pendingSnapshot = await google.CompleteSignIn("ppomi://auth?code=synthetic-code-1234", CancellationToken.None);
-Check(pendingSnapshot is { SignedIn: true, Registered: true, Approved: false, PendingApproval: true, Configured: false, RecordKey: false }, "sign-in registers the device as pending");
-Check(pendingSnapshot.DisplayName == "합성 사용자", "display name comes from the token");
+var connectedSnapshot = await google.CompleteSignIn("ppomi://auth?code=synthetic-code-1234", CancellationToken.None);
+Check(connectedSnapshot is { SignedIn: true, Registered: true, Approved: true, PendingApproval: false, Configured: true, RecordKey: false }, "sign-in registers the device as a workspace member");
+Check(connectedSnapshot.DisplayName == "합성 사용자", "display name comes from the token");
 Check(server.Registration is { } registration && registration.GetProperty("p_platform").GetString() == "windows" && registration.GetProperty("p_label").GetString() == "Windows (FIXTURE)"
     && registration.GetProperty("p_device_id").GetString() == windowsId.ToString("D")
     && registration.GetProperty("p_public_key").GetString() == Convert.ToBase64String(X25519.PublicKey(memory.DevicePrivateKey())), "registration carries the device public key and platform");
 Check(server.Requests.Where(r => r.Path.StartsWith("/rest/")).All(r => r.Device == windowsId.ToString("D") && r.Auth == "Bearer " + server.AccessToken && r.ApiKey == PpomiServer.PublishableKey), "every RPC carries apikey, bearer and X-Ppomi-Device");
 Check(server.Requests.First(r => r.Path.StartsWith("/auth/v1/token")).Body.Contains("code_verifier") && server.ExchangeVerified, "code exchange used the verifier matching the challenge");
-Check(memory.Session is { Registered: true, Approved: false } && memory.Session.AccessToken == server.AccessToken, "pending session persisted to the store");
-var presentation = JsonSerializer.Serialize(pendingSnapshot.Json) + JsonSerializer.Serialize(google.Snapshot.Json);
+Check(memory.Session is { Registered: true, Approved: true } && memory.Session.AccessToken == server.AccessToken, "member session persisted to the store");
+var presentation = JsonSerializer.Serialize(connectedSnapshot.Json) + JsonSerializer.Serialize(google.Snapshot.Json);
 Check(!presentation.Contains(server.AccessToken) && !presentation.Contains("synthetic-refresh") && !presentation.Contains("fixture@example.invalid"), "presentation state carries no token or email");
 
 using (var proxy = new ServerProxy(null, account: google, sharedClient: http))
 {
-    Check(proxy.Configured && !proxy.Connected, "signed in but not connected before approval");
+    Check(proxy.Configured && proxy.Connected, "signed in and connected without a Mac approval tap");
     session.Set(false, "text"); session.Set(true, "text");
-    await RejectAsync(() => proxy.Request("https://agent.example.invalid", "/v1/responses", Object("{}"), session.Capture()), "pending device cannot reach the agent", "server_auth");
-    Check(server.Requests.All(r => !r.Path.StartsWith("/v1/")), "no agent request was sent while pending");
+    var early = await proxy.Request("https://agent.example.invalid", "/v1/responses", Object("{\"input\":\"day-one\"}"), session.Capture());
+    Check(early.GetProperty("output").GetString() == "fixture response", "chat works on day one without a ledger key");
 
     var refreshed = await google.Refresh(CancellationToken.None);
-    Check(refreshed is { PendingApproval: true, RecordKey: false } && server.Requests.Count(r => r.Path.EndsWith("ppomi_context")) == 1, "refresh polls the context while pending");
-    Check(!server.Requests.Any(r => r.Path.EndsWith("ppomi_key_get")), "no key fetch before approval");
+    Check(refreshed is { Configured: true, RecordKey: false } && server.Requests.Count(r => r.Path.EndsWith("ppomi_context")) == 1, "refresh polls the context after sign-in");
+    Check(server.Requests.Count(r => r.Path.EndsWith("ppomi_key_get")) == 1, "ledger key fetch is attempted once a member is registered");
 
-    server.Approved = true;   // the owner pressed 승인 on the Mac; the Mac wrapped the key for this device
     server.Wrapped = Convert.ToBase64String(KeyWrap.Wrap(recordKeyBytes, X25519.PublicKey(memory.DevicePrivateKey()), server.Workspace, server.KeyId));
-    var approved = await google.Refresh(CancellationToken.None);
-    Check(approved is { Configured: true, PendingApproval: false, RecordKey: true }, "approval turns the device into a connected member");
+    var withKey = await google.Refresh(CancellationToken.None);
+    Check(withKey is { Configured: true, PendingApproval: false, RecordKey: true }, "a wrapped ledger key is optional and arrives when another device is online");
     Check(memory.RecordKey is { } stored && stored.Key.SequenceEqual(recordKeyBytes) && stored.KeyId == server.KeyId && stored.WorkspaceId == server.Workspace && stored.Records["ledger"] == server.LedgerRecord, "wrapped key unwrapped and stored");
-    Check(memory.Session is { Approved: true }, "approval persisted");
-    Check(proxy.Connected, "proxy reports connected after approval");
+    Check(memory.Session is { Approved: true }, "membership persisted");
+    Check(proxy.Connected, "proxy stays connected after the ledger key arrives");
     var response = await proxy.Request("https://agent.example.invalid", "/v1/responses", Object("{\"input\":\"fixture\"}"), session.Capture());
     var agentRequest = server.Requests.Last(r => r.Path == "/v1/responses");
     Check(response.GetProperty("output").GetString() == "fixture response" && agentRequest.Auth == "Bearer " + server.AccessToken && agentRequest.Device == windowsId.ToString("D") && agentRequest.ApiKey == null, "agent proxy sends bearer and X-Ppomi-Device, no apikey");
     Check(!agentRequest.Body.Contains("synthetic-refresh") && !agentRequest.Body.Contains(Convert.ToBase64String(recordKeyBytes)), "agent body carries no secret");
 
-    // Revocation on the Mac: the context refuses, the device re-registers as pending and drops the record key.
+    // Revocation: the context refuses, the device re-registers as a member and drops the record key.
     server.Revoked = true;
     var revoked = await google.Refresh(CancellationToken.None);
-    Check(revoked is { SignedIn: true, Registered: true, Approved: false, RecordKey: false } && memory.RecordKey == null, "revoked device returns to pending without the key");
+    Check(revoked is { SignedIn: true, Registered: true, Approved: true, Configured: true, RecordKey: false } && memory.RecordKey == null, "revoked device re-registers as a member without the old key");
     Check(server.Requests.Count(r => r.Path.EndsWith("ppomi_register_device")) == 2, "revocation triggers exactly one new registration");
     server.Revoked = false;
 
@@ -327,14 +330,15 @@ sealed class FakeSupabase(Guid subject)
         {
             case "/rest/v1/rpc/ppomi_register_device":
                 Registration = args.Clone();
-                if (Revoked) { Revoked = false; Approved = false; }   // a revived device waits for approval again (migration rule)
+                Approved = true;   // MZZ-27: Google login + membership auto-approves, including a revived device
+                if (Revoked) Revoked = false;
                 return Fixture.Json(new { workspace = new { id = Workspace, name = "뽀미" }, device = new { id = device, label = args.GetProperty("p_label").GetString(), platform = "windows", approved = Approved } });
             case "/rest/v1/rpc/ppomi_context":
                 if (Revoked) return new HttpResponseMessage(HttpStatusCode.Forbidden);
                 return Fixture.Json(new { workspace = new { id = Workspace, name = "뽀미" }, device = new { id = device, label = "Windows", platform = "windows", approved = Approved },
                     devices = new object[] { new { id = device, label = "Windows", platform = "windows", approved = Approved } } });
             case "/rest/v1/rpc/ppomi_key_get":
-                return Approved && Wrapped != null
+                return Wrapped != null
                     ? Fixture.Json(new { found = true, workspace_id = Workspace, key_id = KeyId, records = new Dictionary<string, string> { ["ledger"] = LedgerRecord.ToString("D") }, wrapped = Wrapped })
                     : Fixture.Json(new { found = false });
             case "/v1/responses":

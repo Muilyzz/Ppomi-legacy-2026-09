@@ -339,8 +339,8 @@ export function ChatPanel({ host, frame }: { host: ChatHost; frame?: ChatFrame }
   // 뼈대(ui/shell.tsx)에 서브트리를 주입한다. 상태와 브리지는 여기, DOM 모양은 뼈대, 스타일은 index.css(토큰 매핑)+style.css.
   const render = (slots?: ShellFrameSlots) => <Shell platform={boot?.platform} {...slots}
     error={error ? <ErrorBanner onClose={() => setError("")}>{error}</ErrorBanner>
-      : boot && !boot.configured ? <ErrorBanner>{boot.authentication?.pendingApproval ? "Mac에서 이 기기를 승인하면 연결됩니다."
-        : boot.executor?.googleSignIn === true && boot.authentication?.signedIn !== true ? "Google 계정으로 로그인해 주세요." : "기기가 아직 연결되지 않았습니다."}</ErrorBanner>
+      : boot && !boot.configured ? <ErrorBanner>{boot.executor?.googleSignIn === true && boot.authentication?.signedIn !== true
+        ? "Google 계정으로 로그인해 주세요." : "기기가 아직 연결되지 않았습니다."}</ErrorBanner>
       : boot && android && !boot.accessibility && <ErrorBanner>접근성 연결 필요 · 설정</ErrorBanner>}
     conversation={<Pane
       incoming={incoming !== null && !inCall && boot?.configured && <IncomingCall reason={incoming} onAccept={() => void startCall(incoming)} onLater={declineCall} />}

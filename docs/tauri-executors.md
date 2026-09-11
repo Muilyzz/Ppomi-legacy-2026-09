@@ -111,9 +111,9 @@ Android Tauri 앱은 기존 APK와 다른 앱 ID를 사용한다. 기존 데이�
 공통 Tauri 채팅의 필수 경로가 아니지만, 기기별 백그라운드 음성·IME·권한 동작의
 실기기 검증과 출시 정책 검토는 별도로 필요하다.
 
-Windows는 Mac·iPad와 같은 Google 로그인(Supabase PKCE)으로 기기를 등록하고, 소유자가
-Mac의 나 › 기기 승인에서 승인해야 `configured`가 된다([Windows 실행기](windows-executor.md)).
-Windows의 `로그인`/`나`는 앱 안의 계정 시트(로그인 전 · Mac 승인 대기 · 기기 등록됨)를 열고,
+Windows는 Mac·iPad와 같은 Google 로그인(Supabase PKCE)으로 기기를 등록하면 바로
+`configured`가 된다([Windows 실행기](windows-executor.md), MZZ-27).
+Windows의 `로그인`/`나`는 앱 안의 계정 시트(로그인 전 · 기기 등록됨)를 열고,
 설정 시트에는 `제어할 앱`만 남는다(개발용 기기 파일 등록은 `PPOMI_DEVELOPER_DEVICE_IMPORT=1`일 때만).
 Android에는 Google 로그인 구현이 아직 없다. 로그인 버튼이나 로그인 완료 상태를 가장하지 않는다.
 Android는 debug 전용 provisioning 경로로 시험하며, 소비자용 계정 연결은 후속 이식 범위다.

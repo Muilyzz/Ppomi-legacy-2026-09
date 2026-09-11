@@ -115,20 +115,18 @@ test('a Google-account device names itself in a header that reaches the shared s
   assert.equal(f.calls.at(-1)?.device ?? null, null);   // legacy devices send no header and none is invented
 });
 
-test('a registered but unapproved device is refused before any model or memory access', async () => {
-  const f = fixture();
-  const pending = createHandler({ env: f.env, fetch: (async (url: string | URL | Request, init?: RequestInit) => {
-    if (String(url).endsWith('ppomi_context')) return Response.json({ workspace: { id: WORKSPACE }, device: { id: DEVICE, approved: false } });
-    return f.handle(new Request(String(url), init));   // anything beyond the context check would be a leak
-  }) as typeof fetch });
-  for (const path of ['/v1/session', '/v1/responses', '/v1/memories/list']) {
-    const denied = await pending(request(path, {}, { 'X-Ppomi-Device': DEVICE }));
-    assert.equal(denied.status, 403);
-    assert.equal(((await denied.json()) as { error: { code: string } }).error.code, 'device_unapproved');
-  }
-  assert.equal(f.calls.length, 0);
-  // Servers that predate the approval column (no field) and approved devices keep working.
-  assert.equal((await f.handle(request('/v1/memories/list', {}, { 'X-Ppomi-Device': DEVICE }))).status, 200);
+test('a leftover unapproved flag does not block chat or memory (MZZ-27 membership is enough)', async () => {
+  const leftover = createHandler({
+    env: environment(),
+    fetch: (async (url: string | URL | Request) => {
+      const address = String(url);
+      if (address.endsWith('ppomi_context')) return Response.json({ workspace: { id: WORKSPACE }, device: { id: DEVICE, approved: false } });
+      if (address.endsWith('ppomi_agent_memory_list')) return Response.json([]);
+      throw new Error('Unexpected endpoint');
+    }) as typeof fetch,
+  });
+  assert.equal((await leftover(request('/v1/session', { mode: 'text' }, { 'X-Ppomi-Device': DEVICE }))).status, 200);
+  assert.equal((await leftover(request('/v1/memories/list', {}, { 'X-Ppomi-Device': DEVICE }))).status, 200);
 });
 
 test('every request rechecks active device; no reused authentication context', async () => {

@@ -30,7 +30,7 @@ export type Bootstrap = {
   /** Mutable OS executor observations, separate from the immutable update capabilities above. */
   executor?: Record<string, unknown>;
   /** Only the native account reports sign-in; device configuration alone is not a Google login.
-   *  `approved`/`pendingApproval`: a signed-in device is connected only after the owner approved it on the Mac. */
+   *  `approved`/`pendingApproval` are leftover presentation; Google login + registration is enough (MZZ-27). */
   authentication?: { method?: string; signedIn?: boolean; displayName?: string | null; googleSignIn?: boolean; developerOnly?: boolean;
     approved?: boolean; pendingApproval?: boolean };
 };
@@ -138,7 +138,7 @@ const nativeFailures = {
   },
   sign_in_failed: {
     message: "Google 로그인을 완료하지 못했습니다.",
-    recovery: "사용자가 계정 창에서 다시 로그인해야 합니다. 모델이 로그인이나 기기 승인을 대신할 수 없습니다.",
+    recovery: "사용자가 계정 창에서 다시 로그인해야 합니다. 모델이 로그인을 대신할 수 없습니다.",
   },
   server_rejected: {
     message: "서버 거부",

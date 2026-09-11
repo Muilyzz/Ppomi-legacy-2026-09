@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace Ppomi.Executor;
 
 /// The Google session of this Windows device: Supabase tokens plus what the server last said about the device.
-/// `Registered` = ppomi_register_device succeeded once for this installation; `Approved` = the owner approved it on the Mac.
+/// `Registered` = ppomi_register_device succeeded once for this installation; `Approved` is leftover presentation (MZZ-27: membership is enough).
 public sealed record GoogleSession(string AccessToken, string RefreshToken, DateTimeOffset ExpiresAt, Guid Sub, string? DisplayName,
     bool Registered, bool Approved, Guid? WorkspaceId)
 {
@@ -52,8 +52,8 @@ public interface IAccountStore
 /// Presentation state for the shell. No token, email, or key ever appears here.
 public sealed record AccountSnapshot(bool SignedIn, bool Registered, bool Approved, bool RecordKey, string? DisplayName)
 {
-    /// The device may hold a conversation only once the owner approved it. Sign-in alone is not a connection.
-    public bool Configured => SignedIn && Registered && Approved;
+    /// Google sign-in + device registration is enough for chat and general use. A leftover `Approved=false` does not block.
+    public bool Configured => SignedIn && Registered;
     public bool PendingApproval => SignedIn && Registered && !Approved;
     public object Json => new { signedIn = SignedIn, registered = Registered, approved = Approved, pendingApproval = PendingApproval, recordKey = RecordKey, displayName = DisplayName };
 }
@@ -135,8 +135,8 @@ public sealed class GoogleAccount
         store.DeleteRecordKey();
     }
 
-    /// Ask the server where this device stands; once approved, fetch and unwrap the record key the Mac left for it.
-    /// A revoked device registers again and returns to the pending state.
+    /// Ask the server where this device stands; if a wrapped ledger key is waiting, fetch and unwrap it.
+    /// A revoked device registers again (membership auto-approves) and drops the old record key.
     public async Task<AccountSnapshot> Refresh(CancellationToken cancellation)
     {
         await gate.WaitAsync(cancellation);
@@ -150,7 +150,7 @@ public sealed class GoogleAccount
             catch (ServerRefusal refusal) when (refusal.Status is 401 or 403)
             {
                 if (refusal.Status == 401) throw new NativeFailure("server_auth");
-                // Not an active device any more (owner revoked it): start over as a pending device.
+                // Not an active device any more (owner revoked it): register again as a workspace member.
                 Update(current => current with { Registered = false, Approved = false });
                 lock (snapshotGate) recordKey = null;
                 store.DeleteRecordKey();
@@ -164,8 +164,7 @@ public sealed class GoogleAccount
                 throw new NativeFailure("server_auth");
             var approved = device.TryGetProperty("approved", out var flag) && flag.ValueKind == JsonValueKind.True;
             Update(current => current with { Registered = true, Approved = approved, WorkspaceId = workspace });
-            if (approved && Current is { } && recordKey == null) await FetchKeyLocked(token, workspace, cancellation);
-            if (!approved && recordKey != null) { lock (snapshotGate) recordKey = null; store.DeleteRecordKey(); }
+            if (Current is { } && recordKey == null) await FetchKeyLocked(token, workspace, cancellation);
             return Snapshot;
         }
         finally { gate.Release(); }
