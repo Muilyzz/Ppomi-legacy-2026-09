@@ -43,7 +43,7 @@ async function runFixtureStep(): Promise<void> {
 
 async function main(): Promise<void> {
   await runFixtureStep();
-  writeLiveProbe(probeMacLive());
+  await writeLiveProbe(probeMacLive());
 }
 
 main().catch(error => {

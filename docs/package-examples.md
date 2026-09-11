@@ -53,8 +53,9 @@ PPOMI_BODY=windows node --experimental-strip-types packages/ppomi-brain/example/
 # body 1-step fixtures (live UIA/AX skips off-host)
 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts
 node --experimental-strip-types packages/ppomi-body-macos/example/src/main.ts
-# Mac live (Safari/Chrome Automation). Deprecated alias: packages/adapter-macos/example
+# Mac live AX (Safari/Chrome System Events). Deprecated alias: packages/adapter-macos/example
 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-macos/example/src/main.ts
+PPOMI_BODY_AX=1 node --experimental-strip-types packages/ppomi-body-macos/example/src/main.ts
 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/adapter-macos/example/src/main.ts
 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts
 node --experimental-strip-types packages/ppomi-body-iphone-mirroring/example/src/main.ts
