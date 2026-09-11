@@ -1,4 +1,4 @@
-# driver-windows
+# ppomi-body-windows
 
 Windows `OsUiDriver` for `playbook-runtime`. Maps focus / click / type / read-screen onto the existing `executors/windows` tools.
 
@@ -52,7 +52,7 @@ The base branch's `WindowsDriver` and fixture predate the measured semantics enc
 `tests/live-edge-uia-smoke.test.ts` launches an isolated Edge profile (`--user-data-dir` in a temp dir, `--force-renderer-accessibility`) on an offline local page with a text input and a button, then runs `app_list → allowApps → app_open → screen_read → ui_type → (stale_screen check) → screen_read → ui_tap → screen_read` through `LiveWindowsExecutorTools`. It skips when not on Windows or when the executor / Edge is missing.
 
 ```sh
-# on the Windows machine, from packages/driver-windows (Node ≥ 22)
+# on the Windows machine, from packages/ppomi-body-windows (Node ≥ 22)
 set PPOMI_EXECUTOR=<path>\ppomi-executor.exe      # default: ..\..\shell\src-tauri\resources\executor\ppomi-executor.exe
 set PPOMI_SMOKE_SHOT=<path>\live-smoke-windows.png  # optional full-screen capture after the final read
 npm run smoke:live
@@ -67,7 +67,7 @@ npm run smoke:live
 
 ```ts
 import { FixedPermissionGate, OsSurface, Runtime } from "../playbook-runtime/src/index.ts";
-import { LiveWindowsExecutorTools, WindowsDriver } from "driver-windows";
+import { LiveWindowsExecutorTools, WindowsDriver } from "ppomi-body-windows";
 
 const tools = LiveWindowsExecutorTools.start({ executorPath: "C:/path/to/ppomi-executor.exe" });
 const edge = tools.listApps("").apps.find(app => app.label === "msedge")!;
@@ -89,7 +89,7 @@ tools.close();
 ## Tests
 
 ```sh
-npm --prefix packages/driver-windows install   # dev-only: typescript + @types/node
-npm --prefix packages/driver-windows test       # fixture + fake-executor bridge tests; live smoke skips off Windows
-npm --prefix packages/driver-windows run typecheck
+npm --prefix packages/ppomi-body-windows install   # dev-only: typescript + @types/node
+npm --prefix packages/ppomi-body-windows test       # fixture + fake-executor bridge tests; live smoke skips off Windows
+npm --prefix packages/ppomi-body-windows run typecheck
 ```

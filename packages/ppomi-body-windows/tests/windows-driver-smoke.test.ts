@@ -43,7 +43,7 @@ const approvalTools = [
   "setControlApps",
 ];
 
-test("smoke: the runtime core drives Windows executor tools through driver-windows", async () => {
+test("smoke: the runtime core drives Windows executor tools through ppomi-body-windows", async () => {
   const tools = new FixtureWindowsExecutorTools(window);
   const runtime = new Runtime(
     new OsSurface(new WindowsDriver(tools)),
