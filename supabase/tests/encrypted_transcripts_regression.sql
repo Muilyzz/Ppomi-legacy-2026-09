@@ -1,6 +1,6 @@
 -- Run as the migration owner using psql -v ON_ERROR_STOP=1 -f ... .
 -- Every fixture and write rolls back. Auth users are synthetic isolated UUIDs.
--- Covers 20260911120000_encrypted_transcripts.sql: server AES at rest,
+-- Covers 20260911125000_encrypted_transcripts.sql: server AES at rest,
 -- member R/W without wrapped keys or device approval, pending-device
 -- access, JWT-only access, append idempotency, tombstone wipe, isolation.
 begin;

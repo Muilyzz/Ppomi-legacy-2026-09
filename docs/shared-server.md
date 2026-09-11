@@ -121,7 +121,7 @@ dist/Ppomi.app/Contents/MacOS/Ppomi --verify-records
 
 ## 대화 transcript
 
-`20260911120000_encrypted_transcripts.sql`은 장부(`ppomi_record_*`)·에이전트 기억(`ppomi_agent_memories`)과 분리된 대화 테이블을 둔다. 정책은 [MZZ-27](https://linear.app/muilyzz/issue/MZZ-27)의 Auth + RLS와 **서버 보유 AES**다. 구성원이 turn JSON을 RPC로 보내면 서버가 공유 헬퍼(`ppomi_at_rest_seal` / `ppomi_at_rest_open`)로 AES-256-CBC+HMAC 봉투를 만들어 저장한다. 브라우저·Mac에 그 키를 두지 않는다. 클라이언트 E2E와 `ppomi_wrapped_keys`·기기 승인 게이트는 쓰지 않는다. 에이전트 `/v1/session`·`/v1/responses`는 요청마다 끝나며 원문을 저장하지 않는다.
+`20260911125000_encrypted_transcripts.sql`은 장부(`ppomi_record_*`)·에이전트 기억(`ppomi_agent_memories`)과 분리된 대화 테이블을 둔다. 정책은 [MZZ-27](https://linear.app/muilyzz/issue/MZZ-27)의 Auth + RLS와 **서버 보유 AES**다. 구성원이 turn JSON을 RPC로 보내면 서버가 공유 헬퍼(`ppomi_at_rest_seal` / `ppomi_at_rest_open`)로 AES-256-CBC+HMAC 봉투를 만들어 저장한다. 브라우저·Mac에 그 키를 두지 않는다. 클라이언트 E2E와 `ppomi_wrapped_keys`·기기 승인 게이트는 쓰지 않는다. 에이전트 `/v1/session`·`/v1/responses`는 요청마다 끝나며 원문을 저장하지 않는다.
 
 Realtime은 암호문 INSERT/UPDATE만 밀어 준다. 웹은 이를 신호로 `ppomi_transcript_turns`를 다시 불러 복호화된 turn을 합친다. Mac은 같은 RPC로 쓰고, 창이 다시 보일 때 `transcriptOpen`으로 합친다.
 
