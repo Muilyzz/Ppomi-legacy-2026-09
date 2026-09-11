@@ -14,10 +14,13 @@ import type {
  * and later steps are not sent to the adapter.
  */
 export class PlaybookRuntime {
-  constructor(
-    private readonly adapter: OsAdapter,
-    private readonly permissions: PermissionGate,
-  ) {}
+  private readonly adapter: OsAdapter;
+  private readonly permissions: PermissionGate;
+
+  constructor(adapter: OsAdapter, permissions: PermissionGate) {
+    this.adapter = adapter;
+    this.permissions = permissions;
+  }
 
   run(playbook: Playbook): RunResult {
     const evidence: StepEvidence[] = [];
