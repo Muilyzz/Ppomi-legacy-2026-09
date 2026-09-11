@@ -8,19 +8,40 @@ export {
   defaultPermission,
   type PermissionGate,
 } from "./permissions.ts";
+export {
+  Runtime,
+  requiredPermissions,
+  type Resolution,
+  type RuntimeOptions,
+  type RuntimePlaybook,
+  type RuntimeStep,
+  type StepClass,
+  type Surface,
+} from "./runtime-core.ts";
+export { OsSurface, type OsRef } from "./os-surface.ts";
+export { PageSurface, navigationRefusal, publicUrl, type PageRef } from "./page-surface.ts";
 export { PlaybookRuntime } from "./playbook-runtime.ts";
+export { PagePlaybookRuntime } from "./page-playbook-runtime.ts";
 export type {
+  MaybePromise,
   Permission,
   Playbook,
   PlaybookStep,
   PageStepKind,
-  RunResult,
-  RunStatus,
-  StepEvidence,
+  StepEffect,
   StepKind,
-  StepOutcome,
   StepRequirement,
 } from "./playbook.ts";
+export type {
+  RunResult,
+  RunStatus,
+  RuntimeCode,
+  StepEvidence,
+  StepOutcome,
+  StepResult,
+  StepStatus,
+  SurfaceKind,
+} from "./step-result.ts";
 export type {
   PagePlaybook,
   PagePlaybookStep,

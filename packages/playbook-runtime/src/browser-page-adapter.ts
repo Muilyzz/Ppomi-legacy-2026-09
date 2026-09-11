@@ -1,4 +1,10 @@
-/** In-page web port. `adapter-playwright` implements this. Not `OsAdapter`. No device-approval input. */
+import type { MaybePromise } from "./playbook.ts";
+
+/**
+ * In-page web port (`PageSurface`). `adapter-playwright` implements it. Not
+ * `OsAdapter`. Sync adapters still satisfy it: the runtime awaits every call.
+ * No device-approval input.
+ */
 export interface PageSnapshot {
   readonly url: string;
   readonly title: string;
@@ -7,9 +13,9 @@ export interface PageSnapshot {
 }
 
 export interface BrowserPageAdapter {
-  readPage(): PageSnapshot;
-  goto(url: string): void;
-  click(locator: string): void;
-  fill(locator: string, text: string): void;
-  waitFor(locator: string): void;
+  readPage(): MaybePromise<PageSnapshot>;
+  goto(url: string): MaybePromise<void>;
+  click(locator: string): MaybePromise<void>;
+  fill(locator: string, text: string): MaybePromise<void>;
+  waitFor(locator: string): MaybePromise<void>;
 }

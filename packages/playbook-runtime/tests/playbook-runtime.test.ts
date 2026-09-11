@@ -19,24 +19,25 @@ const screen: ScreenSnapshot = {
 const happy: Playbook = {
   id: "fixture-happy",
   steps: [
-    { id: "focus-app", kind: "focus", target: "Demo App" },
-    { id: "open-next", kind: "click", target: "Next" },
-    { id: "fill-name", kind: "type", target: "Name", text: "fixture" },
+    { id: "focus-app", kind: "focus", target: "Demo App", effect: "navigate" },
+    { id: "open-next", kind: "click", target: "Next", effect: "navigate" },
+    { id: "fill-name", kind: "type", target: "Name", text: "fixture", effect: "input" },
     { id: "confirm-screen", kind: "read", require: { screen: ["Demo App", "Next"] } },
   ],
 };
 
-test("happy path runs focus, click, type, and read against the dummy adapter", () => {
+test("happy path runs focus, click, type, and read against the dummy adapter", async () => {
   const adapter = new DummyAdapter(screen);
   const runtime = new PlaybookRuntime(
     adapter,
     new FixedPermissionGate(["ui.read", "ui.control"]),
   );
-  const result = runtime.run(happy);
+  const result = await runtime.run(happy);
 
   assert.equal(result.status, "completed");
   assert.equal(result.stopReason, null);
-  assert.deepEqual(result.evidence.map(row => row.outcome), ["ok", "ok", "ok", "ok"]);
+  assert.deepEqual(result.evidence.map(row => row.status), ["done", "done", "done", "done"]);
+  assert.deepEqual(result.evidence.map(row => row.surface), ["os", "os", "os", "os"]);
   assert.deepEqual(adapter.calls, [
     { kind: "read" },
     { kind: "focus", target: "Demo App" },
@@ -48,50 +49,54 @@ test("happy path runs focus, click, type, and read against the dummy adapter", (
   ]);
 });
 
-test("permission denied stops before any adapter call", () => {
+test("permission denied stops before any adapter call", async () => {
   const adapter = new DummyAdapter(screen);
-  const runtime = new PlaybookRuntime(adapter, new FixedPermissionGate(["ui.read"]));
-  const result = runtime.run({
+  const runtime = new PlaybookRuntime(adapter, new FixedPermissionGate(["ui.read"]), { now: () => 1_700_000_000_000 });
+  const result = await runtime.run({
     id: "fixture-denied",
     steps: [
-      { id: "open-next", kind: "click", target: "Next" },
-      { id: "fill-name", kind: "type", target: "Name", text: "fixture" },
+      { id: "open-next", kind: "click", target: "Next", effect: "navigate" },
+      { id: "fill-name", kind: "type", target: "Name", text: "fixture", effect: "input" },
     ],
   });
 
   assert.equal(result.status, "stopped");
-  assert.equal(result.stopReason, "permission_denied");
+  assert.equal(result.stopReason, "refused");
   assert.deepEqual(result.evidence, [{
     stepId: "open-next",
     kind: "click",
-    outcome: "permission_denied",
-    screenTexts: [],
-    note: "missing permission ui.control",
+    surface: "os",
+    status: "refused",
+    code: "missing_permission",
+    url: null,
+    at: 1_700_000_000_000,
+    detail: "missing permission ui.control",
   }]);
+  assert.deepEqual(result.observed, []);
   assert.deepEqual(adapter.calls, []);
 });
 
-test("missing screen text stops without a mutation", () => {
+test("missing screen text stops without a mutation", async () => {
   const adapter = new DummyAdapter(screen);
   const runtime = new PlaybookRuntime(
     adapter,
     new FixedPermissionGate(["ui.read", "ui.control"]),
   );
-  const result = runtime.run({
+  const result = await runtime.run({
     id: "fixture-screen",
     steps: [
-      { id: "need-receipt", kind: "click", target: "Next", require: { screen: ["Receipt"] } },
-      { id: "fill-name", kind: "type", target: "Name", text: "fixture" },
+      { id: "need-receipt", kind: "click", target: "Next", effect: "navigate", require: { screen: ["Receipt"] } },
+      { id: "fill-name", kind: "type", target: "Name", text: "fixture", effect: "input" },
     ],
   });
 
   assert.equal(result.status, "stopped");
-  assert.equal(result.stopReason, "precondition_failed");
-  assert.equal(result.evidence[0]?.note, "screen missing Receipt");
+  assert.equal(result.stopReason, "unmet");
+  assert.equal(result.evidence[0]?.detail, "screen missing Receipt");
   assert.deepEqual(adapter.calls, [{ kind: "read" }]);
 });
 
-test("step permissions are ui.read and ui.control only; a run has no device-approval gate", () => {
+test("step permissions are ui.read and ui.control only; a run has no device-approval gate", async () => {
   const kinds: StepKind[] = ["read", "focus", "click", "type"];
   assert.deepEqual(kinds.map(defaultPermission), [
     "ui.read",
@@ -105,35 +110,35 @@ test("step permissions are ui.read and ui.control only; a run has no device-appr
     adapter,
     new FixedPermissionGate(["ui.read", "ui.control"]),
   );
-  const result = runtime.run({
+  const result = await runtime.run({
     id: "fixture-no-device-gate",
-    steps: [{ id: "open-next", kind: "click", target: "Next" }],
+    steps: [{ id: "open-next", kind: "click", target: "Next", effect: "navigate" }],
   });
 
   assert.equal(result.status, "completed");
   assert.equal(result.stopReason, null);
   assert.equal("deviceApproved" in result, false);
   assert.equal("approved" in result, false);
-  assert.match(JSON.stringify(result), /"outcome":"ok"/);
+  assert.match(JSON.stringify(result), /"status":"done"/);
   assert.doesNotMatch(JSON.stringify(result), /approv/i);
 });
 
-test("missing target stops without a mutation", () => {
+test("missing target stops without a mutation", async () => {
   const adapter = new DummyAdapter(screen);
   const runtime = new PlaybookRuntime(
     adapter,
     new FixedPermissionGate(["ui.read", "ui.control"]),
   );
-  const result = runtime.run({
+  const result = await runtime.run({
     id: "fixture-target",
     steps: [
-      { id: "submit", kind: "click", target: "Submit" },
-      { id: "fill-name", kind: "type", target: "Name", text: "fixture" },
+      { id: "submit", kind: "click", target: "Submit", effect: "navigate" },
+      { id: "fill-name", kind: "type", target: "Name", text: "fixture", effect: "input" },
     ],
   });
 
   assert.equal(result.status, "stopped");
-  assert.equal(result.stopReason, "precondition_failed");
-  assert.equal(result.evidence[0]?.note, "target not on screen: Submit");
+  assert.equal(result.stopReason, "unmet");
+  assert.equal(result.evidence[0]?.detail, "target not on screen: Submit");
   assert.deepEqual(adapter.calls, [{ kind: "read" }]);
 });
