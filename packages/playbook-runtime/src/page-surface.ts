@@ -4,6 +4,7 @@ import { defaultPagePermission } from "./permissions.ts";
 import type { MaybePromise } from "./playbook.ts";
 import type { RuntimeCode } from "./emit-step-result.ts";
 import type { Resolution, StepClass, UiDriver } from "./runtime-core.ts";
+import { originOf, publicHttpUrl, publicUrl } from "./public-url.ts";
 import type { StepTarget } from "./step-result.ts";
 
 export type PageRef =
@@ -131,6 +132,8 @@ export class PageSurface implements UiDriver<PageSnapshot, PageRef, PagePlaybook
   }
 }
 
+export { publicUrl };
+
 /**
  * Same rule as the Swift `browser_open` gate: an absolute, credential-free HTTP(S)
  * address — and, when the playbook declares origins, one of those.
@@ -150,34 +153,11 @@ export function navigationRefusal(url: string, allowedOrigins?: readonly string[
   return null;
 }
 
-/** Origin + pathname only: query strings and fragments carry session tokens and never enter results. */
-export function publicUrl(url: string): string {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return "(invalid url)";
-  }
-  return parsed.origin === "null" ? `${parsed.protocol}${parsed.pathname}` : `${parsed.origin}${parsed.pathname}`;
-}
-
-/** Declared destination as origin + pathname; an unparsable URL is reported as no target (the step is refused anyway). */
+/** Declared destination as origin + pathname; an unparsable or opaque URL is reported as no target (the step is refused anyway). */
 function urlTarget(url: string | undefined): StepTarget {
   if (url === undefined || url.length === 0) return { kind: "none" };
-  try {
-    const parsed = new URL(url);
-    return { kind: "url", url: `${parsed.origin}${parsed.pathname}` };
-  } catch {
-    return { kind: "none" };
-  }
-}
-
-function originOf(url: string): string {
-  try {
-    return new URL(url).origin;
-  } catch {
-    return "(invalid url)";
-  }
+  const publicForm = publicHttpUrl(url);
+  return publicForm === null ? { kind: "none" } : { kind: "url", url: publicForm };
 }
 
 function unmet(code: RuntimeCode, detail: string): Resolution<never> {

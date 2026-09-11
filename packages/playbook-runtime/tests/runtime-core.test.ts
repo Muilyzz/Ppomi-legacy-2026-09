@@ -327,6 +327,19 @@ test("goto refuses non-HTTP(S), credentialed, relative and undeclared-origin url
   assert.equal(result.stopReason, "precondition_failed");
   assert.deepEqual(result.stepResults.map(row => [row.status, row.attempt, row.code]), [["failed", "not_executed", "navigation_refused"]]);
   assert.equal(adapter.calls.some(call => call.kind === "goto"), false);
+
+  // Opaque origins produce no url target, and the refused run still dumps and round-trips.
+  for (const url of ["javascript:alert(1)", "file:///etc/passwd", "data:text/html,<h1>x</h1>", "not a url"]) {
+    const refused = new PagePlaybookRuntime(new DummyPageAdapter(page), all).run({
+      id: "goto-opaque",
+      allowedOrigins: ["https://shop.test"],
+      steps: [{ id: "leave", kind: "goto", url, effect: "navigate" }, { id: "after", kind: "read" }],
+    });
+    assert.equal(refused.stepResults[0]?.code, "navigation_refused", url);
+    assert.deepEqual(refused.stepResults[0]?.target, { kind: "none" }, url);
+    assert.deepEqual(parseStepResultsJson(dumpStepResults(refused.stepResults)), refused.stepResults, url);
+    assert.doesNotMatch(dumpStepResults(refused.stepResults), /nullalert|null\/etc|passwd|alert\(1\)/);
+  }
 });
 
 test("a redirect off the declared origins fails the next step", () => {
