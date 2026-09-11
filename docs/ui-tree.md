@@ -4,7 +4,7 @@
 **펼친 화면은 콘텐츠 왼쪽·대화 오른쪽**, 좁은 화면은 **대화만 기본 표시**한다. 기록을 요청하면 같은 콘텐츠 영역을 시트로 열고 대화 인스턴스는 아래에 유지한다.
 앞서 정했던 대화 왼쪽·기록 오른쪽, 좁은 화면의 두 영역 상시 표시는 이 결정으로 대체되었다.
 공통 구조의 원본은 [Workbench](../agent/src/ui/workbench.tsx)와 [작업대 스토리](../storybook/workbench.stories.jsx)다.
-공통 React·Storybook과 Mac·Android의 네이티브 프레임이 이 배치 계약을 따른다. 운영 웹의 인증된 대화 연결은 별도다.
+공통 React·Storybook과 Mac·Android의 네이티브 프레임, 그리고 웹 홈(hub)의 [웹 프레임](../agent/src/web-panel.tsx)이 이 배치 계약을 따른다.
 
 ## 1. 요구 조건 장부 (누가 · 무엇을 · 당시 판정)
 
@@ -117,6 +117,7 @@
 - Mac의 [WorkbenchLayout](../Ppomi/Sources/Ppomi/Views/WorkbenchLayout.swift)·[WorkbenchContent](../Ppomi/Sources/Ppomi/Views/WorkbenchContent.swift)·[ImmersiveKiosk](../Ppomi/Sources/Ppomi/ImmersiveKiosk.swift), Android의 [WorkbenchFrame](../Android/app/src/main/java/com/ppomi/androidbridge/WorkbenchFrame.kt)은 같은 세 영역과 600 경계를 네이티브 프레임으로 구현한다. Mac 루트의 소유자는 `topBarArea`·`conversationArea`·`contentArea`이며, 실제 제어 창의 크기는 열 배치의 입력이 아니다.
 - 기록 탐색은 탭·증빙 문맥만 바꾼다. Mac에서 제어 창을 접는 명시적 동작만 화면 제어 잠금을 잡으며, 창 복원이 성공해야 잠금을 놓는다.
 - 실제 대화는 [ChatPanel](../agent/src/chat-panel.tsx)을 공유한다. [호스트 어댑터](../agent/src/chat-host.ts)가 기기 이벤트·화면 설정·준비 확인을 소유하고, [네이티브 진입점](../agent/src/main.tsx)은 연결과 마운트를 맡는다. Storybook은 같은 패널에 메모리 응답을 연결한다.
+- 웹 홈(2026-09-11, 사용자 결정 "앱과 거의 같은 작업대, 기기 제어만 없음")은 같은 `ChatPanel`을 [웹 호스트](../agent/src/web-host.ts)(`platform: "web"`, 도구 없음, `voiceSupported: false`)와 [웹 프레임](../agent/src/web-panel.tsx)(상단 바 뽀미 · 로그인/나 시트, 콘텐츠 = 기록 탭 + 샌드박스 기록 프레임)으로 띄운다. 브라우저 전용 계층은 [hub/web/home.js](../hub/web/home.js)가 만들어 host 객체로 넘기고, 모델 호출은 앱과 같은 에이전트 서버로 간다. 📞는 숨기고, 기기 제어·기억 도구는 지침과 브리지에서 명시적으로 없다고 답한다.
 - 색상과 대화 UI는 계속 재사용한다. OS 권한, 키 보관·해제, 실제 제어와 승인 검증은 호스트 책임이다.
 
 ## 5. 주입 계약

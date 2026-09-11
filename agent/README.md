@@ -46,7 +46,9 @@ npm test
 npm run build
 ```
 
-`build`가 네이티브 패키지용 `Web/Agent/`와 `assets/agent/`에 같은 번들을 복사한다. 브라우저 단독 공개 화면에는 기기 브리지가 없으며 실행할 수 없다. 패키지 잠금 파일과 생성된 네이티브 자산을 함께 갱신한다.
+`build`가 네이티브 패키지용 `Web/Agent/`와 `assets/agent/`에 같은 번들을 복사한다. 패키지 잠금 파일과 생성된 네이티브 자산을 함께 갱신한다.
+
+`npm run build:web`은 같은 `ChatPanel`을 웹 홈(hub)용으로 묶는다: 진입점 `src/web-main.tsx`(전역 `PpomiWebWorkbench.mountWebWorkbench`), 산출물 `hub/web/workbench/app.{js,css}`(커밋한다 — hub는 빌드 단계가 없다). 웹 호스트(`src/web-host.ts`)는 네이티브 브리지 자리에서 `bootstrap`(로그인 계정과 확인된 브라우저 기기), `request`(에이전트 서버로 Supabase 토큰·`X-Ppomi-Device` 중계, `/v1/session`·`/v1/responses`만)를 답하고 `executeTool`·통화·기억 도구는 없다고 답한다. 웹 프레임(`src/web-panel.tsx`)은 상단 바(뽀미 · 로그인/나)와 기록 콘텐츠(탭 + hub가 렌더링하는 샌드박스 프레임 자리)를 붙인다. 브라우저 전용 계층(Supabase PKCE 로그인, 기기 키, 복호화, 프레임 렌더러)은 `hub/web/home.js`가 만든다. 페이지는 `style-src 'self'`·`script-src 'self'`(eval 없음) 아래에서 돌므로 계정 시트는 네이티브 `<dialog>`이고 zod는 `jitless`다.
 
 Mac 개발 서명 패키징은 저장소 루트의 `scripts/make-app.sh`를 사용한다. 설치된 번들 실행 파일에 `--configure-agent-endpoint https://ppomi-agent.vercel.app`를 전달하고 `--voice`로 화면을 연다. 단축키는 ⌥Space다. Android는 설정으로 복귀할 수 있는 채팅 기본 화면을 사용한다. 개발용 초기 설정은 `android.permission.DUMP`로 보호된 `.DebugProvisioningActivity`에 ADB shell로 전달하며, 일반 실행 화면은 provisioning extra를 무시한다.
 
