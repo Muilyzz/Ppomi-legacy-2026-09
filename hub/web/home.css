@@ -1,128 +1,19 @@
-/* home.css — 웹 홈(로그인·내 기록)의 배치. 색·글꼴·글자 단·모서리는 /web/vendor/tokens.css의 공통 토큰만 쓴다:
-   라이트/다크는 시스템을 따르고 html[data-theme]로 강제할 수 있다. 이 파일은 색 값이나 새 토큰을 두지 않는다. */
-* { box-sizing: border-box; }
+/* home.css — 웹 홈의 페이지 배치. 작업대 자체(상단 바·대화·기록)는 /web/workbench/app.css(공통 번들)가 그리고, 여기는 그 바깥만 정한다.
+   색·글꼴·글자 단·모서리는 /web/vendor/tokens.css의 공통 토큰만 쓴다: 라이트/다크는 시스템을 따르고 html[data-theme]로 강제할 수 있다.
+   이 파일은 색 값이나 새 토큰을 두지 않는다. */
 [hidden] { display: none !important; }
 html { min-height: 100%; background: var(--bg); }
-button, input { font: inherit; }
-button { color: inherit; }
-a { color: inherit; text-underline-offset: .22em; }
-h1, h2, h3, p { margin: 0; word-break: keep-all; overflow-wrap: anywhere; }
-button, a, [tabindex] { -webkit-tap-highlight-color: transparent; }
-button:focus-visible, a:focus-visible, [tabindex]:focus-visible, summary:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
-.paw { display: block; flex: none; fill: currentColor; }
-
-.home-wrap { width: min(100% - 3rem, 1760px); min-height: 100dvh; margin-inline: auto; display: flex; flex-direction: column; }
-.site-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 5rem; border-bottom: 1px solid var(--line); }
-.brand { display: inline-flex; align-items: center; gap: .5rem; text-decoration: none; font-size: var(--fs-4); font-weight: 500; }
-.site-nav { display: flex; align-items: center; gap: 1.5rem; }
-.site-nav a { display: inline-flex; align-items: center; min-height: 44px; color: var(--fg-2); text-decoration: none; }
-.site-nav a:hover, .site-footer a:hover { color: var(--fg); text-decoration: underline; }
-.skip-link { position: fixed; z-index: 10; top: 1rem; left: 1rem; padding: .75rem 1rem; border-radius: var(--r); background: var(--fg); color: var(--bg); transform: translateY(-180%); }
+body { display: flex; flex-direction: column; height: 100dvh; margin: 0; }
+button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.skip-link { position: fixed; z-index: 30; top: 1rem; left: 1rem; padding: .75rem 1rem; border-radius: var(--r); background: var(--fg); color: var(--bg); transform: translateY(-180%); }
 .skip-link:focus { transform: none; }
-.home-main { flex: 1; padding: 1.5rem 0 3rem; }
-.home-main:focus { outline: none; }
-.auth-status { color: var(--fg-2); margin-bottom: 1rem; }
-.auth-status:empty { display: none; }
-.auth-status[data-state="error"], #record-status[data-state="error"] { color: var(--bad); }
 .eyebrow { color: var(--fg-2); font-size: var(--fs-1); margin-bottom: .25rem; }
 
-/* 로그인 */
-.sign-in-panel { display: grid; justify-items: center; align-content: center; min-height: min(660px, calc(100dvh - 245px)); padding: 1.5rem 0 2.5rem; }
-.sign-in-card { width: min(100%, 28rem); padding: 2.5rem 2.5rem 2rem; border: 1px solid var(--line); border-radius: var(--rc); background: var(--surface); text-align: center; }
-.sign-in-mark { width: 2.75rem; height: 2.75rem; margin: 0 auto 1.5rem; }
-.sign-in-card h1 { font-size: var(--fs-6); letter-spacing: -.01em; }
-.sign-in-description { margin-top: .75rem; color: var(--fg-2); }
-.button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 44px; padding: .5rem 1rem; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); color: var(--fg); font-weight: 500; line-height: 1.5; cursor: pointer; text-decoration: none; }
-.button:hover:not(:disabled) { background: var(--surface-2); }
-.button:disabled { opacity: .55; cursor: default; }
-.button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
-.button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 88%, var(--fg)); border-color: color-mix(in srgb, var(--accent) 88%, var(--fg)); }
-.sign-in-button { width: 100%; justify-content: space-between; min-height: 3.5rem; margin-top: 2rem; font-size: var(--fs-4); text-align: left; }
-.sign-in-button [aria-hidden] { font-size: var(--fs-5); font-weight: 400; }
-.sign-in-note { margin-top: 1.25rem; color: var(--fg-2); font-size: var(--fs-2); }
-.no-script { width: min(100%, 28rem); padding-top: 1.25rem; color: var(--bad); }
-.quiet { flex: none; border-color: var(--line); background: transparent; color: var(--fg-2); font-weight: 400; }
-.quiet:hover:not(:disabled) { color: var(--fg); }
+/* iPad 홈 화면 안내 띠는 작업대 위에 한 줄 얹힌다(install-guide.js가 iPad에서만 보인다). */
+body > .ipad-prompt { flex: none; margin: .75rem .75rem 0; }
 
-/* 내 기록: 왼쪽은 계정·연결·기록 탐색, 오른쪽은 선택한 기록의 격리 프레임 */
-.app-shell { display: grid; grid-template-columns: 280px minmax(0, 1fr); align-items: stretch; min-height: max(660px, calc(100dvh - 245px)); border: 1px solid var(--line); border-radius: var(--rc); overflow: clip; background: var(--surface); }
-.workspace-sidebar { display: flex; flex-direction: column; gap: 1.5rem; min-width: 0; padding: 1.5rem; border-right: 1px solid var(--line); }
-.sidebar-heading { display: flex; justify-content: space-between; align-items: center; gap: .75rem; }
-.sidebar-heading h1 { font-size: var(--fs-5); letter-spacing: -.01em; }
-.sidebar-heading .button { border: 0; padding-inline: .25rem; }
-.account-card { display: flex; align-items: center; gap: .75rem; }
-.account-mark { display: grid; place-items: center; flex: none; width: 2.75rem; height: 2.75rem; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
-.account-details { display: flex; flex-direction: column; min-width: 0; }
-.account-details h2 { font-size: var(--fs-1); font-weight: 400; color: var(--fg-2); margin-bottom: .125rem; }
-.account-details strong { font-size: var(--fs-4); font-weight: 500; overflow-wrap: anywhere; }
-#user-email { color: var(--fg-2); font-size: var(--fs-2); overflow-wrap: anywhere; }
-.connection-card { padding: 1rem; border: 1px solid var(--line); border-radius: var(--rc); }
-.connection-card h2, .record-navigation > h2 { font-size: var(--fs-1); font-weight: 400; color: var(--fg-2); }
-.connection-status { margin: .75rem 0 0; font-size: var(--fs-2); }
-.connection-status > div { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; margin-top: .375rem; }
-.connection-status dt { color: var(--fg-2); flex: none; }
-.connection-status dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
-.connection-note { margin-top: .75rem; color: var(--fg-2); font-size: var(--fs-2); }
-.connection-note[data-state="error"] { color: var(--bad); }
-.record-tabs { display: grid; gap: .125rem; margin-top: .5rem; }
-.record-tabs button { display: flex; justify-content: space-between; align-items: center; gap: .75rem; min-height: 44px; padding: .5rem .75rem; border: 0; border-radius: var(--r); background: transparent; color: var(--fg-2); text-align: left; cursor: pointer; }
-.record-tabs button:hover { background: var(--surface-2); color: var(--fg); }
-.record-tabs button[aria-selected="true"] { background: var(--accent-soft); color: var(--fg); font-weight: 500; }
-.record-tabs button [aria-hidden] { opacity: 0; font-size: var(--fs-2); }
-.record-tabs button[aria-selected="true"] [aria-hidden] { opacity: 1; color: var(--accent-fg); }
-.native-note { margin-top: auto; padding-top: .5rem; font-size: var(--fs-2); color: var(--fg-2); }
-.native-note a { display: inline-flex; align-items: center; gap: .5rem; min-height: 44px; margin-top: .25rem; text-decoration: none; color: var(--fg); }
-.native-note a:hover { text-decoration: underline; }
-.record-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
-.record-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.5rem 1.75rem 1rem; }
-.record-panel-heading h2 { font-size: var(--fs-5); letter-spacing: -.01em; }
-.record-panel-meta { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .375rem 1rem; padding: 0 1.75rem 1rem; border-bottom: 1px solid var(--line); color: var(--fg-2); font-size: var(--fs-2); }
-.record-panel-meta:has(p:empty):has(span:empty) { padding-bottom: 0; }
-#record-version { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
-.main-content { display: flex; flex-direction: column; flex: 1; min-height: 520px; min-width: 0; overflow-wrap: anywhere; }
-.record-empty { display: flex; flex: 1; flex-direction: column; justify-content: center; align-items: center; gap: .75rem; min-height: 420px; padding: 3rem 2rem; text-align: center; }
-.record-empty h3 { font-size: var(--fs-4); }
-.record-empty p { max-width: 30rem; color: var(--fg-2); white-space: pre-line; }
-.record-empty .button { margin-top: .5rem; }
-.empty-symbol { color: var(--fg-2); font-size: 3rem; line-height: 1; margin-bottom: .5rem; }
-.record-frame { display: block; flex: 1; width: 100%; min-height: 640px; border: 0; background: var(--bg); }
-.site-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; padding: 1.5rem 0 max(1.75rem, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); color: var(--fg-2); font-size: var(--fs-2); }
-.site-footer > span:last-child { display: flex; flex-wrap: wrap; gap: 1.25rem; }
-.site-footer a { display: inline-flex; align-items: center; min-height: 32px; text-decoration: none; }
-
-@media (min-width: 1100px) {
-  .record-frame { height: max(640px, calc(100dvh - 355px)); }
-}
-@media (max-width: 1000px) {
-  .home-wrap { width: calc(100% - 2rem); }
-  .app-shell { grid-template-columns: 250px minmax(0, 1fr); }
-  .workspace-sidebar { padding: 1.25rem; }
-  .record-panel-heading { padding: 1.25rem; }
-  .record-panel-meta { padding-inline: 1.25rem; }
-}
-@media (max-width: 720px) {
-  .home-wrap { width: min(100% - 2rem, 600px); }
-  .site-header { min-height: 4.5rem; }
-  .site-nav { gap: 1rem; }
-  .home-main { padding-top: 1.25rem; }
-  .sign-in-card { padding: 2.25rem 1.75rem 2rem; }
-  .app-shell { display: flex; flex-direction: column; min-height: 0; }
-  .workspace-sidebar { gap: 1rem; border-right: 0; border-bottom: 1px solid var(--line); }
-  .connection-card { padding: .75rem 1rem; }
-  .connection-status { margin-top: .5rem; }
-  .native-note { display: none; }
-  .record-navigation > h2 { margin-bottom: .5rem; }
-  .record-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .25rem; margin: 0; }
-  .record-tabs button { justify-content: center; padding: .5rem .25rem; font-size: var(--fs-2); text-align: center; }
-  .record-tabs button [aria-hidden] { display: none; }
-  .main-content { min-height: 460px; }
-  .record-empty { min-height: 380px; padding: 2rem 1.25rem; }
-  .record-frame { min-height: 620px; }
-}
-@media (max-width: 380px) {
-  .site-header { gap: .75rem; }
-  .site-nav { gap: .75rem; }
-  .brand .paw { width: 1.25rem; height: 1.25rem; }
-  .sign-in-card { padding-inline: 1.25rem; }
-  .account-mark { width: 2.5rem; height: 2.5rem; }
-}
+/* 작업대는 남은 높이를 채운다. 번들의 .workbench는 100dvh를 잡으므로 여기서는 남은 공간으로 바꾼다. */
+.workbench-root { display: flex; flex: 1 1 0; flex-direction: column; min-height: 0; }
+.workbench-root:focus { outline: none; }
+.workbench-root > .workbench { height: auto; flex: 1 1 0; min-height: 0; }
+.boot-note { margin: auto; padding: 2rem; color: var(--fg-2); text-align: center; }

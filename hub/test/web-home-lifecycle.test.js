@@ -6,9 +6,9 @@ import { createRecordSession } from '../web/record-session.js';
 import { webcrypto } from 'node:crypto';
 import { createAuth as actualCreateAuth, SESSION_STORAGE_KEY, REDIRECT_URL } from '../web/auth.js';
 
-// Execute the production controller with its real authentication module. Only
-// DOM rendering, timers, record transport and network responses are synthetic.
-// No browser profile, live OAuth token, record key, server or private data is used.
+// Execute the production glue with its real authentication and record-session modules. The shared workbench bundle is
+// replaced by a capture of the host object it would receive; record transport, frame rendering, timers and network
+// responses are synthetic. No browser profile, live OAuth token, record key, server or private data is used.
 const source = (await readFile(new URL('../web/home.js', import.meta.url), 'utf8')).replace(/^import .+;\s*$/gm, '');
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const ALICE = '11111111-1111-4111-8111-111111111111';
@@ -31,36 +31,22 @@ class Events {
   emit(type, event = {}) { return Promise.all([...this.listeners.get(type) ?? []].map(listener => listener(event))); }
 }
 class Element extends Events {
-  constructor(id) {
-    super(); this.id = id; this.dataset = {}; this.textContent = ''; this.hidden = false; this.disabled = false;
-    this.children = []; this.attributes = {};
-  }
-  setAttribute(name, value) { this.attributes[name] = value; }
+  constructor(id) { super(); this.id = id; this.children = []; this.textContent = ''; }
   querySelector(selector) { return selector === 'iframe' ? this.children.find(child => child.tagName === 'IFRAME') ?? null : null; }
   replaceChildren(...children) { this.children = children; }
-  focus() {}
-  click() { return this.disabled ? Promise.resolve() : this.emit('click'); }
 }
 
 function harness({ recordConnect, recordRead, clearKey, tokenResponse } = {}) {
-  const elements = new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(match => [match[1], new Element(match[1])]));
-  const tabs = [...html.matchAll(/<button\b[^>]*data-record-view="([^"]+)"[^>]*>/g)].map(match => {
-    const id = /\bid="([^"]+)"/.exec(match[0])?.[1];
-    const element = elements.get(id);
-    if (!element) throw new Error('Fixture requires real tab IDs');
-    element.dataset.recordView = match[1]; return element;
-  });
-  assert.equal(tabs.length, 6, 'Harness must use all actual record tabs');
+  assert.match(html, /<main id="root"/, 'The production page mounts the workbench into #root');
+  assert.match(html, /<script src="\/web\/workbench\/app\.js" defer><\/script>\s*<script type="module" src="\/web\/home\.js"><\/script>/,
+    'The shared bundle is loaded before the glue that mounts it');
+  const root = new Element('root'), content = new Element('records');
   const document = new Events();
   document.hidden = false;
-  document.getElementById = id => {
-    if (!elements.has(id)) throw new Error(`Missing production DOM element: ${id}`);
-    return elements.get(id);
-  };
-  document.querySelectorAll = selector => selector === '[data-record-view]' ? tabs : [];
+  document.getElementById = id => { if (id !== 'root') throw new Error(`Missing production DOM element: ${id}`); return root; };
   const window = new Events(), storage = memory(), transactions = memory();
   const timers = new Map(), clients = [], renders = [], clearedOwners = [], cleanupEvents = [], keys = new Set([ALICE]);
-  let clock = START, nextTimer = 0, auth;
+  let clock = START, nextTimer = 0, auth, host, mounted = 0;
   function seed(userID) {
     storage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ formatVersion: 1, userId: userID,
       accessToken: `synthetic-access-${userID}`, refreshToken: `synthetic-refresh-${userID}`, expiresAt: clock + 3600_000 }));
@@ -69,8 +55,8 @@ function harness({ recordConnect, recordRead, clearKey, tokenResponse } = {}) {
   const userResponse = id => ({ id, aud: 'authenticated', email: id === ALICE ? 'alice@example.test' : 'bob@example.test',
     user_metadata: { full_name: id === ALICE ? 'Alice fixture' : 'Bob fixture' } });
   const location = { href: REDIRECT_URL, assign() {} };
-  const content = elements.get('main-content');
-  function clearRecords() {
+  function clearRecords(container) {
+    assert.equal(container, content, 'Frames are cleared only from the attached records container');
     for (const frame of content.children) { frame.removed = true; frame.payload = null; }
     content.replaceChildren();
   }
@@ -86,6 +72,8 @@ function harness({ recordConnect, recordRead, clearKey, tokenResponse } = {}) {
     document, window, navigator: {}, AbortController, TextDecoder, TextEncoder, Date, console,
     queueMicrotask, setTimeout: (handler, delay) => { const id = ++nextTimer; timers.set(id, { handler, delay }); return id; },
     clearTimeout: id => timers.delete(id),
+    AGENT_ENDPOINT: 'https://agent.example',
+    PpomiWebWorkbench: { mountWebWorkbench(target, value) { mounted++; assert.equal(target, root); host = value; } },
     createAuth: callbacks => {
       auth = actualCreateAuth({ ...callbacks, storage, transactionStorage: transactions, crypto: webcrypto,
         location, history: { replaceState(_state, _title, url) { location.href = url; } }, eventTarget: window, now: () => clock,
@@ -121,23 +109,28 @@ function harness({ recordConnect, recordRead, clearKey, tokenResponse } = {}) {
       };
       clients.push(client); return client;
     },
-    renderRecords: async (name, payload, { signal }) => {
+    renderRecords: async (name, payload, { container, signal }) => {
+      assert.equal(container, content, 'Frames render only into the attached records container');
       if (signal.aborted) throw Object.assign(new Error('cancelled'), { code: 'cancelled' });
-      clearRecords();
+      clearRecords(container);
       const frame = { tagName: 'IFRAME', name, payload, removed: false };
       content.replaceChildren(frame); renders.push({ frame, signal });
-      // Actual record-views removes its abort listener after a successful render.
-      // The retained view is removed by clearRecords, not an already-finished signal.
       return { frame, name };
     },
     clearRecords,
-    showRecordMessage: (heading, message) => { clearRecords(); content.replaceChildren({ heading, message }); },
     timelineProjection: json => json,
   });
   vm.runInContext(source, context, { filename: 'hub/web/home.js' });
+  assert.equal(mounted, 1, 'The glue mounts the shared workbench exactly once');
+  // The records pane mounts its frame container after React renders; attach it like the pane does.
+  let detach = host.records.attach(content);
   return {
-    get auth() { return auth; }, elements, window, document, clients, renders, timers, clearedOwners, cleanupEvents, keys,
+    get auth() { return auth; }, host, window, document, clients, renders, timers, clearedOwners, cleanupEvents, keys,
     frame: () => content.querySelector('iframe'),
+    detach: () => detach(),
+    reattach: () => { detach = host.records.attach(content); },
+    account: () => host.source.getState().account,
+    records: () => host.records.getState(),
     advance: ms => { clock += ms; },
     async poll() {
       const entry = [...timers.entries()].find(([, timer]) => timer.delay === 60_000);
@@ -145,8 +138,7 @@ function harness({ recordConnect, recordRead, clearKey, tokenResponse } = {}) {
       timers.delete(entry[0]); await entry[1].handler();
     },
     replaceAccount(id) { seed(id); return window.emit('storage', { key: SESSION_STORAGE_KEY, newValue: storage.getItem(SESSION_STORAGE_KEY), storageArea: storage }); },
-    tab: name => tabs.find(tab => tab.dataset.recordView === name),
-    close() { auth?.dispose(); window.emit('pagehide'); timers.clear(); },
+    close() { detach(); auth?.dispose(); window.emit('pagehide'); timers.clear(); },
   };
 }
 
@@ -157,6 +149,24 @@ async function settleUntil(predicate, message) {
   }
   assert.ok(predicate(), message);
 }
+
+test('the host exposes only public account and connection state, and the device ID the agent server needs', async t => {
+  const h = harness();
+  t.after(() => h.close());
+  assert.equal(h.host.source.endpoint, 'https://agent.example');
+  // Values come from another vm context: compare structure, not prototypes.
+  assert.deepEqual(Array.from(h.host.records.views, view => view.id), ['timeline', 'evidence', 'accounting', 'playbooks', 'health', 'spatial']);
+  await settleUntil(() => h.frame(), 'Initial verified account renders records');
+  const state = h.host.source.getState();
+  assert.deepEqual({ ...state.account }, { id: ALICE, name: 'Alice fixture', email: 'alice@example.test' });
+  assert.equal(state.deviceID, ALICE, 'The confirmed browser device becomes the X-Ppomi-Device value');
+  assert.equal(state.notice, '');
+  assert.deepEqual(Object.keys(state).sort(), ['account', 'deviceID', 'notice', 'noticeIsError']);
+  assert.equal(JSON.stringify(state).includes('synthetic-access'), false, 'No token is ever part of host state');
+  assert.equal(await h.host.source.getAccessToken(), `synthetic-access-${ALICE}`);
+  assert.equal(h.records().connection.workspace.name, 'Alice workspace');
+  assert.equal(h.records().record.version, '1');
+});
 
 test('same-user token refresh keeps the current record view and does not delete its device key', async t => {
   const token = deferred(), started = deferred();
@@ -192,7 +202,8 @@ test('external account replacement during auth refresh clears the last key owner
   await settleUntil(() => h.clearedOwners.length === 1, 'Cleanup finds the last key owner despite null auth.current');
   assert.equal(h.cleanupEvents.at(-1).previousUserId, null);
   assert.deepEqual(h.clearedOwners, [ALICE]);
-  assert.equal(h.elements.get('user-email').textContent, '');
+  assert.equal(h.account(), null);
+  assert.equal(h.host.source.getState().deviceID, null, 'The old device ID leaves with the old account');
   assert.equal(h.frame(), null);
   assert.equal(oldFrame.removed, true);
   assert.equal(h.clients.length, 1, 'Next account must wait for private cleanup');
@@ -204,7 +215,8 @@ test('external account replacement during auth refresh clears the last key owner
   await settleUntil(() => h.frame()?.payload.data.fixtureOwner === BOB, 'Next verified account renders only after cleanup');
   assert.equal(h.keys.has(ALICE), false);
   assert.equal(h.keys.has(BOB), true);
-  assert.equal(h.elements.get('user-email').textContent, 'bob@example.test');
+  assert.equal(h.account().email, 'bob@example.test');
+  assert.equal(h.host.source.getState().deviceID, BOB);
   assert.equal(h.frame().payload.data.fixtureOwner, BOB);
 });
 
@@ -220,8 +232,8 @@ test('late connection result from a disposed account cannot replace the current 
   await settleUntil(() => h.frame()?.payload.data.fixtureOwner === BOB, 'New account connects and renders');
   oldConnect.resolve({ status: 'waiting-key', workspace: { id: ALICE, name: 'Stale Alice workspace' }, recordNames: [] });
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(h.elements.get('workspace-status').textContent, 'Bob workspace');
-  await h.tab('accounting').click();
+  assert.equal(h.records().connection.workspace.name, 'Bob workspace');
+  h.host.records.select('accounting');
   await settleUntil(() => h.frame()?.name === 'accounting', 'Stale waiting context cannot suppress current-account tab reads');
   assert.equal(h.frame().payload.data.fixtureOwner, BOB);
   assert.equal(h.clients[0].disposed, true);
@@ -236,11 +248,13 @@ test('unchanged visible poll preserves its iframe and tab changes request a full
   assert.equal(h.frame(), frame);
   assert.equal(h.renders.length, count);
   assert.equal(client.reads.at(-1).knownVersion, '1');
-  assert.equal(h.elements.get('record-version').textContent, '버전 1');
-  await h.tab('accounting').click();
+  assert.equal(h.records().record.version, '1');
+  h.host.records.select('accounting');
   await settleUntil(() => h.frame()?.name === 'accounting', 'Tab switch renders the selected full record');
   assert.equal(frame.removed, true);
   assert.equal(client.reads.at(-1).knownVersion, undefined);
+  h.host.records.select('accounting');
+  assert.equal(client.reads.length, 3, 'Reselecting the shown view does not read again');
 });
 
 test('logout immediately removes private views and discards a late read including its plaintext buffer', async t => {
@@ -254,20 +268,39 @@ test('logout immediately removes private views and discards a late read includin
   await settleUntil(() => h.frame() && h.timers.size, 'Initial view is ready');
   const frame = h.frame(), previousRenders = h.renders.length;
   block = true;
-  const refresh = h.elements.get('refresh-records').click();
+  h.host.records.refresh();
   await started.promise;
-  const logout = h.elements.get('sign-out').click();
-  assert.equal(h.elements.get('user-email').textContent, '');
+  const logout = h.host.source.signOut();
+  assert.equal(h.account(), null);
   assert.equal(h.frame(), null);
   assert.equal(frame.removed, true);
   assert.equal(h.renders[0].signal.aborted, true);
   await logout;
+  assert.equal(h.host.source.getState().notice, '이 브라우저에서 로그아웃했습니다.');
   assert.deepEqual(h.clearedOwners, [ALICE]);
   const bytes = new TextEncoder().encode('{"private":"synthetic late record"}');
   late.resolve({ name: 'ledger', version: '2', bytes, json: { private: 'synthetic late record' } });
-  await refresh;
+  await new Promise(resolve => setImmediate(resolve));
   assert.ok(bytes.every(byte => byte === 0));
   assert.equal(h.renders.length, previousRenders);
   assert.equal(h.frame(), null);
   assert.equal(h.timers.size, 0);
+  await assert.rejects(h.host.source.getAccessToken(), 'A signed-out browser has no token for the agent server');
+});
+
+test('a record read that arrives before the pane mounted waits for the container instead of failing', async t => {
+  const h = harness();
+  t.after(() => h.close());
+  await settleUntil(() => h.frame(), 'Initial view is ready');
+  const previous = h.frame(), renders = h.renders.length;
+  // The pane can unmount and remount around a read (React re-render, sign-in race); the read must wait, not throw.
+  h.detach();
+  h.host.records.select('accounting');
+  for (let turn = 0; turn < 10; turn++) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.renders.length, renders, 'Nothing renders without a container');
+  assert.equal(h.records().status, 'reading', 'The read stays pending rather than reporting an error');
+  h.reattach();
+  await settleUntil(() => h.frame()?.name === 'accounting', 'The waiting read renders once a container appears');
+  assert.equal(previous.removed, true);
+  assert.equal(h.records().status, 'ready');
 });

@@ -1,8 +1,8 @@
 // Only public application files are cached. OAuth callbacks, API responses,
 // user profiles, tokens, downloads and records never enter this cache.
-const CACHE = 'ppomi-public-home-20260911-7';
+const CACHE = 'ppomi-public-home-20260911-8';
 const PUBLIC_PATHS = new Set([
-  '/', '/web/vendor/tokens.css', '/web/home.css', '/web/home.js', '/web/auth.js', '/web/auth-client.js', '/web/auth-error.js', '/web/config.js', '/web/device-store.js',
+  '/', '/web/vendor/tokens.css', '/web/workbench/app.css', '/web/workbench/app.js', '/web/home.css', '/web/home.js', '/web/auth.js', '/web/auth-client.js', '/web/auth-error.js', '/web/config.js', '/web/device-store.js',
   '/web/records.js', '/web/record-rpc.js', '/web/record-protocol.js', '/web/record-session.js', '/web/record-crypto.js', '/web/record-views.js', '/web/timeline-projection.js', '/web/lzfse.js', '/web/vendor/ledger-display.js',
   '/install-guide.js', '/install-guide.css', '/manifest.webmanifest',
   '/icon.png', '/paw.svg', '/web/app-icon.svg',
