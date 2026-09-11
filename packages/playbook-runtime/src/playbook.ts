@@ -32,7 +32,7 @@ export type StepOutcome =
 export type RunStatus = "completed" | "stopped" | "invalid";
 
 export interface RunInvalid {
-  readonly code: "empty_playbook_id" | "empty_step_id" | "duplicate_step_id" | "unknown_driver";
+  readonly code: "empty_playbook_id" | "empty_step_id" | "duplicate_step_id" | "unknown_driver" | "wait_requires_run";
   readonly detail: string;
 }
 

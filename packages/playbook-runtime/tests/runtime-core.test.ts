@@ -88,15 +88,13 @@ class AsyncDummyAdapter implements OsUiDriver {
 
 function virtualClock(onSleep: (elapsed: number) => void): Omit<RuntimeOptions, "driver"> {
   let clock = 0;
-  const advance = (ms: number): void => {
-    clock += ms;
-    onSleep(clock);
-  };
   return {
     pollIntervalMs: 100,
     now: () => clock,
-    sleep: async ms => advance(ms),
-    sleepSync: ms => advance(ms),
+    sleep: async ms => {
+      clock += ms;
+      onSleep(clock);
+    },
   };
 }
 
@@ -278,17 +276,24 @@ test("driver error text is redacted: first line only, URLs reduced to origin + p
   assert.equal(single.evidence[0]?.note, "Target closed at https://shop.test/checkout while clicking");
 });
 
-test("require.wait polls the surface until the precondition holds, then acts (sync and async drivers)", async () => {
+test("require.wait polls the surface until the precondition holds, then acts; the sync wrappers refuse it", async () => {
   const sync = new DummyAdapter({ ...screen, texts: ["Demo App"] });
-  const syncResult = new PlaybookRuntime(sync, all, virtualClock(elapsed => {
-    if (elapsed >= 300) sync.setScreen(screen);
+  const syncResult = new PlaybookRuntime(sync, all).run({
+    id: "wait-sync",
+    steps: [{ id: "open-next", kind: "click", target: "Next", effect: "navigate", require: { wait: 1000 } }],
+  });
+  assert.deepEqual([syncResult.status, syncResult.invalid?.code, sync.calls.length], ["invalid", "wait_requires_run", 0]);
+
+  const polled = new DummyAdapter({ ...screen, texts: ["Demo App"] });
+  const polledResult = await new Runtime(new OsSurface(polled), all, virtualClock(elapsed => {
+    if (elapsed >= 300) polled.setScreen(screen);
   })).run({
     id: "wait-ok",
     steps: [{ id: "open-next", kind: "click", target: "Next", effect: "navigate", require: { wait: 1000 } }],
   });
-  assert.equal(syncResult.status, "completed");
-  assert.equal(sync.calls.filter(call => call.kind === "read").length, 4);
-  assert.deepEqual(sync.calls.at(-1), { kind: "click", target: "Next" });
+  assert.equal(polledResult.status, "completed");
+  assert.equal(polled.calls.filter(call => call.kind === "read").length, 4);
+  assert.deepEqual(polled.calls.at(-1), { kind: "click", target: "Next" });
 
   const asyncAdapter = new AsyncDummyAdapter();
   asyncAdapter.inner.setScreen({ ...screen, texts: ["Demo App"] });
@@ -302,9 +307,9 @@ test("require.wait polls the surface until the precondition holds, then acts (sy
   assert.equal(asyncResult.stepResults[0]?.driver, "os-macos");
 });
 
-test("require.wait gives up at the deadline as a retryable timeout with no mutation", () => {
+test("require.wait gives up at the deadline as a retryable timeout with no mutation", async () => {
   const adapter = new DummyAdapter({ ...screen, texts: ["Demo App"] });
-  const result = new PlaybookRuntime(adapter, all, virtualClock(() => undefined)).run({
+  const result = await new Runtime(new OsSurface(adapter), all, virtualClock(() => undefined)).run({
     id: "wait-timeout",
     steps: [{ id: "open-next", kind: "click", target: "Next", effect: "navigate", require: { wait: 250 } }],
   });
@@ -315,9 +320,9 @@ test("require.wait gives up at the deadline as a retryable timeout with no mutat
   assert.equal(adapter.calls.some(call => call.kind === "click"), false);
 });
 
-test("require.locators with wait replaces a page waitFor step", () => {
+test("require.locators with wait replaces a page waitFor step", async () => {
   const adapter = new DummyPageAdapter({ ...page, url: "https://shop.test/start", locators: [] });
-  const result = new PagePlaybookRuntime(adapter, all, virtualClock(elapsed => {
+  const result = await new Runtime(new PageSurface(adapter), all, virtualClock(elapsed => {
     if (elapsed >= 200) adapter.setPage({ ...page, url: "https://shop.test/start" });
   })).run({
     id: "wait-locator",

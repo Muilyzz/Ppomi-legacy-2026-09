@@ -85,7 +85,6 @@ export interface RuntimeOptions {
   readonly maxEvidenceTextLength?: number;
   readonly maxNoteLength?: number;
   readonly sleep?: (ms: number) => Promise<void>;
-  readonly sleepSync?: (ms: number) => void;
   readonly now?: () => number;
 }
 
@@ -142,7 +141,6 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
   private readonly maxEvidenceTextLength: number;
   private readonly maxNoteLength: number;
   private readonly sleep: (ms: number) => Promise<void>;
-  private readonly sleepSync: (ms: number) => void;
   private readonly now: () => number;
 
   constructor(driver: UiDriver<Snap, Ref, Step>, permissions: PermissionGate, options: RuntimeOptions = {}) {
@@ -155,7 +153,6 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
     this.maxEvidenceTextLength = options.maxEvidenceTextLength ?? DEFAULTS.maxEvidenceTextLength;
     this.maxNoteLength = options.maxNoteLength ?? DEFAULTS.maxNoteLength;
     this.sleep = options.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
-    this.sleepSync = options.sleepSync ?? blockingSleep;
     this.now = options.now ?? (() => Date.now());
   }
 
@@ -177,15 +174,31 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
     return next.value;
   }
 
-  /** Sync loop for sync drivers (fixtures, UIA/AX bridges that block). Throws on a Promise-returning driver. */
+  /**
+   * The deprecated wrappers' engine: drives sync drivers and fixtures without an
+   * event loop, and is deleted with the wrappers in the driver-* port slice. It
+   * never sleeps, so a playbook that declares `require.wait` is `invalid` here
+   * (`wait_requires_run`); a driver that returns a Promise is a programming
+   * error and throws `TypeError` — use `Runtime.run` for both.
+   */
   runSync(playbook: RuntimePlaybook<Step>): RunResult {
+    if (playbook.steps.some(step => (step.require?.wait ?? 0) > 0)) {
+      return {
+        status: "invalid",
+        stopReason: null,
+        evidence: [],
+        stepResults: [],
+        invalid: { code: "wait_requires_run", detail: "require.wait polls the driver; use Runtime.run, the synchronous wrappers cannot sleep" },
+      };
+    }
     const loop = this.loop(playbook);
     let next = loop.next();
     while (!next.done) {
       const effect = next.value;
+      if (effect.type === "sleep") throw new Error("Runtime.runSync: unexpected sleep effect; require.wait was validated");
       let value: unknown;
       try {
-        value = effect.type === "sleep" ? this.sleepSync(effect.ms) : this.perform(effect);
+        value = this.perform(effect);
       } catch (error) {
         next = loop.throw(error);
         continue;
@@ -312,9 +325,4 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
 
 function isThenable(value: unknown): boolean {
   return typeof value === "object" && value !== null && "then" in value && typeof value.then === "function";
-}
-
-/** Node allows `Atomics.wait` on the main thread; this is the sync loop's poll sleep. */
-function blockingSleep(ms: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
