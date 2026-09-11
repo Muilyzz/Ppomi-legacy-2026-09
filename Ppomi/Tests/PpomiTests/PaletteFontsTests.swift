@@ -30,15 +30,14 @@ final class PaletteFontsTests: XCTestCase {
 
     func testPretendardRegistersAndScalesWithUIScale() {
         XCTAssertTrue(Fonts.registered)
-        let saved = UserDefaults.standard.double(forKey: "uiScale")
-        defer { UserDefaults.standard.set(saved, forKey: "uiScale") }
-        AppSettings.uiScale = 1
+        defer { AppSettings.uiScaleOverride = nil }
+        AppSettings.uiScaleOverride = 1
         let body = NSFont.ppomi(3), bold = NSFont.ppomi(3, weight: .bold)
         XCTAssertEqual(body.familyName, Fonts.family)
         XCTAssertEqual(body.pointSize, 14)
         XCTAssertNotEqual(body.fontName, bold.fontName)
         XCTAssertEqual(NSFont.ppomi(6).pointSize, 24)
-        AppSettings.uiScale = 2
+        AppSettings.uiScaleOverride = 2
         XCTAssertEqual(NSFont.ppomi(3, monospacedDigits: true).pointSize, 28)
         XCTAssertEqual(NSFont.ppomi(3, monospacedDigits: true).familyName, Fonts.family)
     }

@@ -9,7 +9,8 @@ final class TimelineTests: XCTestCase {
         guard FileManager.default.fileExists(atPath: LedgerTests.dbPath), !LedgerTests.me.isEmpty, let d = try? Data(contentsOf: Self.fixture)
         else { throw XCTSkip("no ledger.db, STYLE_ME or timeline-parity.json") }
         let want = try JSONSerialization.jsonObject(with: d) as! [String: Any]
-        let got = Timeline.data(try Ledger.load(dbPath: LedgerTests.dbPath, me: LedgerTests.me))
+        var got = Timeline.data(try Ledger.load(dbPath: LedgerTests.dbPath, me: LedgerTests.me))
+        ["defaultLens", "lenses", "lens", "nodes"].forEach { got.removeValue(forKey: $0) }   // 계좌 그룹은 우리 것, report.py 에 없다
         let show = { (x: Any) in String(data: try! JSONSerialization.data(withJSONObject: x, options: .sortedKeys), encoding: .utf8)! }
         XCTAssertEqual(show(got["accounts"]!), show(want["accounts"]!))
         XCTAssertEqual(show(got["series"]!), show(want["series"]!))

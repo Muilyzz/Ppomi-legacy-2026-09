@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>분개</title>
+<style>/*THEME*/</style>
+<script src="./journal.js"></script>
+</head>
+<body>
+<main id="journal" aria-label="분개"></main>
+<script id="archive" type="application/json">/*ARCHIVE*/null</script>
+<script>
+// 서버의 accounting 기록(AccountingArchive)을 그대로 Journal.mount 에. 장부는 첫 번째 돈 장부, 스코프는 이달, 관리 층(평가 조정 포함).
+(function () {
+  var archive = JSON.parse(document.getElementById('archive').textContent);
+  var books = archive && archive.books || [];
+  var book = books.find(function (b) { return b.unit && b.unit.dimension === 'currency'; }) || books[0];
+  var el = document.getElementById('journal');
+  if (!archive || !book) { el.innerHTML = '<p class="meta">분개 장부 없음</p>'; return; }
+  Journal.mount(el, {archive: archive, bookID: book.id, unit: 'month', at: new Date(), depth: 2, layer: 'effective'});
+})();
+</script>
+</body>
+</html>

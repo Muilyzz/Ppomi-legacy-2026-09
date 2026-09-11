@@ -55,6 +55,7 @@ final class AgentSidebar: WorkbenchSurface, ConversationHost {
 /// 제어 머리띠: the target picker and the 기록 button, nothing else.
 struct ControlTargetToolbar: View {
     @EnvironmentObject private var state: AppState
+    @State private var me = false
 
     /// Records wait for the person's turn to end and the agent to release the screen.
     private var recordsAvailable: Bool {
@@ -65,23 +66,18 @@ struct ControlTargetToolbar: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Picker("제어 화면", selection: Binding(get: { state.workSurface }, set: state.selectSurface)) {
-                ForEach(WorkSurface.allCases) { target in
-                    Text(target.displayName).tag(target)
-                }
-            }
-            .pickerStyle(.menu)       // a dropdown, like the Storybook <select>: the control column is only as wide as the target
-            .labelsHidden()
-            .font(.ppomi(2))
-            .controlSize(.ppomiSmall)
-            .fixedSize(horizontal: true, vertical: false)
-            .disabled(state.ask != nil)
-            .accessibilityIdentifier("workbench-control-target")
+            // 대상 선택기 없음: 어느 창을 데려올지는 도구 호출이 정한다(phone_*→iPhone, windows_*→Windows, android_*→Android)
             Spacer(minLength: 8)
             Button("기록", action: state.toggleRecordsFocus)
                 .controlSize(.ppomiSmall)
                 .disabled(!recordsAvailable)
                 .accessibilityIdentifier("records-open")
+            // 프로필 아이콘 = 나: 로그인 전엔 실루엣, 뒤엔 구글 사진. 누르면 계정과 자동입력 프로필(잠금 뒤) 시트. 아이패드와 같은 자리, 메뉴엔 아무것도 없다.
+            Button { me = true } label: { AvatarView(session: GoogleAccount.session, size: 20) }
+                .buttonStyle(.plain)
+                .accessibilityLabel("나")
+                .accessibilityIdentifier("me-open")
+                .sheet(isPresented: $me) { MeSheet().environmentObject(state) }
         }
         .font(.ppomi(2))
         .frame(maxWidth: .infinity, alignment: .leading)

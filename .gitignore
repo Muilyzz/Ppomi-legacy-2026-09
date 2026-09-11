@@ -43,3 +43,4 @@ Ppomi/Tests/PpomiTests/stitch-parity.json
 storybook/storybook-static/
 iPad/build/
 iPad/PpomiPad.xcodeproj/
+data/lenses.json

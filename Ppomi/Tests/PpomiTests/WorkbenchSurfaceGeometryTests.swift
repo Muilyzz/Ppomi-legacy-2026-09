@@ -3,16 +3,16 @@ import XCTest
 @testable import Ppomi
 
 final class WorkbenchSurfaceGeometryTests: XCTestCase {
-    /// 제어 열 폭 = 대상 창 폭 + 간격 2; 대화 열이 나머지를 가진다. 대상이 없거나 작으면 작은 iPhone 폭이 바닥이다.
-    func testDashboardSizesTheControlColumnFromTheSurfaceWidth() {
+    /// 대화 열 = 폰 폭으로 고정(왼쪽), 제어 열 = 나머지. 대상 창 폭은 열 폭을 바꾸지 않는다(창 최소 폭이 대상을 담게 자랄 뿐).
+    func testDashboardKeepsANarrowConversationAndGivesTheRestToControl() {
         for origin in [CGPoint.zero, CGPoint(x: -1728, y: 90)] {
             let screen = CGRect(origin: origin, size: CGSize(width: 1728, height: 1117))
-            for (surfaceWidth, expected) in [(348, 348 + 24), (900, 900 + 24), (120, 232 + 24), (0, 232 + 24)] as [(CGFloat, CGFloat)] {
+            for surfaceWidth in [348, 900, 120, 0] as [CGFloat] {
                 let layout = WorkbenchLayout.dashboard(in: screen, controlWidth: surfaceWidth)
-                XCTAssertEqual(layout.controlColumn.width, expected)
-                XCTAssertEqual(layout.controlColumn.maxX, screen.maxX)
+                XCTAssertEqual(layout.conversationColumn.width, WorkbenchLayout.conversationWidth)
                 XCTAssertEqual(layout.conversationColumn.minX, screen.minX)
-                XCTAssertEqual(layout.conversationColumn.width, screen.width - expected)
+                XCTAssertEqual(layout.controlColumn.width, screen.width - WorkbenchLayout.conversationWidth)
+                XCTAssertEqual(layout.controlColumn.maxX, screen.maxX)
                 XCTAssertEqual(layout.conversationColumn.maxX, layout.controlColumn.minX)
                 XCTAssertEqual(layout.workspace.maxY, screen.maxY - WorkbenchLayout.normalTop)
                 XCTAssertEqual(layout.conversationColumn.height, layout.workspace.height)
@@ -21,8 +21,8 @@ final class WorkbenchSurfaceGeometryTests: XCTestCase {
                 XCTAssertTrue(screen.contains(layout.conversationColumn))
             }
             let narrow = WorkbenchLayout.dashboard(in: CGRect(origin: origin, size: CGSize(width: 300, height: 600)), controlWidth: 900)
-            XCTAssertEqual(narrow.controlColumn.width, 300, "The column never exceeds the window")
-            XCTAssertEqual(narrow.conversationColumn.width, 0)
+            XCTAssertEqual(narrow.conversationColumn.width, 300, "The column never exceeds the window")
+            XCTAssertEqual(narrow.controlColumn.width, 0)
         }
     }
 
@@ -112,12 +112,12 @@ final class WorkbenchSurfaceGeometryTests: XCTestCase {
         content.layoutSubtreeIfNeeded()
         XCTAssertTrue(content.nativeControlFits)
         XCTAssertEqual(content.phoneSlot.frame.size, content.phoneSize)
-        XCTAssertEqual(content.controlAvailableArea.width, 300)
-        XCTAssertEqual(content.phoneSlot.frame.minX, content.controlAvailableArea.minX)
+        XCTAssertEqual(content.controlAvailableArea.width, 1440 - WorkbenchLayout.conversationWidth - 24)
+        XCTAssertEqual(content.phoneSlot.frame.midX, content.controlAvailableArea.midX, "대상 창은 넓은 제어 열 위쪽 가운데에 제 크기로")
         XCTAssertEqual(content.phoneSlot.frame.maxY, content.controlAvailableArea.maxY)
-        XCTAssertEqual(content.phoneSlot.frame.maxX, content.bounds.maxX - WorkbenchLayout.horizontalInset)
+        XCTAssertEqual(content.phoneSlot.frame.width, 300)
         XCTAssertTrue(content.controlAvailableArea.contains(content.phoneSlot.frame))
-        XCTAssertEqual(content.controlToolbarArea.frame.width, 300)
+        XCTAssertEqual(content.controlToolbarArea.frame.width, 1440 - WorkbenchLayout.conversationWidth - 24)
         XCTAssertEqual(content.controlToolbarArea.frame.minY, content.controlAvailableArea.maxY + WorkbenchLayout.contentGap)
         XCTAssertEqual(content.workbenchArea.frame.maxX, content.controlToolbarArea.frame.minX - WorkbenchLayout.horizontalInset * 2)
         XCTAssertEqual(content.workbenchArea.frame.maxY, content.controlToolbarArea.frame.maxY, "The shell starts where the control header starts")
@@ -146,7 +146,7 @@ final class WorkbenchSurfaceGeometryTests: XCTestCase {
         content.layoutSubtreeIfNeeded()
         XCTAssertFalse(content.nativeControlFits)
         XCTAssertEqual(content.phoneSlot.frame, content.controlAvailableArea)
-        XCTAssertEqual(content.controlAvailableArea.width, 900)
+        XCTAssertEqual(content.controlAvailableArea.width, 1100 - WorkbenchLayout.conversationWidth - 24, "제어 열 = 창의 나머지")
         XCTAssertTrue(content.bounds.contains(content.phoneSlot.frame))
         XCTAssertFalse(content.phoneSlot.frame.intersects(content.workbenchArea.frame))
     }

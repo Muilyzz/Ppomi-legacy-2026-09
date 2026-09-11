@@ -21,7 +21,7 @@ final class VisualLiveTests: XCTestCase {
         let png = FileManager.default.temporaryDirectory.appendingPathComponent("ppomi-vlm-synthetic-\(UUID().uuidString).png")
         defer { try? FileManager.default.removeItem(at: png) }
         try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: png)
-        let text = try VisualInspector(model: AppSettings.visionModel).inspect(
+        let text = try VisualInspector().inspect(
             png: png, words: [], question: "노란색 사각형 중심의 위치를 알려 줘.", surface: "windows")
         let result = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
         let target = try XCTUnwrap(result["target"] as? [String: Any])

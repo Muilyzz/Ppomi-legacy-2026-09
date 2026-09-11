@@ -245,7 +245,7 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
             return
         }
 
-        let endpoint = defaults.string(forKey: AgentNativePolicy.endpointPreference) ?? ""
+        let endpoint = defaults.string(forKey: AgentNativePolicy.endpointPreference) ?? PpomiServer.agentEndpoint
         let currentEpoch = epoch
         let nativeRevision = session.revision
         let session = session, workspace = workspace, server = server, bankProfileRequests = bankProfileRequests
@@ -256,7 +256,7 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
                 guard session.revision == nativeRevision else { throw AgentNativeError.inactive }
                 switch method {
                 case "bootstrap":
-                    let configured = (try? SharedServerConfiguration.load()) != nil && (try? AgentNativePolicy.endpoint(endpoint)) != nil
+                    let configured = server.isConfigured && (try? AgentNativePolicy.endpoint(endpoint)) != nil
                     return ["platform": "macos", "deviceLabel": "Mac", "configured": configured,
                             "endpoint": endpoint, "tools": AgentNativePolicy.toolNames + MCPServer.tools.map(\.name),
                             "toolSpecs": MCPServer.toolSpecs, "toolGuide": self.mcp?.instructions ?? "",

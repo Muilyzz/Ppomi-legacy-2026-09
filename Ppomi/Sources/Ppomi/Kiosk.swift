@@ -8,6 +8,17 @@ import CoreGraphics
 /// Navigation leaves the mirroring app active; every explicit raise stays directly behind its window.
 /// The workbench window. Its control slot (and a docked agent area) are transparent holes, so a docked native window
 /// stays visible whether it is above or below this window; no cross-application z-ordering is attempted.
+extension NSApplication {
+    /// 앞으로 오기. macOS 14+ 의 activate(ignoringOtherApps:)는 우리가 방금 AX 로 앞세운 미러링 앱에서 활성을 되찾지 못한다(메뉴 막대가 미러링 것으로 남음).
+    /// 미러링 앱을 앞세울 때와 같은 AX frontmost 를 우리 자신에게 건다 — 손쉬운 사용 권한이 있을 때(폰 조종에 이미 필요한 권한).
+    func activateFront() {
+        activate(ignoringOtherApps: true)
+        if AXIsProcessTrusted() {
+            AXUIElementSetAttributeValue(AXUIElementCreateApplication(ProcessInfo.processInfo.processIdentifier), kAXFrontmostAttribute as CFString, kCFBooleanTrue)
+        }
+    }
+}
+
 final class MainPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
@@ -325,7 +336,7 @@ final class KioskController {
                 MainActor.assumeIsolated {
                     // Only a live, buried control window is raised; a Stage Manager thumbnail belongs to another stage.
                     // Another Ppomi window (settings, a picker) that was activated keeps its key status.
-                    guard let self, !self.up, !self.state.recordsFocused, !self.revealingOnActivate, NSApp.isActive,
+                    guard let self, !self.up, !self.state.recordsFocused, !self.revealingOnActivate, NSApp.isActive, self.controlWanted,
                           let p = self.main, p.isVisible, NSApp.keyWindow == nil || NSApp.keyWindow === p, Permissions.accessibility,
                           let phone = self.surface.liveWindow(), !self.isSurfacePresented(phone.id),
                           self.activateRevealFailedFor != phone.id else { return }
@@ -337,7 +348,7 @@ final class KioskController {
                     // Revealing can hand activation to the control app; take it back so typing stays in the chat.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         MainActor.assumeIsolated {
-                            NSApp.activate(ignoringOtherApps: true)
+                            NSApp.activateFront()
                             p.makeKey(); p.orderFront(nil)
                             WindowDiagnostics.panel("activate.reveal", p, fields: ["revealed": revealed])
                             self.revealingOnActivate = false
@@ -393,10 +404,10 @@ final class KioskController {
             if !up {
                 // A live control window buried under other apps comes up with the chat; a Stage Manager thumbnail
                 // (another stage) is left alone, the slot explains how to bring it over.
-                if Permissions.accessibility, let phone = surface.liveWindow(), !isSurfacePresented(phone.id) {
+                if controlWanted, Permissions.accessibility, let phone = surface.liveWindow(), !isSurfacePresented(phone.id) {
                     _ = surface.revealWindow()
                 }
-                NSApp.activate(ignoringOtherApps: true); main?.makeKey(); main?.orderFront(nil)
+                NSApp.activateFront(); main?.makeKey(); main?.orderFront(nil)
             }
         }
         let switched = displayedSurface != state.workSurface
@@ -441,7 +452,7 @@ final class KioskController {
                 content?.layoutSubtreeIfNeeded()
                 // The review needs the whole workbench in front: without a docked window it is opaque and covers
                 // a control window that could not be minimized.
-                NSApp.activate(ignoringOtherApps: true)
+                NSApp.activateFront()
                 main?.makeKeyAndOrderFront(nil)
             }
         } catch {
@@ -545,6 +556,7 @@ final class KioskController {
                                 size: NSScreen.main?.visibleFrame.size ?? CGSize(width: 1440, height: 900)))
         c.surface = surface
         c.recordsFocused = state.recordsFocused
+        c.onRecordsVisibility = { [weak state] visible in if let state, state.recordsOnScreen != visible { state.recordsOnScreen = visible } }
         c.phoneSize = surfaceSize
         c.phase = state.phase; c.band.state = state; c.band.sync()
         c.mount(sidebar: sidebar, records: records, controlToolbar: controlToolbar)
@@ -606,7 +618,8 @@ final class KioskController {
                 surfaceFit = SurfaceFit()
                 placementRequested = true
                 NSApp.unhideWithoutActivation()
-                if Permissions.accessibility { _ = surface.revealWindow() }
+                if controlWanted, Permissions.accessibility { _ = surface.revealWindow() }
+                NSApp.activateFront()
             }
             updateImmersive()
             return
@@ -627,7 +640,7 @@ final class KioskController {
             // A window parked on another stage cannot be revealed: activating its app would hand the stage over.
             // The docking tick's thumbnail pull brings it here instead.
             let parked = surface.liveWindow() == nil && surfaceThumbnail != nil
-            let presented = Permissions.accessibility && !parked && surface.revealWindow()
+            let presented = controlWanted && Permissions.accessibility && !parked && surface.revealWindow()
             p.surfacePID = surface.processIdentifier
             awaitingPresentedPhone = !presented
             if !presented { lastDock = nil }
@@ -639,6 +652,8 @@ final class KioskController {
         }
         c.layoutSubtreeIfNeeded()
         p.orderFront(nil)
+        // 사람이 뽀미를 불렀다(실행·Dock·메뉴): 미러링 창을 앞세우느라 넘어간 활성을 되찾아 메뉴 막대와 타자가 뽀미에 남게 한다.
+        if stage { NSApp.activateFront(); p.makeKey() }
     }
 
     /// Move the same view objects between hosts, preserving the timeline page and pending human approval.
@@ -658,7 +673,7 @@ final class KioskController {
                 }
             }
             if !state.recordsFocused {
-                if Permissions.accessibility { _ = surface.revealWindow() }
+                if controlWanted, Permissions.accessibility { _ = surface.revealWindow() }
                 surfaceFit = SurfaceFit()
                 placementRequested = true
             }
@@ -788,6 +803,7 @@ final class KioskController {
                     self.stagePullInFlight = false
                     self.lastDock = nil
                     self.placementRequested = true
+                    NSApp.activateFront(); p.makeKey()   // 썸네일을 끌어 놓는 합성 드래그가 미러링 앱을 활성화한다: 사람은 뽀미에 있다
                 }
             }
         }
@@ -824,7 +840,7 @@ final class KioskController {
         guard let full = visible ?? (p.screen ?? NSScreen.main)?.visibleFrame else { return }
         let display = usable(full, stageManager: visible == nil && stageManagerActive)
         var minimum = WorkbenchLayout.minimumContentSize
-        minimum.width = max(minimum.width, phoneSize.width + WorkbenchLayout.horizontalInset * 2 + WorkbenchLayout.minimumConversationWidth)
+        minimum.width = max(minimum.width, phoneSize.width + WorkbenchLayout.horizontalInset * 2 + WorkbenchLayout.conversationWidth)
         let displayContent = p.contentRect(forFrameRect: display).size
         p.contentMinSize = CGSize(width: min(minimum.width, displayContent.width), height: min(minimum.height, displayContent.height))
         p.contentMaxSize = CGSize(width: 10000, height: 10000)
@@ -856,7 +872,7 @@ final class KioskController {
             var room = available.size
             if surface == .windows, let full = (main?.screen ?? NSScreen.main)?.visibleFrame {
                 let usable = Self.usable(full, stageManager: Self.stageManagerActive)
-                room.width = max(room.width, usable.width - WorkbenchLayout.horizontalInset * 2 - WorkbenchLayout.minimumConversationWidth)
+                room.width = max(room.width, usable.width - WorkbenchLayout.horizontalInset * 2 - WorkbenchLayout.conversationWidth)
                 room.height = max(room.height, usable.height - WorkbenchLayout.normalTop - WorkbenchLayout.toolbarHeight - WorkbenchLayout.contentGap * 2 - 60)
             }
             let accepted = surface.requestCompactSize(available: room)
@@ -918,6 +934,15 @@ final class KioskController {
     }
 
     /// Maintain relative order without raising/activating the phone. Ignore transient Stage Manager animation frames.
+    /// 폰·Windows 창은 도구가 만질 때(뽀미 진행 중), 사람 차례일 때, 사람이 큰 화면으로 쓰겠다고 했을 때만 데려온다. 평상시엔 제어 열이 상태 뷰다.
+    private var controlWanted: Bool {
+        switch state.phase {
+        case .idle: return false
+        case .agent, .humanTurn: return true
+        case .humanUse(let onScreen): return onScreen
+        }
+    }
+
     private func dock() {
         checkFocusedWindows()
         guard wantMain, let p = main, let c = content else { return }
@@ -929,6 +954,16 @@ final class KioskController {
         if state.recordsFocused {
             p.phoneID = nil
             c.layoutSubtreeIfNeeded()
+            return
+        }
+        if !controlWanted {   // 평상시: 창을 데려오지도, 끌어오지도 않는다. 자리는 상태 뷰, 힌트 한 줄만 위에
+            p.phoneID = nil; lastDock = nil; placedDesktopID = nil
+            c.followedPhone = nil
+            awaitingPresentedPhone = false
+            let present = surface == .iphone ? state.mirror == .connected : surface.liveWindow() != nil
+            c.phoneSlot.hint = present ? "\(surface.displayName) · 대기 · 뽀미가 만질 때 데려옴" : state.connectionHint(for: surface)
+            c.layoutSubtreeIfNeeded()
+            if !p.isVisible { p.orderFront(nil) }
             return
         }
         guard Permissions.accessibility else {
@@ -1016,7 +1051,7 @@ final class KioskController {
                 lastRaiseReveal = now
                 WindowDiagnostics.panel("dock.raiseReveal", p)
                 _ = surface.revealWindow()
-                NSApp.activate(ignoringOtherApps: true)
+                NSApp.activateFront()
                 p.makeKey()
             }
         }

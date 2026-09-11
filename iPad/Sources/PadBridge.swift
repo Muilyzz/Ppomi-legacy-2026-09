@@ -107,29 +107,12 @@ final class PadServerClient {
         lock.lock(); defer { lock.unlock() }
         guard var s = Session.load() else { throw Failure.unconfigured }
         if s.expiresAt.timeIntervalSinceNow > 30 { return s.accessToken }
-        var r = Self.authRequest("/auth/v1/token", query: [URLQueryItem(name: "grant_type", value: "refresh_token")])
-        r.httpBody = try JSONSerialization.data(withJSONObject: ["refresh_token": s.refreshToken])
-        let (data, status) = try send(r)
-        guard status == 200, let t = Self.tokens(data) else { throw Failure.authentication }
+        let t: SupabaseAuth.Tokens
+        do { t = try SupabaseAuth.refresh(s.refreshToken) } catch SupabaseAuth.Failure.connection { throw Failure.connection } catch { throw Failure.authentication }
         s.accessToken = t.access; s.refreshToken = t.refresh; s.expiresAt = t.expiresAt
         try s.save()
         return s.accessToken
     }
-    /// PKCE: 로그인 창이 돌려준 code + verifier → 토큰.
-    static func exchange(code: String, verifier: String) throws -> Session {
-        var r = authRequest("/auth/v1/token", query: [URLQueryItem(name: "grant_type", value: "pkce")])
-        r.httpBody = try JSONSerialization.data(withJSONObject: ["auth_code": code, "code_verifier": verifier])
-        let (data, status) = try shared.send(r)
-        guard status == 200, let t = tokens(data) else { throw Failure.authentication }
-        return Session(accessToken: t.access, refreshToken: t.refresh, expiresAt: t.expiresAt, registered: false)
-    }
-    private static func tokens(_ data: Data) -> (access: String, refresh: String, expiresAt: Date)? {
-        guard data.count <= 65_536, let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let access = o["access_token"] as? String, (16...16_384).contains(access.count), !access.contains(where: { $0.isWhitespace }),
-              let refresh = o["refresh_token"] as? String, !refresh.isEmpty, let ttl = o["expires_in"] as? NSNumber, ttl.doubleValue > 0 else { return nil }
-        return (access, refresh, Date().addingTimeInterval(min(ttl.doubleValue, 86_400)))
-    }
-
     func rpc(_ name: String, _ args: [String: Any]) throws -> Any {
         var r = Self.authRequest("/rest/v1/rpc/" + name)
         r.setValue("Bearer " + (try token()), forHTTPHeaderField: "Authorization")

@@ -35,7 +35,7 @@ final class VisualInspectorTests: XCTestCase {
     }
 
     private func inspect(_ transport: @escaping VisualInspector.Transport, words: [OCR.Word] = [], question: String? = nil) throws -> [String: Any] {
-        let result = try VisualInspector(apiKey: { "synthetic-test-key" }, transport: transport)
+        let result = try VisualInspector(transport: transport)
             .inspect(png: frame, words: words, question: question ?? self.question, surface: "windows")
         return try XCTUnwrap(JSONSerialization.jsonObject(with: Data(result.utf8)) as? [String: Any])
     }
@@ -47,11 +47,11 @@ final class VisualInspectorTests: XCTestCase {
         let answer = try response(observation(target: candidate))
         let result = try inspect { request in
             calls += 1
-            XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/responses")
+            XCTAssertEqual(request.url?.absoluteString, PpomiServer.agentEndpoint + "/v1/responses")
             XCTAssertEqual(request.httpMethod, "POST"); XCTAssertEqual(request.timeoutInterval, 20)
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer synthetic-test-key")
+            XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"), "the login session is attached by the server client, never by the inspector")
             let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: Any])
-            XCTAssertEqual(body["model"] as? String, VisualInspector.defaultModel)
+            XCTAssertNil(body["model"], "the server picks the model")
             XCTAssertEqual(body["store"] as? Bool, false); XCTAssertEqual(body["max_output_tokens"] as? Int, 1000)
             XCTAssertEqual((body["reasoning"] as? [String: String])?["effort"], "none")
             XCTAssertNil(body["tools"], "the observer must never receive a tool surface")
@@ -78,8 +78,7 @@ final class VisualInspectorTests: XCTestCase {
 
     func testSensitiveOCRAndQuestionsStopBeforeKeyOrNetwork() throws {
         let sensitive = ["123456-1234567", "1234 5678 1234 5678", "비밀번호를 입력하세요", "비밀번호", "인증서 암호", "OTP 123456", "인증번호 123456", "sk-proj-synthetic_secret_token_123", "password: example-secret"]
-        let client = VisualInspector(apiKey: { XCTFail("privacy check must precede key access"); return nil },
-                                     transport: { _ in XCTFail("private frames must stay local"); return (Data(), 500) })
+        let client = VisualInspector(transport: { _ in XCTFail("private frames must stay local"); return (Data(), 500) })
         for text in sensitive {
             let word = OCR.Word(x: 0, y: 0, w: 1, h: 1, text: text)
             XCTAssertThrowsError(try client.inspect(png: frame, words: [word], question: question, surface: "phone")) {
@@ -91,12 +90,9 @@ final class VisualInspectorTests: XCTestCase {
         XCTAssertFalse(VisualInspector.hasSensitiveContent("2026-09-08 열람 수수료 700원"))
     }
 
-    func testMissingKeyAndInvalidInputsNeverUseNetwork() throws {
+    func testInvalidInputsNeverUseNetwork() throws {
         let noNetwork: VisualInspector.Transport = { _ in XCTFail("network should not start"); return (Data(), 500) }
-        XCTAssertThrowsError(try VisualInspector(apiKey: { nil }, transport: noNetwork).inspect(png: frame, words: [], question: question, surface: "phone")) {
-            XCTAssertTrue(String(describing: $0).contains("API 키"))
-        }
-        let client = VisualInspector(apiKey: { "synthetic" }, transport: noNetwork)
+        let client = VisualInspector(transport: noNetwork)
         for query in ["", String(repeating: "가", count: 2001)] {
             XCTAssertThrowsError(try client.inspect(png: frame, words: [], question: query, surface: "phone"))
         }

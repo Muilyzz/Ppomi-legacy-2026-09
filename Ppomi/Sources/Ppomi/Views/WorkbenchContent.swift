@@ -11,6 +11,8 @@ final class WorkbenchContent: WorkbenchSurface {
     let overlay = WorkbenchOverlayView()
     /// The records page replaces the whole workspace.
     var recordsFocused = false { didSet { needsLayout = true } }
+    /// 기록이 화면에 있는지(집중 또는 평상시 제어 열): 페이지들은 보일 때만 장부를 읽고 그린다(AppState.recordsOnScreen).
+    var onRecordsVisibility: ((Bool) -> Void)?
     var surface: WorkSurface = .iphone {
         didSet {
             guard surface != oldValue else { return }
@@ -61,12 +63,17 @@ final class WorkbenchContent: WorkbenchSurface {
         !recordsFocused && phoneSize.width <= controlAvailableArea.width && phoneSize.height <= controlAvailableArea.height
     }
 
+    /// 제어 창이 없을 때(연결 끊김·다른 스테이지·자리 밖): 빈 구멍 대신 기록(상태 뷰)을 제어 열에 보인다. 힌트 한 줄은 그 위에 남는다.
+    var statusInSlot: Bool { !recordsFocused && !dockedPhone && followedPhone == nil && !phoneSlot.hint.isEmpty }
+
     override func layout() {
         super.layout()
+        let statusInSlot = statusInSlot
         workbenchArea.isHidden = recordsFocused
         controlToolbarArea.isHidden = recordsFocused
-        recordsArea.isHidden = !recordsFocused
-        if phoneSlot.superview === self { phoneSlot.isHidden = recordsFocused || dockedPhone }
+        recordsArea.isHidden = !(recordsFocused || statusInSlot)
+        onRecordsVisibility?(!recordsArea.isHidden)
+        if phoneSlot.superview === self { phoneSlot.isHidden = recordsFocused || dockedPhone || statusInSlot }
         if band.superview === self { band.isHidden = recordsFocused || footerHeight == 0 }
         needsDisplay = true
         if recordsFocused {
@@ -76,7 +83,9 @@ final class WorkbenchContent: WorkbenchSurface {
         let dashboard = dashboard
         let control = WorkbenchLayout.pane(in: dashboard.controlColumn, footerHeight: footerHeight)
         controlToolbarArea.frame = control.toolbar
-        if phoneSlot.superview === self {
+        if statusInSlot {   // 평상시: 힌트 줄 없이 기록이 제어 열 전부
+            recordsArea.frame = control.available
+        } else if phoneSlot.superview === self {
             let followed = followedPhone.flatMap { control.available.contains($0) ? $0 : nil }
             phoneSlot.frame = followed ?? (nativeControlFits
                 ? WorkbenchLayout.topAlignedWindow(size: phoneSize, in: control.available) : control.available)

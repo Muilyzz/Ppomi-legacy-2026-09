@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "shinhan-sol",
+  "name": "신한 슈퍼SOL",
+  "version": "0.1.0",
+  "aliases": [
+    "신한",
+    "신한은행",
+    "슈퍼SOL",
+    "신한 SOL뱅크",
+    "SHINHAN"
+  ],
+  "launch": {
+    "search": "신한"
+  },
+  "capabilities": [
+    {
+      "id": "read-accounts-and-loans",
+      "title": "계좌·대출 잔액 읽기",
+      "description": "이미 로그인된 신한 슈퍼SOL의 전체계좌 화면에서 입출금 잔액과 대출 잔액을 읽습니다. 대출 잔액은 갚을 돈이라 장부에 음수(부채)로 적습니다. 이체·이자납부·상품 가입은 하지 않습니다.",
+      "inputs": [],
+      "steps": [
+        { "id": "open", "title": "▶ 신한 슈퍼SOL 열기 (Spotlight '신한')", "kind": "open" },
+        { "id": "paste-prompt", "title": "⎋ 'MacBook에서 붙여넣으려고 함' 물음이 뜨면 '붙여넣기 허용 안 함'", "kind": "close" },
+        { "id": "login", "title": "👤 로그인 화면이면 당사자가 Face ID·비밀번호로 로그인", "kind": "human" },
+        { "id": "home", "title": "📝 홈의 '계좌' 카드에서 입출금 잔액 읽기", "kind": "read" },
+        { "id": "list", "title": "⊙ '계좌' 제목을 눌러 전체계좌(입출금·대출)로", "kind": "tap" },
+        { "id": "read", "title": "📝 입출금 각 잔액과 대출 각 잔액 읽기 — 대출은 부채", "kind": "read" }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "로그인·Face ID·비밀번호는 당사자가 직접 처리합니다. 앱이 이미 로그인돼 있으면 다시 요구하지 않습니다.",
+    "잔액 읽기만 합니다. 이체·이자납부·상품 가입·카드 신청은 하지 않습니다. '이체' 버튼과 계좌번호는 누르지 않습니다.",
+    "계좌번호 원문은 장부 라벨에 남기지 않습니다(끝 4자리만)."
+  ],
+  "guide": "guide.md",
+  "collection": {
+    "key": "SHINHAN",
+    "account": "예금$|대출\\(",
+    "list": "^계좌$",
+    "home": "땡겨요|마이신한포인트|추천서비스",
+    "debt": "대출",
+    "scrollY": 0.5
+  }
+}

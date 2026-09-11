@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "kakaopay",
+  "name": "카카오페이",
+  "version": "0.1.0",
+  "aliases": [
+    "카카오페이증권",
+    "KAKAOPAY",
+    "kakaopay"
+  ],
+  "launch": {
+    "search": "카카오페이"
+  },
+  "capabilities": [
+    {
+      "id": "read-securities-account",
+      "title": "카카오페이증권 계좌 총 자산 읽기",
+      "description": "이미 로그인된 카카오페이 앱의 '증권' 탭 → '내 계좌'에서 종합계좌 총 자산(원화·달러·주식 평가금액 합)을 읽습니다. 충전·출금·환전·주문은 하지 않습니다.",
+      "inputs": [],
+      "steps": [
+        { "id": "open", "title": "▶ 카카오페이 열기 (Spotlight '카카오페이')", "kind": "open" },
+        { "id": "popup", "title": "⎋ 광고 팝업은 '닫기'", "kind": "close" },
+        { "id": "login", "title": "👤 로그인 화면이면 당사자가 비밀번호·생체로 로그인", "kind": "human" },
+        { "id": "tab", "title": "⊙ 아래 탭 '증권'", "kind": "tap" },
+        { "id": "account", "title": "⊙ 보유주식 옆 '내 계좌'", "kind": "tap" },
+        { "id": "read", "title": "📝 '계좌 총 자산' 아래 금액 읽기", "kind": "read" }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "로그인·비밀번호·생체 인증은 당사자가 직접 처리합니다.",
+    "읽기만 합니다. 충전·출금·환전·송금·주문은 하지 않습니다.",
+    "계좌번호 원문은 장부 라벨에 남기지 않습니다."
+  ],
+  "guide": "guide.md",
+  "collection": {
+    "key": "KAKAOPAY",
+    "account": "^계좌 총 자산$",
+    "expand": "^증권$",
+    "list": "^내 계좌$",
+    "scrollY": 0.5
+  }
+}

@@ -181,8 +181,10 @@ final class PlaybookCatalogTests: XCTestCase {
 
     func testExistingCollectorSettingsArePreserved() throws {
         let configs = Apps.configurations(from: PlaybookCatalog.load(in: temporary))
-        XCTAssertEqual(configs.map(\.key), ["KB", "KBANK", "KAKAO", "TOSS"])
-        XCTAssertEqual(configs.map(\.search), ["kb", "kbank", "kakaobank", "toss"])
+        XCTAssertEqual(configs.map(\.key), ["KB", "KBANK", "KAKAO", "TOSS", "KAKAOPAY", "KBBIZ", "SAMSUNG", "SHINHAN"], "옛 순서 그대로, 새 패키지는 뒤에 이름순")
+        XCTAssertEqual(configs.last?.debt, "대출", "신한: 대출 이름의 잔액은 음수(부채)로 — 커스텀 디코더가 debt 를 읽어야 한다")
+        XCTAssertEqual(configs.last?.list, "^계좌$"); XCTAssertNil(configs.first?.debt)
+        XCTAssertEqual(configs.map(\.search), ["kb", "kbank", "kakaobank", "toss", "카카오페이", "KB스타기업뱅킹", "삼성증권", "신한"])
         XCTAssertEqual(configs[0].account, #"\(\d{4}\)|\d{6}-\d{2}-\d{6}"#)
         XCTAssertEqual(configs[0].expand, "^더보기")
         XCTAssertEqual(configs[0].list, "내 계좌 전체보기")

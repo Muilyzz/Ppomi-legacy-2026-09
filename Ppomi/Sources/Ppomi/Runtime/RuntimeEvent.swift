@@ -51,7 +51,7 @@ struct RuntimeEvent: Equatable, Identifiable, Sendable {
         "profile_delete": "기본정보 삭제", "profile_fill": "기본정보 입력",
         "screen_inspect": "화면 관찰", "run_combo": "알려진 동작 재생", "pay_preference": "결제 수단 조회",
         "confirm_payment": "결제 승인 요청", "record_spend": "지출 기록",
-        "health_records": "건강 기록 조회", "record_health": "건강 기록 저장", "inbody_capture": "인바디 기록 수집", "bank_profile_capture": "은행정보 수집",
+        "health_records": "건강 기록 조회", "record_health": "건강 기록 저장", "inbody_capture": "인바디 기록 수집", "bank_profile_capture": "은행정보 수집", "registry_read": "등기부등본 읽기",
         "transactions": "거래 조회", "sql": "장부 조회", "list_playbooks": "절차 목록 조회",
         "read_playbook": "절차 읽기", "note_footprint": "동작 기록", "verify_step": "단계 판정",
         "accounting_records": "분개장 조회", "accounting_import": "분개장 저장",

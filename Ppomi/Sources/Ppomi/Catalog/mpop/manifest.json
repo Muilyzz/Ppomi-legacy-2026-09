@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "id": "mpop",
+  "name": "삼성증권",
+  "version": "0.1.0",
+  "aliases": [
+    "삼성증권 mPOP",
+    "mPOP",
+    "SAMSUNG"
+  ],
+  "launch": {
+    "search": "삼성증권"
+  },
+  "capabilities": [
+    {
+      "id": "order",
+      "title": "주식 주문 준비(매수·매도)",
+      "description": "종목을 찾아 주문 화면에 매수·매도 구분, 수량, 가격(지정가·시장가)을 입력하고 주문 요약을 안내합니다. 매수·매도 주문 버튼과 주문 확인 팝업은 당사자가 직접 누릅니다. 2026-09-11 화면 라벨은 미검증입니다.",
+      "inputs": [
+        {
+          "name": "symbol",
+          "label": "종목명 또는 종목코드",
+          "required": true
+        },
+        {
+          "name": "side",
+          "label": "매수 또는 매도",
+          "required": true
+        },
+        {
+          "name": "quantity",
+          "label": "수량(주)",
+          "required": true
+        },
+        {
+          "name": "price",
+          "label": "가격(지정가 금액 또는 '시장가')",
+          "required": true
+        }
+      ],
+      "steps": [
+        {
+          "id": "step-1",
+          "title": "▶삼성증권 mPOP",
+          "kind": "open"
+        },
+        {
+          "id": "step-2",
+          "title": "👤로그인(간편비밀번호·생체인증)",
+          "kind": "human"
+        },
+        {
+          "id": "step-3",
+          "title": "⎋공지·이벤트 팝업",
+          "kind": "close"
+        },
+        {
+          "id": "step-4",
+          "title": "⊙주문|주식주문",
+          "kind": "tap"
+        },
+        {
+          "id": "step-5",
+          "title": "⌨종목명 또는 종목코드(검색)",
+          "kind": "input"
+        },
+        {
+          "id": "step-6",
+          "title": "⊙검색 결과의 종목",
+          "kind": "tap"
+        },
+        {
+          "id": "step-7",
+          "title": "⊙매수|매도",
+          "kind": "tap"
+        },
+        {
+          "id": "step-8",
+          "title": "⌨수량",
+          "kind": "input"
+        },
+        {
+          "id": "step-9",
+          "title": "⊙지정가|시장가 › ⌨가격(지정가일 때)",
+          "kind": "input"
+        },
+        {
+          "id": "step-10",
+          "title": "phone_screen 주문 요약(종목·구분·수량·가격·예상 주문금액·주문가능금액) → 한 줄 안내",
+          "kind": "read"
+        },
+        {
+          "id": "step-11",
+          "title": "👤매수|매도 버튼과 주문 확인 팝업",
+          "kind": "human"
+        },
+        {
+          "id": "step-12",
+          "title": "📝주문 접수 결과(주문번호·체결 여부)",
+          "kind": "read"
+        },
+        {
+          "id": "step-13",
+          "title": "phone_key home",
+          "kind": "close"
+        }
+      ]
+    },
+    {
+      "id": "read-total-assets",
+      "title": "총 자산 읽기",
+      "description": "이미 로그인된 삼성증권 mPOP 홈의 '자산' 탭에서 총 자산(평가금액)을 읽습니다. 주문·이체·상품 가입은 하지 않습니다.",
+      "inputs": [],
+      "steps": [
+        {
+          "id": "open",
+          "title": "▶ 삼성증권 열기 (Spotlight '삼성증권')",
+          "kind": "open"
+        },
+        {
+          "id": "home",
+          "title": "⎋ 홈이 아니면 왼쪽 위 <로 홈까지; '님을 위한 안내' 팝업은 '닫기'",
+          "kind": "close"
+        },
+        {
+          "id": "login",
+          "title": "👤 로그인 화면이면 당사자가 간편비밀번호·생체로 로그인",
+          "kind": "human"
+        },
+        {
+          "id": "tab",
+          "title": "⊙ 홈 탭 '자산'",
+          "kind": "tap"
+        },
+        {
+          "id": "read",
+          "title": "📝 '총 자산' 아래 금액 읽기 (평가손익 줄은 무시)",
+          "kind": "read"
+        }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "로그인·간편비밀번호·생체인증은 직접 진행합니다. 자격 증명은 뽀미가 입력하지 않습니다.",
+    "매수·매도 주문 버튼과 주문 확인 팝업은 당사자가 직접 누릅니다. 뽀미는 주문 화면 입력과 주문 요약 안내까지만 하며 이체·출금·신용·미수 설정은 건드리지 않습니다."
+  ],
+  "guide": "guide.md",
+  "iconSource": "https://apps.apple.com/kr/app/id500473788",
+  "collection": {
+    "key": "SAMSUNG",
+    "account": "^총 ?자산( 투자성과)?$",
+    "expand": "^자산$",
+    "home": "상품/연금",
+    "scrollY": 0.5
+  }
+}

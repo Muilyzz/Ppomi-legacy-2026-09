@@ -33,7 +33,7 @@ final class ServeTests: XCTestCase {
     }
 
     func testPayGate() throws {
-        XCTAssertTrue(Tools.isPayWord("결제하기")); XCTAssertTrue(Tools.isPayWord("406,600원 결제")); XCTAssertTrue(Tools.isPayWord("주문 완료")); XCTAssertFalse(Tools.isPayWord("예약하기")); XCTAssertFalse(Tools.isPayWord("확인")); XCTAssertFalse(Tools.isPayWord("총 결제 금액 406,600원")); XCTAssertFalse(Tools.isPayWord("할인 및 결제 정보"))
+        XCTAssertTrue(Tools.isPayWord("결제하기")); XCTAssertTrue(Tools.isPayWord("406,600원 결제")); XCTAssertTrue(Tools.isPayWord("주문 완료")); XCTAssertFalse(Tools.isPayWord("예약하기")); XCTAssertFalse(Tools.isPayWord("확인")); XCTAssertFalse(Tools.isPayWord("총 결제 금액 406,600원")); XCTAssertFalse(Tools.isPayWord("할인 및 결제 정보")); XCTAssertFalse(Tools.isPayWord("바로구매")); XCTAssertTrue(Tools.isPayWord("구매하기"))
         let path = NSTemporaryDirectory() + "ppomi-pay-\(UUID().uuidString)/ledger.db"
         let t = try Tools(db: try DB(path: path, writable: true))
         t.currentText = "응 잠겨있어"

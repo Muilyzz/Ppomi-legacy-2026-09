@@ -42,6 +42,7 @@ struct PlaybookManifest: Codable, Equatable {
         var tx: String? = nil
         var txpage: String? = nil
         var home: String? = nil
+        var debt: String? = nil        // 이름이 이에 맞는 계좌의 잔액은 갚을 돈: 음수로 적는다(대출·마이너스 통장)
         var scrollY: Double = 0.5
     }
 
@@ -82,6 +83,7 @@ extension PlaybookManifest.Collection {
         tx = try values.decodeIfPresent(String.self, forKey: .tx)
         txpage = try values.decodeIfPresent(String.self, forKey: .txpage)
         home = try values.decodeIfPresent(String.self, forKey: .home)
+        debt = try values.decodeIfPresent(String.self, forKey: .debt)
         scrollY = try values.decodeIfPresent(Double.self, forKey: .scrollY) ?? 0.5
     }
 }

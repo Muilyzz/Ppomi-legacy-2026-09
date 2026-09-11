@@ -12,6 +12,7 @@ struct AppConfig {
     var tx: String? = nil          // the home row to tap for the transaction list (first match)
     var txpage: String? = nil      // text only the transaction list has (default: 카카오 '13:06 #' rows)
     var home: String? = nil        // text only the home screen has — absent after opening → tap back
+    var debt: String? = nil        // regex: rows whose balance is money owed (loans) — stored negative
     var scrollY = 0.5              // where the wheel scrolls (KB's web list only moves with the pointer over the rows)
 }
 
@@ -24,7 +25,7 @@ enum Apps {
             guard let value = record.manifest.collection else { return nil }
             return AppConfig(key: value.key, title: record.name, search: record.manifest.launch.search, account: value.account,
                              homeLabel: value.homeLabel, expand: value.expand, list: value.list, tx: value.tx,
-                             txpage: value.txpage, home: value.home, scrollY: value.scrollY)
+                             txpage: value.txpage, home: value.home, debt: value.debt, scrollY: value.scrollY)
         }.sorted {
             let left = legacyOrder.firstIndex(of: $0.key) ?? legacyOrder.count
             let right = legacyOrder.firstIndex(of: $1.key) ?? legacyOrder.count

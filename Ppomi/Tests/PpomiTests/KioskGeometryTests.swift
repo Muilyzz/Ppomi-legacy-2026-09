@@ -38,7 +38,7 @@ final class KioskGeometryTests: XCTestCase {
         XCTAssertEqual(panel.contentMinSize, WorkbenchLayout.minimumContentSize)
         XCTAssertGreaterThan(panel.contentMaxSize.width, display.width)
         XCTAssertEqual(content.phoneSlot.bounds.size, CGSize(width: 348, height: 540))
-        XCTAssertEqual(workbench.frame.width, 1440 - (348 + 24) - 24)
+        XCTAssertEqual(workbench.frame.width, WorkbenchLayout.conversationWidth - 24, "대화 열은 폰 폭으로 고정")
         XCTAssertGreaterThan(workbench.frame.height, 400)
         XCTAssertTrue(content.band.isHidden, "No footer without a question")
         XCTAssertFalse(content.phoneSlot.frame.intersects(content.workbenchArea.frame))
@@ -50,11 +50,11 @@ final class KioskGeometryTests: XCTestCase {
         XCTAssertEqual(panel.frame, chosen)
         XCTAssertEqual(content.phoneSlot.bounds.size, CGSize(width: 300, height: 520))
         XCTAssertGreaterThan(workbench.frame.height, 300)
-        XCTAssertEqual(workbench.frame.width, 1100 - (300 + 24) - 24)
+        XCTAssertEqual(workbench.frame.width, WorkbenchLayout.conversationWidth - 24)
         XCTAssertTrue(content.bounds.contains(content.phoneSlot.frame))
     }
 
-    /// A wide target pushes the window minimum out so the shell keeps `minimumConversationWidth` beside it.
+    /// A wide target pushes the window minimum out so the shell keeps `conversationWidth` beside it.
     @MainActor func testMinimumWidthFollowsAWideControlColumn() {
         _ = NSApplication.shared
         let content = WorkbenchContent(frame: .zero)
@@ -62,7 +62,7 @@ final class KioskGeometryTests: XCTestCase {
         defer { panel.close() }
         let display = CGRect(x: 0, y: 0, width: 1920, height: 1080)
         KioskController.fitMain(panel, content: content, phoneSize: CGSize(width: 900, height: 620), in: display, initial: true)
-        XCTAssertEqual(panel.contentMinSize.width, 900 + 24 + WorkbenchLayout.minimumConversationWidth)
+        XCTAssertEqual(panel.contentMinSize.width, 900 + 24 + WorkbenchLayout.conversationWidth)
         XCTAssertEqual(panel.contentMinSize.height, WorkbenchLayout.minimumContentSize.height)
         KioskController.fitMain(panel, content: content, phoneSize: CGSize(width: 348, height: 540), in: display)
         XCTAssertEqual(panel.contentMinSize, WorkbenchLayout.minimumContentSize)
@@ -165,7 +165,7 @@ final class KioskGeometryTests: XCTestCase {
         XCTAssertEqual(content.workbenchArea.frame, originalSidebar)
         XCTAssertEqual(content.controlToolbarArea.frame, originalToolbar)
         XCTAssertTrue(content.bounds.contains(content.workbenchArea.frame))
-        XCTAssertEqual(content.workbenchArea.frame.width, 1280 - (348 + 24) - 24)
+        XCTAssertEqual(content.workbenchArea.frame.width, WorkbenchLayout.conversationWidth - 24)
         XCTAssertFalse(panel.isVisible)
     }
 

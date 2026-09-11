@@ -1,7 +1,8 @@
 import AppKit
 
-/// The workbench tree (docs/ui-tree.md): 대화 takes the remaining width, 제어 the target window's width; the 차례 띠
-/// exists only while a question is pending. Records replace the whole workspace as a page.
+/// The workbench tree (docs/ui-tree.md): 대화 is a narrow phone-width column on the left, 제어 takes the rest (fixed to the
+/// window, not to the target); an empty control slot shows the records(상태 뷰) instead. The 차례 띠 exists only while a
+/// question is pending. 기록 still replaces the whole workspace as a page.
 enum WorkbenchLayout {
     static let horizontalInset: CGFloat = 12
     static let approvalBottom: CGFloat = 8
@@ -15,8 +16,8 @@ enum WorkbenchLayout {
     static let minimumControlWidth: CGFloat = 232 + horizontalInset * 2
     /// Height: normalTop + immersiveTop + toolbar + gap + 515 + approvalBottom = 615, rounded up.
     static let minimumContentSize = CGSize(width: 1040, height: 640)
-    /// A wide target (Windows) pushes the window minimum out so the shell keeps a usable width beside it.
-    static let minimumConversationWidth: CGFloat = 400
+    /// 대화 열 폭(폰 스타일, 고정): 셸 388 + 여백. A wide target (Windows) pushes the window minimum out beside it.
+    static let conversationWidth: CGFloat = 412
 
     struct Dashboard {
         let workspace: CGRect
@@ -27,9 +28,9 @@ enum WorkbenchLayout {
     static func dashboard(in bounds: CGRect, controlWidth: CGFloat,
                           topInset: CGFloat = WorkbenchLayout.normalTop) -> Dashboard {
         let workspace = CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width, height: max(0, bounds.height - topInset))
-        let control = min(workspace.width, max(minimumControlWidth, controlWidth + horizontalInset * 2))
-        let right = CGRect(x: workspace.maxX - control, y: workspace.minY, width: control, height: workspace.height)
-        let left = CGRect(x: workspace.minX, y: workspace.minY, width: workspace.width - control, height: workspace.height)
+        _ = controlWidth   // 제어 열은 대상 창 폭이 아니라 창의 나머지: 창 최소 폭이 대상을 담을 만큼 자란다(Kiosk.fitMain)
+        let left = CGRect(x: workspace.minX, y: workspace.minY, width: min(conversationWidth, workspace.width), height: workspace.height)
+        let right = CGRect(x: left.maxX, y: workspace.minY, width: max(0, workspace.width - left.width), height: workspace.height)
         return Dashboard(workspace: workspace, conversationColumn: left, controlColumn: right)
     }
 

@@ -11,7 +11,9 @@ final class Collector {
     static let login = Re(#"패턴|비밀번호|인증서|간편인증|Face ID|로그인(?! 연장| 시간)"#)   // '로그인 연장' is a session popup, not a login wall
     static let extend = Re("^로그인 연장$")                                                    // KB: idle-timeout popup; tapping keeps the session
     // Popups we close, and the only buttons we may press for each. Money-moving suggestions are closed with X/닫기/아니요 only.
-    static let popups = [(Re("이체할까요"), Re(#"^[X×x]$|^닫기$|^아니요$"#)), (Re("로그아웃 되었습니다"), Re(#"^확인$|^[X×x]$"#))]
+    static let popups = [(Re("이체할까요"), Re(#"^[X×x]$|^닫기$|^아니요$"#)), (Re("로그아웃 되었습니다"), Re(#"^확인$|^[X×x]$"#)),
+                         (Re("붙여넣으려고 함"), Re(#"^붙여넣기 허용 안 함$"#)),   // iOS: the app wants the Mac clipboard; never allow
+                         (Re("님을 위한 안내"), Re(#"^닫기$"#))]                    // 삼성증권 home: event popup
 
     let db: DB
     let log: (String) -> Void
@@ -54,7 +56,7 @@ final class Collector {
             do { try Toss.collect(db: db, log: log) } catch { log("TOSSINVEST: \(error)") }
         }
         let apps = keys.compactMap(Apps.config)
-        guard !apps.isEmpty else { return }
+        guard !apps.isEmpty else { log("실행 안 함: 수집 규칙(collection)이 있는 앱이 아닙니다(\(keys.joined(separator: ", "))). 카탈로그 ID·이름·별칭으로 적으세요."); return }
         do {
             let databases = try db.rows("PRAGMA database_list")
             guard let path = databases.first(where: { $0[1] as? String == "main" })?[2] as? String,
@@ -103,7 +105,8 @@ final class Collector {
         }
         guard !found.isEmpty else { log("\(cfg.key): no balance found (login not done? popup?) -> see \(png.lastPathComponent)"); return }
         let ts = TS.string(Date())
-        for (acct, bal) in found {
+        for (acct, raw) in found {
+            let bal = cfg.debt.map { Re($0).search(acct) != nil } == true ? -raw : raw   // 대출·마이너스 통장: 갚을 돈은 음수(부채)
             try db.insertSnapshot(ts: ts, app: cfg.key, account: acct, balance: bal, shot: png.lastPathComponent)
             log("\(cfg.key): \(acct) = \(bal.won)")
         }
@@ -167,7 +170,7 @@ final class Collector {
         }
         // Spotlight's field autocompletes the top hit ("kb스타뱅킹 — 열기"): Return opens it. Else the top-hit grid puts the
         // icon above the label; an '앱' list row is tappable as a whole.
-        if words.contains(where: { $0.y > 0.85 && $0.text.lowercased().contains(cfg.title.lowercased()) }) {
+        if words.contains(where: { $0.y > 0.85 && $0.text.lowercased().contains(cfg.title.lowercased()) && $0.text.contains("열기") }) {   // the typed text alone (no '— 열기') means Return would open a web hit
             try Phone.key("return")
         } else if let h = find(words, "연관성 높은 항목"), hit.y - h.y > 0, hit.y - h.y < 0.1 {
             try Phone.tap(hit.x + min(hit.w, 0.25) / 2, hit.y - 0.06)
