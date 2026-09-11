@@ -102,8 +102,7 @@ export function assertCiphertextEnvelope(input: unknown): VaultEnvelope {
     throw new VaultError("plaintext_rejected", "store accepts ciphertext envelopes only");
   }
   const body = box.subarray(NONCE_LEN, box.byteLength - TAG_LEN);
-  const asText = body.toString("utf8");
-  if (ACCOUNTISH.test(asText) || looksLikeUtf8Secret(body, asText)) {
+  if (!body.includes(0) && ACCOUNTISH.test(body.toString("utf8"))) {
     throw new VaultError("plaintext_rejected", "store accepts ciphertext envelopes only");
   }
   return { v: VAULT_VERSION, identityId: row.identityId, id: row.id, box: row.box };
@@ -209,10 +208,3 @@ function assertPlaintext(value: string): void {
   }
 }
 
-function looksLikeUtf8Secret(body: Buffer, asText: string): boolean {
-  if (body.includes(0)) return false;
-  for (const byte of body) {
-    if (byte < 0x20 || byte > 0x7e) return false;
-  }
-  return asText.length >= 6;
-}
