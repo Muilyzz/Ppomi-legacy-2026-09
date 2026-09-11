@@ -1,8 +1,9 @@
 import type { BrowserPageAdapter, PageSnapshot } from "./browser-page-adapter.ts";
 import type { PagePlaybookStep } from "./page-playbook.ts";
 import { defaultPagePermission } from "./permissions.ts";
-import type { Resolution, StepClass, Surface } from "./runtime-core.ts";
-import type { RuntimeCode } from "./step-result.ts";
+import type { MaybePromise } from "./playbook.ts";
+import type { Resolution, RuntimeCode, StepClass, Surface } from "./runtime-core.ts";
+import type { StepTarget } from "./step-result.ts";
 
 export type PageRef =
   | { readonly kind: "read" }
@@ -14,24 +15,39 @@ export type PageRef =
 /** A web page as a runtime surface: locator targets over one `BrowserPageAdapter`. */
 export class PageSurface implements Surface<PageSnapshot, PageRef, PagePlaybookStep> {
   readonly kind = "page" as const;
-  private readonly adapter: BrowserPageAdapter;
+  readonly adapter = "page" as const;
+  private readonly page: BrowserPageAdapter;
   private readonly allowedOrigins: readonly string[] | undefined;
 
   constructor(adapter: BrowserPageAdapter, allowedOrigins?: readonly string[]) {
-    this.adapter = adapter;
+    this.page = adapter;
     this.allowedOrigins = allowedOrigins;
   }
 
-  async read(): Promise<PageSnapshot> {
-    return await this.adapter.readPage();
+  read(): MaybePromise<PageSnapshot> {
+    return this.page.readPage();
   }
 
   observed(snap: PageSnapshot): readonly string[] {
     return snap.texts;
   }
 
-  location(snap: PageSnapshot): string | null {
-    return publicUrl(snap.url);
+  /** Declared locator or URL; session node ids and coordinates never enter a result. */
+  target(step: PagePlaybookStep): StepTarget {
+    switch (step.kind) {
+      case "goto":
+        return step.url !== undefined && step.url.length > 0 ? { kind: "url", url: step.url } : { kind: "none" };
+      case "click":
+      case "fill":
+      case "waitFor":
+        return step.locator !== undefined && step.locator.length > 0 ? { kind: "locator", locator: step.locator } : { kind: "none" };
+      case "read":
+        return { kind: "none" };
+      default: {
+        const exhaustive: never = step.kind;
+        throw new Error(`unhandled page step kind: ${String(exhaustive)}`);
+      }
+    }
   }
 
   classify(step: PagePlaybookStep): StepClass {
@@ -94,22 +110,18 @@ export class PageSurface implements Surface<PageSnapshot, PageRef, PagePlaybookS
     }
   }
 
-  async act(_step: PagePlaybookStep, ref: PageRef): Promise<void> {
+  act(_step: PagePlaybookStep, ref: PageRef): MaybePromise<void> {
     switch (ref.kind) {
       case "read":
-        return;
+        return undefined;
       case "goto":
-        await this.adapter.goto(ref.url);
-        return;
+        return this.page.goto(ref.url);
       case "click":
-        await this.adapter.click(ref.locator);
-        return;
+        return this.page.click(ref.locator);
       case "fill":
-        await this.adapter.fill(ref.locator, ref.text);
-        return;
+        return this.page.fill(ref.locator, ref.text);
       case "waitFor":
-        await this.adapter.waitFor(ref.locator);
-        return;
+        return this.page.waitFor(ref.locator);
       default: {
         const exhaustive: never = ref;
         throw new Error(`unhandled ref: ${String(exhaustive)}`);

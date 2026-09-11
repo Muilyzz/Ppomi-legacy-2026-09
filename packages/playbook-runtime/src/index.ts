@@ -1,4 +1,5 @@
-export type { OsAdapter, ScreenSnapshot } from "./os-adapter.ts";
+export type { OsAdapter, OsAdapterKind, ScreenSnapshot } from "./os-adapter.ts";
+export { AdapterTimeoutError, isAdapterTimeout } from "./adapter-timeout.ts";
 export type { BrowserPageAdapter, PageSnapshot } from "./browser-page-adapter.ts";
 export { DummyAdapter, type DummyCall } from "./dummy-adapter.ts";
 export { DummyPageAdapter, type DummyPageCall } from "./dummy-page-adapter.ts";
@@ -12,6 +13,7 @@ export {
   Runtime,
   requiredPermissions,
   type Resolution,
+  type RuntimeCode,
   type RuntimeOptions,
   type RuntimePlaybook,
   type RuntimeStep,
@@ -28,22 +30,34 @@ export type {
   Playbook,
   PlaybookStep,
   PageStepKind,
-  StepEffect,
-  StepKind,
-  StepRequirement,
-} from "./playbook.ts";
-export type {
   RunResult,
   RunStatus,
-  RuntimeCode,
+  StepEffect,
   StepEvidence,
+  StepKind,
   StepOutcome,
-  StepResult,
-  StepStatus,
+  StepRequirement,
   SurfaceKind,
-} from "./step-result.ts";
+} from "./playbook.ts";
 export type {
   PagePlaybook,
   PagePlaybookStep,
   PageStepRequirement,
 } from "./page-playbook.ts";
+export {
+  dumpStepResults,
+  parseStepResult,
+  parseStepResults,
+  parseStepResultsJson,
+  StepResultError,
+} from "./step-result.ts";
+export type {
+  Evidence,
+  StepAction,
+  StepAdapter,
+  StepAttempt,
+  StepObservation,
+  StepResult,
+  StepResultStatus,
+  StepTarget,
+} from "./step-result.ts";

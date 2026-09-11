@@ -1,8 +1,8 @@
 import type { OsAdapter, ScreenSnapshot } from "./os-adapter.ts";
 import { defaultPermission } from "./permissions.ts";
-import type { PlaybookStep } from "./playbook.ts";
-import type { Resolution, StepClass, Surface } from "./runtime-core.ts";
-import type { RuntimeCode } from "./step-result.ts";
+import type { MaybePromise, PlaybookStep } from "./playbook.ts";
+import type { Resolution, RuntimeCode, StepClass, Surface } from "./runtime-core.ts";
+import type { StepAdapter, StepTarget } from "./step-result.ts";
 
 export type OsRef =
   | { readonly kind: "read" }
@@ -13,22 +13,27 @@ export type OsRef =
 /** The OS screen as a runtime surface: screen-text targets over one `OsAdapter`. */
 export class OsSurface implements Surface<ScreenSnapshot, OsRef, PlaybookStep> {
   readonly kind = "os" as const;
-  private readonly adapter: OsAdapter;
+  readonly adapter: StepAdapter;
+  private readonly os: OsAdapter;
 
   constructor(adapter: OsAdapter) {
-    this.adapter = adapter;
+    this.os = adapter;
+    this.adapter = adapter.kind;
   }
 
-  async read(): Promise<ScreenSnapshot> {
-    return await this.adapter.readScreen();
+  read(): MaybePromise<ScreenSnapshot> {
+    return this.os.readScreen();
   }
 
   observed(snap: ScreenSnapshot): readonly string[] {
     return snap.texts;
   }
 
-  location(): string | null {
-    return null;
+  /** Screen text is the OS accessible name; node ids and coordinates never enter a result. */
+  target(step: PlaybookStep): StepTarget {
+    return step.target !== undefined && step.target.length > 0
+      ? { kind: "accessibility", name: step.target }
+      : { kind: "none" };
   }
 
   classify(step: PlaybookStep): StepClass {
@@ -68,19 +73,16 @@ export class OsSurface implements Surface<ScreenSnapshot, OsRef, PlaybookStep> {
     }
   }
 
-  async act(_step: PlaybookStep, ref: OsRef): Promise<void> {
+  act(_step: PlaybookStep, ref: OsRef): MaybePromise<void> {
     switch (ref.kind) {
       case "read":
-        return;
+        return undefined;
       case "focus":
-        await this.adapter.focus(ref.target);
-        return;
+        return this.os.focus(ref.target);
       case "click":
-        await this.adapter.click(ref.target);
-        return;
+        return this.os.click(ref.target);
       case "type":
-        await this.adapter.type(ref.target, ref.text);
-        return;
+        return this.os.type(ref.target, ref.text);
       default: {
         const exhaustive: never = ref;
         throw new Error(`unhandled ref: ${String(exhaustive)}`);
