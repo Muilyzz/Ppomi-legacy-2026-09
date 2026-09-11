@@ -2,7 +2,7 @@
 
 One-step `ppomi-body` smoke via Mac `phone_*`. Default: fixture `Runtime` click.
 
-Live iPhone Mirroring: `PPOMI_BODY_LIVE=1` on a Mac with the mirroring window **open and connected**. The probe reads through `LiveIphoneMirroringTools` (AX, OCR only if AX labels are chrome-only). Off-macOS, Automation denial, or no window skips (exit 0).
+Live iPhone Mirroring: `PPOMI_BODY_LIVE=1` on a Mac with the mirroring window **open and connected**. The probe reads through `LiveIphoneMirroringTools` (AX, then OCR because the window's AX is only its own chrome). Off-macOS, Accessibility / Automation denial, no window, or a chrome-only read (no `phone` binary or no 화면 기록) skips (exit 0); PASS means the phone UI was read.
 
 ## Prerequisites (human)
 

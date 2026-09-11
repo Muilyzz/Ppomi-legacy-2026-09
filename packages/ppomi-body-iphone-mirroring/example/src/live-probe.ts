@@ -100,6 +100,14 @@ export async function probeIphoneMirroringLive(): Promise<LiveProbe> {
   if (preview.rows.length === 0 && preview.title.trim().length === 0) {
     return skipLines(lines, "mirroring window has no AX/OCR rows", "nodes=0");
   }
+  const read = tools.lastRead();
+  if (read === null || !read.phoneUi) {
+    return skipLines(
+      lines,
+      "mirroring window read, but only Mac chrome (Home / App Switcher), not the phone UI",
+      `source=${read?.source ?? "?"} rows=${preview.rows.length}. Build phone (swiftc -O phone.swift -o phone) and grant 화면 기록 so OCR reads the phone screen.`,
+    );
+  }
 
   const oneStep: Playbook = {
     id: "iphone-mirroring-live-read",
@@ -125,7 +133,7 @@ export async function probeIphoneMirroringLive(): Promise<LiveProbe> {
       lines: [
         ...lines,
         `probe     read "${preview.title}" via IphoneMirroringDriver + LiveIphoneMirroringTools`,
-        `          driver=${result.stepResults[0]?.driver ?? "phone"} rows=${preview.rows.length} grant=ui.read`,
+        `          driver=${result.stepResults[0]?.driver ?? "phone"} source=${read.source} rows=${preview.rows.length} grant=ui.read`,
       ],
     };
   } catch (error) {
