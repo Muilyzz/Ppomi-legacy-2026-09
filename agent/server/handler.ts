@@ -23,6 +23,12 @@ const TEXT_MODEL = 'openai/gpt-6-astra';
 const GATEWAY = 'https://ai-gateway.vercel.sh/v1';
 const MODEL_ID = /^[a-zA-Z0-9_.\/-]{1,100}$/;
 const NO_STORE = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store, private', 'Pragma': 'no-cache', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
+/** The web home (hub) runs the same bundled conversation in a browser tab with the same Supabase session and device header. */
+const WEB_ORIGIN_DEFAULT = 'https://ppomi.muilyzz.com';
+const ORIGIN = /^https:\/\/[a-z0-9.-]+(?::\d{1,5})?$/;
+/** Only the conversation paths are reachable from a browser; memory paths stay native (web devices are read-only on the shared server). */
+const WEB_PATHS = new Set(['/v1/session', '/v1/responses']);
+const WEB_ALLOWED_HEADERS = 'authorization, content-type, x-ppomi-device';
 
 class SafeError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) { super(message); }
@@ -46,6 +52,11 @@ function containsSecretOrTranscript(text: string): boolean {
     || /(?:password|passwd|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|client[_ -]?secret|비밀번호|비번|인증번호|복구\s*코드)\s*(?::|=|은|는|이|가)\s*\S+/i.test(text)
     || /\b\d{6}-[1-8]\d{6}\b/.test(text)
     || (text.match(/^(?:user|assistant|system|사용자|어시스턴트)\s*:/gim)?.length ?? 0) >= 2;
+}
+/** Browser origins allowed to call the conversation paths. `PPOMI_WEB_ORIGINS` lists https origins; an empty value disables browsers. */
+function webOrigins(env: Environment): Set<string> {
+  if (env.PPOMI_WEB_ORIGINS === undefined) return new Set([WEB_ORIGIN_DEFAULT]);
+  return new Set(env.PPOMI_WEB_ORIGINS.split(',').map(origin => origin.trim()).filter(origin => ORIGIN.test(origin)));
 }
 /** Gateway credentials: an explicit key, else the deployment's OIDC token (Vercel injects it as an env var or the invocation header). */
 function gateway(env: Environment, request: Request): { key: string; base: string; textModel: string } {
@@ -135,18 +146,29 @@ function decrypt(row: StoredMemory, workspace: string, key: Buffer): Memory {
 export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment } = {}) {
   const transport = dependencies.fetch ?? fetch;
   return async function handle(request: Request): Promise<Response> {
+    // A browser request names its origin; a native host never does. Only an allowlisted origin gets CORS headers, on every response.
+    const origin = request.headers.get('origin');
+    const path = new URL(request.url).pathname;
+    const env = dependencies.env ?? process.env;
+    const webOrigin = origin !== null && webOrigins(env).has(origin) && WEB_PATHS.has(path) ? origin : null;
+    const cors: Record<string, string> = webOrigin ? { 'Access-Control-Allow-Origin': webOrigin, 'Vary': 'Origin' } : {};
     try {
-      const path = new URL(request.url).pathname;
       if (!PATHS.has(path)) throw new SafeError(404, 'not_found', '지원하지 않는 요청입니다.');
+      if (request.method === 'OPTIONS') {
+        // Preflight carries no credentials; it only learns whether this origin may POST with the three headers.
+        if (!webOrigin) throw new SafeError(403, 'native_only', '앱의 보안 연결을 사용해 주세요.');
+        return new Response(null, { status: 204, headers: { ...cors, 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': WEB_ALLOWED_HEADERS,
+          'Access-Control-Max-Age': '600', 'Cache-Control': 'no-store, private', 'X-Content-Type-Options': 'nosniff' } });
+      }
       if (request.method !== 'POST') throw new SafeError(405, 'method_not_allowed', 'POST 요청만 허용합니다.');
-      if (request.headers.has('origin')) throw new SafeError(403, 'native_only', '앱의 보안 연결을 사용해 주세요.');
+      if (origin !== null && !webOrigin) throw new SafeError(403, 'native_only', '앱의 보안 연결을 사용해 주세요.');
       const auth = request.headers.get('authorization') ?? '';
       if (!/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(auth) || auth.length > 8192)
         throw new SafeError(401, 'unauthenticated', '등록된 기기의 인증이 필요합니다.');
       // 구글 계정은 기기가 여럿: 어느 기기인지는 이 헤더가 말하고, 공유 서버(ppomi_private_device)가 그 사람의 기기인지 확인한다.
       const device = request.headers.get('x-ppomi-device') ?? '';
       if (device && !UUID.test(device)) throw new SafeError(401, 'unauthenticated', '기기 식별자를 확인해 주세요.');
-      const env = dependencies.env ?? process.env, config = settings(env);
+      const config = settings(env);
       async function rpc(name: string, body: Json): Promise<unknown> {
         let response: Response;
         try {
@@ -174,7 +196,7 @@ export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment
         exactFields(body, ['mode'], []);
         if (body.mode !== undefined && body.mode !== 'voice' && body.mode !== 'text') invalid();
         // Text chat: the page drives the model loop through its native bridge and this proxy; no secret is minted.
-        if (body.mode === 'text') return new Response(JSON.stringify({ model: gateway(env, request).textModel }), { status: 200, headers: NO_STORE });
+        if (body.mode === 'text') return new Response(JSON.stringify({ model: gateway(env, request).textModel }), { status: 200, headers: { ...NO_STORE, ...cors } });
         const key = env.OPENAI_API_KEY ?? '', model = env.OPENAI_REALTIME_MODEL ?? 'gpt-realtime-2.1';
         if (!key || /\s/.test(key) || !MODEL_ID.test(model)) throw new SafeError(503, 'not_configured', '에이전트 서버 설정이 필요합니다.');
         const safetyIdentifier = createHmac('sha256', encryptionKey(env)).update('ppomi-voice-safety\0').update(JSON.stringify([context.workspace.id, context.device.id])).digest('hex');
@@ -224,10 +246,10 @@ export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment
         if (!deleted || (deleted as Json).deleted !== true) throw new SafeError(502, 'invalid_response', '기록 삭제를 확인하지 못했습니다.');
         result = { deleted: true };
       }
-      return new Response(JSON.stringify(result), { status: 200, headers: NO_STORE });
+      return new Response(JSON.stringify(result), { status: 200, headers: { ...NO_STORE, ...cors } });
     } catch (error) {
       const safe = error instanceof SafeError ? error : new SafeError(500, 'internal_error', '요청을 처리하지 못했습니다.');
-      return new Response(JSON.stringify({ error: { code: safe.code, message: safe.message } }), { status: safe.status, headers: NO_STORE });
+      return new Response(JSON.stringify({ error: { code: safe.code, message: safe.message } }), { status: safe.status, headers: { ...NO_STORE, ...cors } });
     }
   };
 }
