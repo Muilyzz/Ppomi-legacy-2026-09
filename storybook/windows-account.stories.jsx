@@ -13,7 +13,7 @@ function WindowsShell({state, simulateApproval}) {
   return <div className="windows-account-story" style={{height: '100dvh', display: 'grid', gridTemplateRows: simulateApproval ? 'auto minmax(0, 1fr)' : 'minmax(0, 1fr)'}}>
     {simulateApproval && <div style={{display: 'flex', gap: '.75rem', alignItems: 'center', padding: '.5rem .75rem', borderBottom: '1px solid var(--line)'}}>
       <span style={{opacity: .7}}>Mac 쪽 시뮬레이션</span>
-      <button className="text" disabled={approved} onClick={() => { fixture.approve(); setApproved(true); }}>{approved ? '승인됨 · 다음 확인에서 연결' : '나 › 기기 승인 › 승인'}</button>
+      <button className="text" aria-label="Mac 승인 시뮬레이션" disabled={approved} onClick={() => { fixture.approve(); setApproved(true); }}>{approved ? '승인됨 · 다음 확인에서 연결' : '나 › 기기 승인 › 승인'}</button>
     </div>}
     <ChatPanel host={fixture.host} frame={(slots, render) => <ExecutorPanel {...slots} manage={fixture.manage}>{render}</ExecutorPanel>} />
   </div>;
@@ -48,6 +48,8 @@ export const SignedOut = {name: '로그인 전', args: {state: 'signed-out'}};
 export const SignedOutAccount = {name: '로그인 전 · 계정 시트', args: {state: 'signed-out'}, play: () => open('Google 계정으로 로그인')};
 export const PendingApproval = {name: '승인 대기', args: {state: 'pending-approval', simulateApproval: true}};
 export const PendingApprovalAccount = {name: '승인 대기 · 계정 시트', args: {state: 'pending-approval'}, play: () => open('나 · 계정')};
+// 소유자가 Mac 에서 승인을 누른 뒤: 실행기의 다음 상태 확인이 approved 를 보고 → 패널이 bootstrap 을 다시 읽어 → 띠가 사라진다.
+export const ApprovedOnMac = {name: '승인 대기 → Mac 승인 → 연결', args: {state: 'pending-approval', simulateApproval: true}, play: () => open('Mac 승인 시뮬레이션')};
 export const Connected = {name: '연결됨', args: {state: 'connected'}};
 export const ConnectedAccount = {name: '연결됨 · 계정 시트', args: {state: 'connected'}, play: () => open('나 · 계정')};
 export const SettingsSheet = {name: '설정 · 제어할 앱만', args: {state: 'connected'}, play: () => open('설정')};
