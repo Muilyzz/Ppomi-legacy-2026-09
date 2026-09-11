@@ -7,6 +7,8 @@ final class ConversationHostTests: XCTestCase {
         let state = AppState()
         state.openChat()
         XCTAssertEqual(state.chatOpen, 1)
+        XCTAssertTrue(state.fleetLine.contains("macos"))
+        XCTAssertTrue(state.fleetLine.contains("온라인"))
         XCTAssertEqual(state.workbenchShown, 0)
         state.showWorkbench()
         XCTAssertEqual(state.chatOpen, 1)

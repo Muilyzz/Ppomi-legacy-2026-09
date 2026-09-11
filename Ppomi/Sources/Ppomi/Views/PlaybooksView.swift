@@ -37,7 +37,9 @@ struct PlaybooksView: View {
             } else {
                 // 계정과목표 같은 한 나무(자리 › 패키지 › 기능) + 고른 패키지의 명세 나무·판정·발자국 — Web/playbooks.html
                 WebPage(html: PlaybooksPage.html(model.entries), onMessage: { m in
-                    if let id = (m as? [String: Any])?["open"] as? String { open(id) }
+                    guard let body = m as? [String: Any] else { return }
+                    if let id = body["open"] as? String { open(id) }
+                    if let id = body["pathColdStart"] as? String, id == "kb-enterprise" { state.runKBColdStart() }
                 })
             }
         }

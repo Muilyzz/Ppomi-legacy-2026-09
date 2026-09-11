@@ -19,7 +19,7 @@ final class ScreenControlLeaseTests: XCTestCase {
     func testAllScreenFamiliesAndCompositeToolsRequireVisibleSurfaces() {
         for name in ["phone_screen", "phone_tap", "phone_installed", "phone_future_tool", "windows_screen",
                      "windows_open", "windows_future_tool", "android_screen", "android_open", "android_future_tool",
-                     "run_combo", "inbody_capture", "collect_now", "screen_inspect", "profile_fill", "browser_open"] {
+                     "run_combo", "path_cold_start", "inbody_capture", "collect_now", "screen_inspect", "profile_fill", "browser_open"] {
             XCTAssertTrue(ScreenControlLease.requiresVisibleSurface(tool: name), name)
         }
         for name in ["android_status", "accounting_records", "accounting_import", "accounting_reclassify",

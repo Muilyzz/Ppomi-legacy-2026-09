@@ -67,6 +67,20 @@ struct ControlTargetToolbar: View {
     var body: some View {
         HStack(spacing: 8) {
             // 대상 선택기 없음: 어느 창을 데려올지는 도구 호출이 정한다(phone_*→iPhone, windows_*→Windows, android_*→Android)
+            if !state.fleetLine.isEmpty {
+                Text(state.fleetLine).foregroundStyle(.fg2).lineLimit(1)
+                    .accessibilityIdentifier("fleet-line")
+            }
+            Button("Home → KB") { state.runKBColdStart() }
+                .controlSize(.ppomiSmall)
+                .disabled(state.pathBusy)
+                .help("미러링에서 Home 후 KB스타기업뱅킹. 로그인 전 멈춤. example CLI 아님.")
+                .accessibilityIdentifier("kb-cold-start")
+            if let status = state.pathStatus {
+                Text(status).foregroundStyle(.fg2).lineLimit(1)
+                    .help(status)
+                    .accessibilityIdentifier("kb-cold-start-status")
+            }
             Spacer(minLength: 8)
             Button("기록", action: state.toggleRecordsFocus)
                 .controlSize(.ppomiSmall)

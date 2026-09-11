@@ -49,10 +49,52 @@ final class AppState: ObservableObject {
     func reveal() { shown += 1 }
     @Published private(set) var chatOpen = 0
     /// Conversation navigation must not trigger device window placement.
-    func openChat() { chatOpen += 1 }
+    func openChat() { attachThisMac(); chatOpen += 1 }
     @Published private(set) var workbenchShown = 0
     /// The embedded conversation asks for its window without reopening the chat (⌥Space, wake word, arrival).
-    func showWorkbench() { workbenchShown += 1 }
+    func showWorkbench() { attachThisMac(); workbenchShown += 1 }
+    @Published var fleetLine = ""
+    @Published var pathStatus: String?
+    @Published var pathBusy = false
+
+    /// Login / first workbench: DeviceRegistry.attach so this macos device is in the local fleet.
+    @discardableResult
+    func attachThisMac() -> FleetDevice {
+        let device = DeviceRegistry.shared.attachThisMac()
+        fleetLine = DeviceRegistry.displayLine(device)
+        return device
+    }
+
+    /// Workbench / chat / 절차 탭: Home then open KB스타기업뱅킹. Stops at human login.
+    func runKBColdStart() {
+        guard !pathBusy else { return }
+        attachThisMac()
+        workSurface = .iphone
+        pathBusy = true
+        pathStatus = "Home → KB…"
+        phase = .agent(job: "Home → KB")
+        reveal()
+        Task.detached { [weak self] in
+            let result: String
+            do {
+                let tools = try Tools(db: DB(path: AppSettings.dbPath, writable: true))
+                tools.currentText = "해줘"
+                result = tools.execute("path_cold_start", ["app": "kb-enterprise"])
+            } catch {
+                result = "실행 안 함: 장부를 열지 못했다."
+            }
+            await MainActor.run {
+                guard let self else { return }
+                self.pathBusy = false
+                self.pathStatus = result
+                if result.contains("멈춤") {
+                    self.phase = .humanTurn(reason: "Face ID·로그인 · 작업대 Home → KB")
+                } else if result.hasPrefix("실행 안 함:") || result.hasPrefix("오류:") {
+                    self.phase = .idle
+                }
+            }
+        }
+    }
     func openInitialScreen(kiosk: Bool) {
         if kiosk { toggleKiosk() } else { openChat() }
     }

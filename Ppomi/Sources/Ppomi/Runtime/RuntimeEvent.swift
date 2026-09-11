@@ -49,7 +49,7 @@ struct RuntimeEvent: Equatable, Identifiable, Sendable {
         "shared_document_put": "공유 문서 저장",
         "profile_save": "기본정보 저장", "profile_status": "기본정보 등록 확인",
         "profile_delete": "기본정보 삭제", "profile_fill": "기본정보 입력",
-        "screen_inspect": "화면 관찰", "run_combo": "알려진 동작 재생", "pay_preference": "결제 수단 조회",
+        "screen_inspect": "화면 관찰", "run_combo": "알려진 동작 재생", "path_cold_start": "Home 후 KB 열기", "pay_preference": "결제 수단 조회",
         "confirm_payment": "결제 승인 요청", "record_spend": "지출 기록",
         "health_records": "건강 기록 조회", "record_health": "건강 기록 저장", "inbody_capture": "인바디 기록 수집", "bank_profile_capture": "은행정보 수집", "registry_read": "등기부등본 읽기",
         "transactions": "거래 조회", "sql": "장부 조회", "list_playbooks": "절차 목록 조회",

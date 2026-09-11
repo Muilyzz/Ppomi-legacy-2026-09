@@ -63,9 +63,11 @@ function drawDetail(){var el=document.getElementById('detail');if(!SEL||!byId[SE
   var p=byId[SEL.pkg];el.innerHTML='';var box=document.createElement('div');el.appendChild(box);
   P.mount(box,{manifest:p.manifest,verification:p.verification,footprints:p.footprints||[],cap:SEL.cap||''});
   var more='';if(p.openable)more+='<p><button type="button" id="openPkg">'+esc(p.target)+'에서 열기</button></p>';
+  if(p.runnable)more+='<p><button type="button" id="runPkg">Home → KB (로그인 전 멈춤)</button> <span class="meta">메인 앱 · example 아님</span></p>';
   if((p.humanSteps||[]).length)more+='<details><summary>사람 차례</summary><ul>'+p.humanSteps.map(function(s){return '<li>'+esc(s)+'</li>';}).join('')+'</ul></details>';
   if(p.guide)more+='<details><summary>사용법</summary><pre style="white-space:pre-wrap;font:inherit">'+esc(p.guide)+'</pre></details>';
-  el.insertAdjacentHTML('beforeend',more);var b=document.getElementById('openPkg');if(b)b.addEventListener('click',function(){post({open:p.id});});}
+  el.insertAdjacentHTML('beforeend',more);var b=document.getElementById('openPkg');if(b)b.addEventListener('click',function(){post({open:p.id});});
+  var r=document.getElementById('runPkg');if(r)r.addEventListener('click',function(){post({pathColdStart:p.id});});}
 function setView(v){VIEW=v;save();var b=document.getElementById('mapToggle');b.classList.toggle('on',v==='map');b.setAttribute('aria-pressed',String(v==='map'));document.getElementById('list').hidden=v==='map';document.getElementById('map').hidden=v!=='map';if(v==='map')drawMap();}
 document.getElementById('mapToggle').addEventListener('click',function(){setView(VIEW==='map'?'list':'map');});
 if(D){drawList();drawDetail();setView(VIEW);}

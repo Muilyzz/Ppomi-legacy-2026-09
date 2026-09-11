@@ -1,5 +1,7 @@
 # Package examples (real smoke) vs unit tests vs hub
 
+**CEO / product smoke: test in the main app (`뽀미.app` / `Ppomi.app`), not `packages/*/example`.** Home → KB lives on the workbench control strip and MCP `path_cold_start`. See [v0.2 Mac 셸](v0.2-mac-shell.md).
+
 Each DI-separated package keeps **two** ways to check it. Do not fold them together.
 
 | Surface | What it is | What it may touch | Where |
