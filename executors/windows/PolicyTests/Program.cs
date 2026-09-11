@@ -169,6 +169,16 @@ Check(GoogleSignIn.CodeFromCallback("ppomi://auth/?code=synthetic-code-1234&stat
 foreach (var callback in new[] { "https://auth?code=synthetic-code-1234", "ppomi://evil?code=synthetic-code-1234", "ppomi://auth?error=access_denied",
     "ppomi://auth?code=a&code=b", "ppomi://auth?code=short", "ppomi://auth?code=has%20space", "ppomi://auth", "ppomi://user@auth?code=synthetic-code-1234", "not a url" })
     Check(GoogleSignIn.CodeFromCallback(callback) == null, "callback rejected: " + callback);
+// The exact shapes GoTrue sends to redirect_to=ppomi://auth: a PKCE success carries the auth code (a uuid) in the query;
+// an error is repeated in query and fragment; a fragment token set belongs to the implicit flow and never completes PKCE.
+const string gotrueCode = "0f2d5c1e-9a7b-4c3d-8e2f-1a2b3c4d5e6f";
+const string gotrueError = "error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired";
+Check(GoogleSignIn.CodeFromCallback("ppomi://auth?code=" + gotrueCode) == gotrueCode, "gotrue pkce success: code in the query");
+Check(GoogleSignIn.CodeFromCallback("ppomi://auth/?code=" + gotrueCode) == gotrueCode, "browser-normalised trailing slash");
+Check(GoogleSignIn.CodeFromCallback("ppomi://auth?" + gotrueError + "#" + gotrueError + "&sb=") == null, "gotrue error in query and fragment");
+Check(GoogleSignIn.CodeFromCallback("ppomi://auth#access_token=synthetic-access&refresh_token=synthetic-refresh&token_type=bearer") == null, "implicit fragment never completes pkce");
+Check(GoogleSignIn.CodeFromCallback("ppomi://auth#code=" + gotrueCode) == null, "a code hidden in the fragment is not a callback code");
+Check(GoogleSignIn.CodeFromCallback("ppomi://auth%3Fcode%3D" + gotrueCode) == null, "over-encoded handoff is not a code");
 var subject = Guid.NewGuid();
 string Jwt(object payload) => "e30." + Pkce.Base64Url(JsonSerializer.SerializeToUtf8Bytes(payload)) + ".signature";
 var parsed = GoogleSignIn.ParseTokens(Object(JsonSerializer.Serialize(new { access_token = Jwt(new { sub = subject, email = "fixture@example.invalid", user_metadata = new { full_name = "합성 사용자" } }),
