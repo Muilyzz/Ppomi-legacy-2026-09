@@ -1,7 +1,7 @@
 {
   // Shared by every package under packages/. Node globals (URL, timers) come from
-  // @types/node installed in ppomi-body; no package relies on the DOM lib.
-  // typeRoots below resolves only after `npm ci` in packages/ppomi-body.
+  // @types/node; no package relies on the DOM lib. typeRoots covers both installs:
+  // `npm ci` in packages/ppomi-body (nested) and a root `npm ci` (hoisted).
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],
@@ -17,6 +17,6 @@
     "noUnusedParameters": true,
     "allowImportingTsExtensions": true,
     "types": ["node"],
-    "typeRoots": ["./ppomi-body/node_modules/@types"]
+    "typeRoots": ["./ppomi-body/node_modules/@types", "../node_modules/@types"]
   }
 }
