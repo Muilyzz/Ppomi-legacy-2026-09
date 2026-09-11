@@ -14,8 +14,9 @@ PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/ex
 On Windows (cmd):
 
 ```bat
+node scripts\build-windows-executor.mjs
 set PPOMI_BODY_LIVE=1
-set PPOMI_EXECUTOR=C:\path\to\ppomi-executor.exe
+set PPOMI_EXECUTOR=%CD%\shell\src-tauri\resources\executor\ppomi-executor.exe
 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts
 ```
 
