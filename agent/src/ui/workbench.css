@@ -112,6 +112,8 @@
   font-size: var(--fs-2);
 }
 .highlight-overlay-boxes { list-style: none; margin: 0; padding: 0; }
+/* Boxes are fractions of the picture; until the picture's rect is measured they would sit on the frame. */
+.highlight-overlay-boxes[data-measured="false"] { visibility: hidden; }
 .highlight-overlay-box {
   position: absolute;
   box-sizing: border-box;

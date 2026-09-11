@@ -5,9 +5,12 @@ import { createElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { parseStepResultsJson } from "../../packages/playbook-runtime/src/step-result";
 import {
+  containedImageRect,
   evidenceScreenshot,
+  FULL_FRAME,
   HighlightOverlay,
   isStaticImageSrc,
+  placeBox,
   visibleOverlayBoxes,
 } from "./ui/highlight-overlay";
 import { fixtureSteps, overlayFixture } from "./ui/step-result-fixtures";
@@ -87,8 +90,29 @@ test("HighlightOverlay uses a static image src when one is provided", () => {
   }));
   assert.match(html, /<img/);
   assert.match(html, /data:image\/svg\+xml/);
+  assert.match(html, /data-measured="false"/, "boxes wait for the picture rect when an image is shown");
   assert.equal(isStaticImageSrc(overlay.imageSrc), true);
   assert.equal(isStaticImageSrc("runs/fixture/open-next.after.png"), false);
+});
+
+test("containedImageRect letterboxes like object-fit: contain and placeBox keeps boxes on the picture", () => {
+  assert.deepEqual(containedImageRect(160, 100, 16, 10), FULL_FRAME);
+  assert.deepEqual(containedImageRect(0, 100, 16, 10), FULL_FRAME);
+  assert.deepEqual(containedImageRect(160, 100, 0, 0), FULL_FRAME);
+
+  // Fixture SVG (400x260) in the 16:10 frame: full height, side bars.
+  const svg = containedImageRect(542, 338, 400, 260);
+  assert.equal(svg.height, 1);
+  assert.ok(Math.abs(svg.width - (400 / 260) / (542 / 338)) < 1e-9);
+  assert.ok(Math.abs(svg.left - (1 - svg.width) / 2) < 1e-9);
+
+  // Phone screenshot (1170x2532) in the same frame: a 70% box must land inside the picture, not on the bars.
+  const phone = containedImageRect(542, 338, 1170, 2532);
+  const placed = placeBox({ id: "next", x: 0.7, y: 0.78, width: 0.22, height: 0.1 }, phone);
+  assert.ok(phone.width < 0.3 && phone.left > 0.35);
+  assert.ok(placed.left >= phone.left && placed.left + placed.width <= phone.left + phone.width + 1e-9);
+  assert.ok(placed.top >= phone.top && placed.top + placed.height <= phone.top + phone.height + 1e-9);
+  assert.ok(placed.left < 0.7, "frame-relative percent would have been 70%");
 });
 
 test("visibleOverlayBoxes drops invalid session geometry", () => {
