@@ -1,5 +1,6 @@
 import { isDriverTimeout } from "./adapter-timeout.ts";
 import type { PageStepKind, StepKind, StepOutcome } from "./playbook.ts";
+import { redactText } from "./public-url.ts";
 import type { StepAttempt, StepDriver, StepResult, StepResultStatus, StepTarget } from "./step-result.ts";
 import { withDeprecatedAdapter } from "./step-result.ts";
 
@@ -83,7 +84,8 @@ function refusedBeforeActing(code: string | null): boolean {
  * protected-control refusal (`protected_action`).
  */
 export function driverFailed(error: unknown, phase: DriverPhase, action: StepKind | PageStepKind): Decision {
-  const note = error instanceof Error ? error.message : String(error);
+  // Driver messages (Playwright call logs, UIA text) may carry URLs with query tokens: keep one line, public URLs only.
+  const note = redactText(error instanceof Error ? error.message : String(error));
   const driverCode = codeOf(error);
   const readIsTheStep = phase === "read" && action === "read";
   if (isDriverTimeout(error)) {

@@ -251,6 +251,33 @@ test("an adapter throw during read is a failed step, not an escaping exception",
   assert.deepEqual(readResult.stepResults.map(row => [row.status, row.attempt]), [["retryable", "executed"]]);
 });
 
+test("driver error text is redacted: first line only, URLs reduced to origin + pathname", () => {
+  class LeakyDriver implements OsUiDriver {
+    readonly kind = "os-windows" as const;
+    readScreen(): ScreenSnapshot { return screen; }
+    focus(): void { throw new Error("unused"); }
+    click(): void {
+      throw new Error("locator.click: Timeout 30000ms exceeded.\nCall log:\n  - navigated to https://shop.test/checkout?token=PLACEHOLDER#step2\n  - waiting for #pay");
+    }
+    type(): void { throw new Error("unused"); }
+  }
+  const result = new PlaybookRuntime(new LeakyDriver(), all).run({ id: "leaky", steps: [{ id: "pay", kind: "click", target: "Next", effect: "navigate" }] });
+  const note = result.evidence[0]?.note ?? "";
+  assert.equal(note, "locator.click: Timeout 30000ms exceeded.");
+  assert.equal(result.stepResults[0]?.observation.summary, note);
+  assert.doesNotMatch(JSON.stringify(result), /PLACEHOLDER|token=|Call log|#step2/);
+
+  const oneLine = new (class implements OsUiDriver {
+    readonly kind = "os-windows" as const;
+    readScreen(): ScreenSnapshot { return screen; }
+    focus(): void { throw new Error("unused"); }
+    click(): void { throw new Error("Target closed at https://shop.test/checkout?token=PLACEHOLDER while clicking"); }
+    type(): void { throw new Error("unused"); }
+  })();
+  const single = new PlaybookRuntime(oneLine, all).run({ id: "one-line", steps: [{ id: "pay", kind: "click", target: "Next", effect: "navigate" }] });
+  assert.equal(single.evidence[0]?.note, "Target closed at https://shop.test/checkout while clicking");
+});
+
 test("require.wait polls the surface until the precondition holds, then acts (sync and async drivers)", async () => {
   const sync = new DummyAdapter({ ...screen, texts: ["Demo App"] });
   const syncResult = new PlaybookRuntime(sync, all, virtualClock(elapsed => {
