@@ -11,7 +11,7 @@ Needs .NET 10 SDK (`winget install Microsoft.DotNet.SDK.10`). Self-contained pub
 node scripts/build-windows-executor.mjs
 :: ARM64 VM:
 node scripts/build-windows-executor.mjs --rid win-arm64
-:: or pull the latest CI artifact (GitHub CLI):
+:: or pull the CI artifact (GitHub CLI): latest successful push to main, or --run <id>
 node scripts/build-windows-executor.mjs --download --rid win-arm64
 
 set PPOMI_EXECUTOR=%CD%\shell\src-tauri\resources\executor\ppomi-executor.exe
@@ -51,7 +51,11 @@ node scripts/build-windows-executor.mjs --rid win-x64
 node scripts/build-windows-executor.mjs --rid win-arm64
 ```
 
-That is `dotnet publish` (Release, self-contained, single-file) into `executors/windows/artifacts/<rid>/` and a copy at the smoke default path. Cross-publish works on Linux with the .NET 10 SDK; macOS also needs the WindowsDesktop reference packs. Use `win-arm64` on a Windows ARM64 VM (Parallels on Apple silicon). Package the helper as a Tauri resource and invoke its absolute installed resource path:
+That is `dotnet publish` (Release, self-contained, single-file) into `executors/windows/artifacts/<rid>/` and a copy at the smoke default path. Cross-publish works on Linux with the .NET 10 SDK; macOS also needs the WindowsDesktop reference packs. Use `win-arm64` on a Windows ARM64 VM (Parallels on Apple silicon).
+
+`--download` stages the same file from the `windows-executor` workflow instead. It only accepts artifacts built from a `push` to `main` (the default search) or a `workflow_dispatch` run named with `--run <id>`; `pull_request` runs build but publish nothing, so a fork can never supply the binary. The workflow uploads `SHA256SUMS` next to the exe and the script verifies the hash before staging, printing the run id, commit and hash; a missing or mismatched sum fails closed. The rules live in `scripts/lib/executor-artifact.mjs` (`node --test scripts/tests/executor-artifact.test.mjs`).
+
+Package the helper as a Tauri resource and invoke its absolute installed resource path:
 
 ```text
 ppomi-executor.exe --executor --owner-pid <Tauri-process-id>
