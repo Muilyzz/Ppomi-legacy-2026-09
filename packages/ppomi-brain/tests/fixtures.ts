@@ -40,7 +40,11 @@ export const payPath: PathDefinition = {
 };
 
 export class FixedPaths implements PathCatalog, PathLoader {
-  constructor(private readonly paths: readonly PathDefinition[]) {}
+  private readonly paths: readonly PathDefinition[];
+
+  constructor(paths: readonly PathDefinition[]) {
+    this.paths = paths;
+  }
 
   list(): readonly PathDefinition[] {
     return this.paths;
@@ -52,10 +56,16 @@ export class FixedPaths implements PathCatalog, PathLoader {
 }
 
 export class MockSession implements AccountSession {
+  private readonly who: SessionIdentity | null;
+  private readonly decide: (path: PathDefinition) => ReturnType<AccountSession["grantFor"]>;
+
   constructor(
-    private readonly who: SessionIdentity | null,
-    private readonly decide: (path: PathDefinition) => ReturnType<AccountSession["grantFor"]>,
-  ) {}
+    who: SessionIdentity | null,
+    decide: (path: PathDefinition) => ReturnType<AccountSession["grantFor"]>,
+  ) {
+    this.who = who;
+    this.decide = decide;
+  }
 
   current(): SessionIdentity | null {
     return this.who;
@@ -70,8 +80,11 @@ export class MockSession implements AccountSession {
 
 export class MockBody implements BodyRuntime {
   readonly calls: BodyRunInput[] = [];
+  private readonly impl: (input: BodyRunInput) => BodyRunResult;
 
-  constructor(private readonly impl: (input: BodyRunInput) => BodyRunResult) {}
+  constructor(impl: (input: BodyRunInput) => BodyRunResult) {
+    this.impl = impl;
+  }
 
   run(input: BodyRunInput): BodyRunResult {
     this.calls.push(input);

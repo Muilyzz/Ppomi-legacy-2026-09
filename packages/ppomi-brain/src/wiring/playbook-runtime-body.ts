@@ -96,7 +96,7 @@ function mapOutcome(
 
 function toBodyResult(legacy: LegacyRunResult, steps: readonly BodyStepResult[]): BodyRunResult {
   const blocking = steps.find(step => step.status !== "ok");
-  if (blocking !== undefined) {
+  if (blocking !== undefined && blocking.status !== "ok") {
     return { status: "stopped", stopReason: blocking.status, steps };
   }
   if (legacy.status === "completed") {

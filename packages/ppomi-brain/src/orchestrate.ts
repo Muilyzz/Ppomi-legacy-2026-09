@@ -28,7 +28,11 @@ export interface OrchestrationResult {
 }
 
 export class PpomiBrain {
-  constructor(private readonly ports: BrainPorts) {}
+  private readonly ports: BrainPorts;
+
+  constructor(ports: BrainPorts) {
+    this.ports = ports;
+  }
 
   run(intent: RunIntent): Promise<OrchestrationResult> {
     return orchestrate(this.ports, intent);
