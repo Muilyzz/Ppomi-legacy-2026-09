@@ -7,6 +7,11 @@ export {
   type FixtureWindowsWindow,
 } from "./fixture-windows-executor-tools.ts";
 export {
+  LiveWindowsExecutorTools,
+  type LiveWindowsExecutorOptions,
+  type WindowsRunningApp,
+} from "./live-windows-executor-tools.ts";
+export {
   WINDOWS_SNAPSHOT_TTL_MS,
   WindowsAdapterError,
   snapshotIdOf,
