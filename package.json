@@ -13,7 +13,8 @@
   ],
   "scripts": {
     "test": "npm test --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "windows-executor": "node scripts/build-windows-executor.mjs"
   },
   "engines": {
     "node": ">=22.6"
