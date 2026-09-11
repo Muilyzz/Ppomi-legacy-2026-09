@@ -1,0 +1,35 @@
+/* web-panel.css — hub 프레임의 상단 바·계정 시트·기록 영역. 색·글자는 tokens.css 토큰만, 배치는 workbench.css의 세 영역 안. */
+.web-panel .web-brand { font-size: var(--fs-4); font-weight: 500; padding-inline: .25rem; }
+.web-notice { flex: 1 1 12rem; min-width: 0; margin: 0; color: var(--fg-2); font-size: var(--fs-2); overflow-wrap: anywhere; }
+.web-notice.error { color: var(--bad); }
+
+/* 계정 시트는 네이티브 <dialog>: 스타일 주입 없이 포커스 트랩·Esc·배경을 얻는다(style-src 'self'). 배경 스크림은 workbench.css의 시트와 같다. */
+.web-sheet { width: min(28rem, calc(100vw - 2rem)); max-height: 85dvh; margin: auto; padding: 0; border: 1px solid var(--line); border-radius: var(--rc); background: var(--surface); color: var(--fg); overflow: auto; }
+.web-sheet::backdrop { background: rgb(0 0 0 / .45); }
+.web-sheet-body { padding: 1.25rem; }
+.web-sheet h2 { margin: 0; font-size: var(--fs-4); font-weight: 500; }
+.web-account { display: flex; flex-direction: column; gap: 1.25rem; }
+.web-account h3 { margin: 0 0 .5rem; color: var(--fg-2); font-size: var(--fs-1); font-weight: 400; }
+.web-account-identity { display: flex; flex-direction: column; margin: 0 0 .75rem; min-width: 0; }
+.web-account-identity strong { font-size: var(--fs-4); font-weight: 500; overflow-wrap: anywhere; }
+.web-account-identity span { color: var(--fg-2); font-size: var(--fs-2); overflow-wrap: anywhere; }
+.web-connection { margin: 0 0 .5rem; font-size: var(--fs-2); }
+.web-connection > div { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; margin-top: .375rem; }
+.web-connection dt { color: var(--fg-2); flex: none; }
+.web-connection dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.web-account-links { display: flex; flex-wrap: wrap; gap: 1rem; }
+.web-account-links a { display: inline-flex; align-items: center; min-height: 2.75rem; color: var(--fg); text-underline-offset: .22em; }
+
+.records-header .web-refresh { margin-left: auto; flex-shrink: 0; }
+.web-record-status { flex-shrink: 0; margin: 0; color: var(--fg-2); font-size: var(--fs-2); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.web-record-status:empty { display: none; }
+.web-records-body { display: flex; flex-direction: column; }
+.web-record-frames { display: flex; flex: 1 1 0; flex-direction: column; min-height: 0; }
+.web-record-frames[hidden] { display: none; }
+.web-record-frames > iframe { display: block; flex: 1 1 0; width: 100%; min-height: 0; border: 0; background: var(--bg); }
+.record-empty { display: flex; flex: 1; flex-direction: column; justify-content: center; align-items: center; gap: .75rem; min-height: 16rem; padding: 3rem 2rem; text-align: center; }
+.record-empty h3 { margin: 0; color: var(--fg); font-size: var(--fs-4); font-weight: 500; }
+.record-empty p { margin: 0; max-width: 30rem; color: var(--fg-2); white-space: pre-line; }
+.record-empty .empty-symbol { color: var(--fg-2); font-size: 3rem; line-height: 1; margin-bottom: .5rem; }
+.web-link-button { display: inline-flex; align-items: center; justify-content: center; min-height: 2.75rem; margin-top: .5rem; padding: .5rem 1rem; border: 1px solid var(--line-2); border-radius: var(--r); color: var(--fg); font-weight: 500; text-decoration: none; }
+.web-link-button:hover { background: var(--surface-2); }

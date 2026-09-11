@@ -46,11 +46,62 @@ const request = (path: string, body: unknown = {}, headers = {}) => new Request(
   method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test.device.signature', ...headers }, body: JSON.stringify(body),
 });
 
-test('missing auth and browser origin fail before any upstream request', async () => {
+test('missing auth and an unknown browser origin fail before any upstream request', async () => {
   const f = fixture();
   assert.equal((await f.handle(request('/v1/session', {}, { Authorization: '' }))).status, 401);
-  assert.equal((await f.handle(request('/v1/session', {}, { Origin: 'https://other.example' }))).status, 403);
+  const foreign = await f.handle(request('/v1/session', {}, { Origin: 'https://other.example' }));
+  assert.equal(foreign.status, 403);
+  assert.equal(foreign.headers.get('access-control-allow-origin'), null, 'no CORS grant for an unknown origin');
   assert.equal(f.calls.length, 0);
+});
+
+const WEB = 'https://ppomi.muilyzz.com';
+const preflight = (path: string, origin: string) => new Request(`https://agent.example${path}`, { method: 'OPTIONS',
+  headers: { Origin: origin, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'authorization,content-type,x-ppomi-device' } });
+
+test('the web home is a browser: it gets a preflight answer and CORS headers for the two conversation paths only', async () => {
+  const f = fixture();
+  const options = await f.handle(preflight('/v1/responses', WEB));
+  assert.equal(options.status, 204);
+  assert.equal(options.headers.get('access-control-allow-origin'), WEB);
+  assert.equal(options.headers.get('access-control-allow-methods'), 'POST');
+  assert.equal(options.headers.get('access-control-allow-headers'), 'authorization, content-type, x-ppomi-device');
+  assert.equal(options.headers.get('vary'), 'Origin');
+  assert.equal(options.headers.get('access-control-allow-credentials'), null, 'the bearer header is explicit; no cookie credentials');
+  assert.equal(f.calls.length, 0, 'preflight never reaches the shared server');
+  const session = await f.handle(request('/v1/session', { mode: 'text' }, { Origin: WEB, 'X-Ppomi-Device': DEVICE }));
+  assert.equal(session.status, 200);
+  assert.deepEqual(await session.json(), { model: 'openai/gpt-6-astra' });
+  assert.equal(session.headers.get('access-control-allow-origin'), WEB);
+  assert.equal(session.headers.get('vary'), 'Origin');
+  assert.match(session.headers.get('cache-control') ?? '', /no-store/);
+  assert.equal(f.calls.find(call => call.url.endsWith('ppomi_context'))?.device, DEVICE, 'the browser device header reaches the shared server like a native one');
+  const denied = await f.handle(request('/v1/session', { mode: 'text' }, { Origin: WEB, Authorization: '' }));
+  assert.equal(denied.status, 401);
+  assert.equal(denied.headers.get('access-control-allow-origin'), WEB, 'a browser can read its own failure');
+  // Memory paths stay native: no preflight answer, no CORS grant, and a browser POST is refused before authentication.
+  assert.equal((await f.handle(preflight('/v1/memories/list', WEB))).status, 403);
+  const memories = await f.handle(request('/v1/memories/list', {}, { Origin: WEB }));
+  assert.equal(memories.status, 403);
+  assert.equal(memories.headers.get('access-control-allow-origin'), null);
+  assert.equal((await memories.json()).error.code, 'native_only');
+  assert.equal((await f.handle(preflight('/v1/responses', 'https://other.example'))).status, 403);
+  assert.equal((await f.handle(preflight('/v1/unknown', WEB))).status, 404);
+  assert.equal(f.calls.filter(call => call.url.endsWith('ppomi_context')).length, 1);
+});
+
+test('PPOMI_WEB_ORIGINS replaces the default browser origin; an empty value admits no browser', async () => {
+  const f = fixture();
+  const custom = createHandler({ env: { ...f.env, PPOMI_WEB_ORIGINS: 'https://a.example, https://b.example:8443,http://insecure.example,garbage' }, fetch: (async () => Response.json({ workspace: { id: WORKSPACE }, device: { id: DEVICE } })) as typeof fetch });
+  assert.equal((await custom(preflight('/v1/session', 'https://a.example'))).headers.get('access-control-allow-origin'), 'https://a.example');
+  assert.equal((await custom(preflight('/v1/session', 'https://b.example:8443'))).status, 204);
+  assert.equal((await custom(preflight('/v1/session', 'http://insecure.example'))).status, 403);
+  assert.equal((await custom(preflight('/v1/session', WEB))).status, 403, 'the default origin is gone once the list is explicit');
+  const none = createHandler({ env: { ...f.env, PPOMI_WEB_ORIGINS: '' }, fetch: (async () => Response.json({ workspace: { id: WORKSPACE }, device: { id: DEVICE } })) as typeof fetch });
+  assert.equal((await none(preflight('/v1/session', WEB))).status, 403);
+  assert.equal((await none(request('/v1/session', { mode: 'text' }, { Origin: WEB }))).status, 403);
+  // Native hosts send no Origin and are unaffected by any of this.
+  assert.equal((await none(request('/v1/session', { mode: 'text' }))).status, 200);
 });
 
 test('a Google-account device names itself in a header that reaches the shared server as-is', async () => {

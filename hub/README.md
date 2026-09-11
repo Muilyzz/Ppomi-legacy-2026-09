@@ -68,10 +68,15 @@ npm run deploy                 # 카탈로그 복사·다운로드 파일 준비
 
 ## 로그인 웹 홈
 
-`/`는 로그인과 계정 홈, `/download`는 설치 파일 안내다. 구현과 사용 예시는 다음을 기준으로 한다.
+`/`는 뽀미 작업대(대화 + 내 기록), `/download`는 설치 파일 안내다. 화면은 Mac·Android 앱과 같은 공통 React `Workbench`/`ChatPanel`이다: `agent/`에서 `npm run build:web`으로 만든 [번들](web/workbench/)을 [index.html](index.html)이 싣고, [home.js](web/home.js)는 브라우저 전용 계층 — Supabase 로그인, 기기 키·등록, 기록 세션, 샌드박스 프레임 렌더러 — 을 만들어 `mountWebWorkbench(root, host)`에 넘기는 접착제만 남았다. 토큰·기기 키·평문 기록은 host 상태에 들어가지 않는다.
+
+텍스트 대화는 앱과 같은 에이전트 서버([config.js](web/config.js)의 `AGENT_ENDPOINT`)로 간다. 브라우저는 Supabase 세션 토큰과 `X-Ppomi-Device`(이 브라우저의 등록 기기)를 붙여 `/v1/session`·`/v1/responses`만 부르고, 모델·Gateway 키는 그 서버에만 있다. 서버 쪽 Origin 허용 목록은 [agent/server/README.md](../agent/server/README.md)를 따른다. 통화·기기 제어·기억 저장은 웹에 없고 화면과 지침이 그렇게 말한다. 번들을 다시 만들면 [service-worker.js](service-worker.js)의 캐시 버전을 올린다.
+
+구현과 사용 예시는 다음을 기준으로 한다.
 
 | 책임 | 구현 | 검증 사례 |
 |---|---|---|
+| 작업대 마운트·브라우저 계층 연결 | [home.js](web/home.js), [index.html](index.html), [workbench/](web/workbench/) | [화면 연동](test/web-home-lifecycle.test.js), [페이지·정책·번들 계약](test/web-workbench.test.js) |
 | 로그인·공개 설정 | [auth.js](web/auth.js), [config.js](web/config.js) | [인증](test/web-auth.test.js) |
 | 로그인 서버·응답 검증 | [auth-client.js](web/auth-client.js) | [토큰·사용자·통신](test/web-auth-client.test.js) |
 | 기기 키 저장·기록 읽기 | [device-store.js](web/device-store.js), [records.js](web/records.js) | [기록](test/web-records.test.js), [조건부 조회](test/web-records-conditional.test.js) |
@@ -79,10 +84,10 @@ npm run deploy                 # 카탈로그 복사·다운로드 파일 준비
 | 기록 응답·소유 범위 검증 | [record-protocol.js](web/record-protocol.js) | [메타데이터·버전·청크](test/web-record-protocol.test.js) |
 | 연결·갱신·계정 정리 | [record-session.js](web/record-session.js) | [세션](test/web-record-session.test.js), [화면 연동](test/web-home-lifecycle.test.js) |
 | 복호화·압축 해제 | [record-crypto.js](web/record-crypto.js), [lzfse.js](web/lzfse.js) | [암호화](test/web-records-crypto.test.js) |
-| UI 연결·격리 렌더링 | [home.js](web/home.js), [record-views.js](web/record-views.js) | [화면 연동](test/web-home-lifecycle.test.js) |
+| 격리 렌더링 | [record-views.js](web/record-views.js) | [화면 연동](test/web-home-lifecycle.test.js), [테마 계약](test/web-theme.test.js) |
 | 공통 테마·토큰 | [home.css](web/home.css), [record-frame.css](web/record-frame.css), [frame-theme.js](web/frame-theme.js) | [테마 계약](test/web-theme.test.js) |
 
-색·글꼴·글자 단·모서리는 Mac·Android·작업대와 같은 [tokens.css](web/vendor/tokens.css)(`agent/theme.json`에서 생성)만 쓴다. 라이트/다크는 시스템을 따르고 `html[data-theme]`로 강제할 수 있으며, 격리 프레임은 부모 문서의 명시적 `data-theme`만 URL 질의(`?theme=`)로 넘겨받는다. 홈 CSS에는 색 값이나 새 토큰을 두지 않는다(`web-theme.test.js`가 검사).
+색·글꼴·글자 단·모서리는 Mac·Android·작업대와 같은 [tokens.css](web/vendor/tokens.css)(`agent/theme.json`에서 생성)만 쓴다. 라이트/다크는 시스템을 따르고 `html[data-theme]`로 강제할 수 있으며, 격리 프레임은 부모 문서의 명시적 `data-theme`만 URL 질의(`?theme=`)로 넘겨받는다. 홈 CSS에는 색 값이나 새 토큰을 두지 않는다(`web-theme.test.js`가 검사). 작업대 번들의 CSS는 `/web/vendor/Agent/fonts/`의 공유 글꼴을 가리킨다.
 
 브라우저는 Mac의 키체인을 읽지 않고 독립된 기기 키를 사용한다. 렌더링 프레임에는 인증 토큰과 기기 키를 넘기지 않으며, 공개 앱 캐시에 개인 기록을 저장하지 않는다. 계정 전환 때 기다려야 하는 정리와 렌더러의 버퍼 수명 계약은 `record-session.js`의 주석과 사용 예시를 따른다.
 

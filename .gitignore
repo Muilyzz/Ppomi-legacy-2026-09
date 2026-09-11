@@ -35,6 +35,7 @@ data/chats/
 .venv/
 node_modules/
 agent/dist-shell/
+agent/dist-web/
 shell/src-tauri/target/
 shell/src-tauri/gen/
 shell/src-tauri/resources/executor/

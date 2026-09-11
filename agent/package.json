@@ -8,6 +8,7 @@
     "generate:theme": "node scripts/generate-theme.mjs",
     "build": "npm run generate:theme && npm run generate:playbooks && tsc --noEmit && vite build && node scripts/copy-assets.mjs",
     "build:shell": "npm run generate:theme && npm run generate:playbooks && tsc --noEmit && vite build --config vite.shell.config.ts",
+    "build:web": "npm run generate:theme && npm run generate:playbooks && tsc --noEmit && vite build --config vite.web.config.ts && node scripts/copy-web-assets.mjs",
     "test": "npm run generate:playbooks && node --test scripts/*.test.mjs && tsx --test src/*.test.ts server/*.test.ts && npm run test:browser",
     "dev": "npm run generate:theme && npm run generate:playbooks && vite --host 127.0.0.1",
     "test:browser": "node --conditions=browser --import tsx --test src/browser-stop.check.ts"

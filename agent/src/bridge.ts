@@ -1,11 +1,14 @@
 import { isTauriHost, tauriTransport } from "./tauri-host";
 
 export type Bootstrap = {
-  platform: "macos" | "android" | "windows";
+  /** "web" is the browser host (hub): the same panel with no device tools and no call. */
+  platform: "macos" | "android" | "windows" | "web";
   deviceLabel: string;
   configured: boolean;
   endpoint: string;
   tools: string[];
+  /** Omitted means a call can be placed. A host without microphone/session support says false and the composer hides 📞. */
+  voiceSupported?: boolean;
   /** Omitted by older app binaries. When present, all update compatibility fields are required. */
   nativeBuild?: number;
   bridgeVersion?: number;
@@ -37,9 +40,10 @@ export class UpdateCompatibilityError extends Error {
 /** Check before exposing bootstrap to any session controller, including OS-answered calls. */
 export function validateBootstrap(value: unknown): Bootstrap {
   const b = value as Bootstrap | null;
-  if (!b || typeof b !== "object" || !["macos", "android", "windows"].includes(b.platform) ||
+  if (!b || typeof b !== "object" || !["macos", "android", "windows", "web"].includes(b.platform) ||
       typeof b.deviceLabel !== "string" || typeof b.configured !== "boolean" ||
-      typeof b.endpoint !== "string" || !Array.isArray(b.tools) || b.tools.some(tool => typeof tool !== "string")) {
+      typeof b.endpoint !== "string" || !Array.isArray(b.tools) || b.tools.some(tool => typeof tool !== "string") ||
+      (b.voiceSupported !== undefined && typeof b.voiceSupported !== "boolean")) {
     throw new UpdateCompatibilityError();
   }
   const fields = [b.nativeBuild, b.bridgeVersion, b.webRelease, b.capabilities];

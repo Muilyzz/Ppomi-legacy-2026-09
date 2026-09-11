@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>뽀미 — 내 기록</title>
-  <meta name="description" content="뽀미에 로그인하고 내 기록을 살펴보세요.">
+  <title>뽀미</title>
+  <meta name="description" content="뽀미에 로그인하고 대화하며 내 기록을 살펴보세요.">
   <meta name="color-scheme" content="light dark">
   <!-- Browser chrome tint = --bg of /web/vendor/tokens.css (generated from agent/theme.json); the manifest cannot follow the scheme. -->
   <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f8f8f8">
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#111111">
   <meta property="og:title" content="뽀미">
-  <meta property="og:description" content="로그인하고 내 기록을 살펴보세요.">
+  <meta property="og:description" content="로그인하고 대화하며 내 기록을 살펴보세요.">
   <meta property="og:url" content="https://ppomi.muilyzz.com/">
   <link rel="icon" href="/icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -18,80 +18,25 @@
   <meta name="apple-mobile-web-app-title" content="뽀미">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="stylesheet" href="/web/vendor/tokens.css">
+  <!-- The shared workbench (agent/src/web-main.tsx): the same ChatPanel/Workbench the Mac and Android apps show, built by agent `npm run build:web`. -->
+  <link rel="stylesheet" href="/web/workbench/app.css">
   <link rel="stylesheet" href="/install-guide.css">
   <script src="/install-guide.js" defer></script>
   <link rel="stylesheet" href="/web/home.css">
+  <script src="/web/workbench/app.js" defer></script>
   <script type="module" src="/web/home.js"></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">본문으로 바로 가기</a>
-  <svg hidden aria-hidden="true"><symbol id="paw" viewBox="0 0 24 24"><ellipse cx="3.5" cy="8.75" rx="2.1" ry="2.6" transform="rotate(-18 3.5 8.75)"/><ellipse cx="8.75" cy="5.25" rx="2.2" ry="2.7"/><ellipse cx="15.25" cy="5.25" rx="2.2" ry="2.7"/><ellipse cx="20.5" cy="8.75" rx="2.1" ry="2.6" transform="rotate(18 20.5 8.75)"/><path d="M12 11.2 C 15.8 11.2 19 14 19 17.2 C 19 19.9 16.2 21 12 21 C 7.8 21 5 19.9 5 17.2 C 5 14 8.2 11.2 12 11.2 Z"/></symbol></svg>
-  <div class="home-wrap">
-    <header class="site-header">
-      <a class="brand" href="/" aria-label="뽀미 홈"><svg class="paw" width="24" height="24" aria-hidden="true"><use href="#paw"/></svg><span>Ppomi</span></a>
-      <nav class="site-nav" aria-label="사이트 메뉴"><a href="/download">다운로드</a><a href="/privacy">개인정보</a></nav>
-    </header>
-
-    <main id="main" class="home-main" tabindex="-1">
-      <p id="auth-status" class="auth-status" role="status" aria-live="polite">로그인 상태를 확인하고 있습니다.</p>
-
-      <aside class="ipad-prompt" id="ipad-prompt" aria-label="홈 화면 추가 안내" hidden>
-        <div><strong>홈 화면에서 뽀미를 바로 열어요</strong><p>아이콘을 한 번 추가하면 다음부터 여기로 바로 올 수 있어요.</p></div>
-        <button class="guide-button" type="button" data-open-install-guide hidden>추가 방법 보기 <span aria-hidden="true">↗</span></button>
-      </aside>
-
-      <section id="sign-in-panel" class="sign-in-panel" aria-labelledby="sign-in-title">
-        <div class="sign-in-card">
-          <svg class="paw sign-in-mark" width="44" height="44" aria-hidden="true"><use href="#paw"/></svg>
-          <h1 id="sign-in-title">뽀미에 로그인하세요</h1>
-          <p class="sign-in-description">사용하던 계정으로 시작하세요.</p>
-          <button id="sign-in" class="button primary sign-in-button" type="button" disabled>
-            <span>Google 계정으로 계속</span><span aria-hidden="true">→</span>
-          </button>
-          <button class="install-home-link" type="button" data-open-install-guide hidden>iPad 홈 화면에 추가하기</button>
-          <p class="sign-in-note">설치한 뽀미 앱에서 사용하는<br>Google 계정으로 로그인해 주세요.</p>
-        </div>
-        <noscript><p class="no-script">로그인하려면 브라우저에서 JavaScript를 켜 주세요.</p></noscript>
-      </section>
-
-      <section id="app-shell" class="app-shell" aria-label="내 기록" hidden>
-        <aside class="workspace-sidebar" aria-label="계정과 기록 탐색">
-          <div class="sidebar-heading"><h1>내 뽀미</h1><button id="sign-out" class="button quiet" type="button">로그아웃</button></div>
-          <section class="account-card" aria-labelledby="account-title">
-            <div class="account-mark" aria-hidden="true"><svg class="paw" width="24" height="24"><use href="#paw"/></svg></div>
-            <div class="account-details"><h2 id="account-title">로그인 계정</h2><strong id="user-name"></strong><span id="user-email"></span></div>
-          </section>
-          <section class="connection-card" aria-labelledby="connection-title">
-            <h2 id="connection-title">기록 연결</h2>
-            <dl class="connection-status"><div><dt>계정</dt><dd id="workspace-status">확인 중</dd></div><div><dt>이 기기</dt><dd id="device-status">확인 중</dd></div></dl>
-            <p id="sync-status" class="connection-note" role="status" aria-live="polite">기록을 읽을 수 있는지 확인하고 있습니다.</p>
-          </section>
-          <div class="record-navigation">
-            <h2 id="records-nav-title">내 기록</h2>
-            <div class="record-tabs" role="tablist" aria-labelledby="records-nav-title" aria-orientation="vertical">
-              <button id="tab-timeline" type="button" role="tab" data-record-view="timeline" aria-selected="true" aria-controls="main-content" tabindex="0"><span>타임라인</span><span aria-hidden="true">↗</span></button>
-              <button id="tab-evidence" type="button" role="tab" data-record-view="evidence" aria-selected="false" aria-controls="main-content" tabindex="-1"><span>증빙·전표</span><span aria-hidden="true">↗</span></button>
-              <button id="tab-accounting" type="button" role="tab" data-record-view="accounting" aria-selected="false" aria-controls="main-content" tabindex="-1"><span>분개장</span><span aria-hidden="true">↗</span></button>
-              <button id="tab-playbooks" type="button" role="tab" data-record-view="playbooks" aria-selected="false" aria-controls="main-content" tabindex="-1"><span>플레이북</span><span aria-hidden="true">↗</span></button>
-              <button id="tab-health" type="button" role="tab" data-record-view="health" aria-selected="false" aria-controls="main-content" tabindex="-1"><span>건강</span><span aria-hidden="true">↗</span></button>
-              <button id="tab-spatial" type="button" role="tab" data-record-view="spatial" aria-selected="false" aria-controls="main-content" tabindex="-1"><span>건축물 3D</span><span aria-hidden="true">↗</span></button>
-            </div>
-          </div>
-          <div class="native-note"><p>대화와 기기 제어는<br>설치한 뽀미 앱에서 이용하세요.</p><a href="/download">앱 설치 안내 <span aria-hidden="true">↗</span></a></div>
-        </aside>
-        <section class="record-panel" aria-labelledby="record-title">
-          <header class="record-panel-heading"><div><p class="eyebrow">내 기록</p><h2 id="record-title">타임라인</h2></div><button id="refresh-records" class="button quiet" type="button" disabled>새로고침</button></header>
-          <div class="record-panel-meta"><p id="record-status" role="status" aria-live="polite">기록 연결을 확인하고 있습니다.</p><span id="record-version"></span></div>
-          <div id="main-content" class="main-content" role="tabpanel" aria-labelledby="tab-timeline" tabindex="0">
-            <div class="record-empty"><span class="empty-symbol" aria-hidden="true">⌁</span><h3>기록을 불러올 준비를 하고 있어요</h3><p>왼쪽에서 보고 싶은 기록을 선택하세요.</p></div>
-          </div>
-        </section>
-      </section>
-    </main>
-
-    <div class="install-footer"><button class="install-home-link" type="button" data-open-install-guide hidden>iPad 홈 화면 추가 도움말</button></div>
-    <footer class="site-footer"><span>Ppomi</span><span><a href="/download">기기에 설치하기</a><a href="/privacy">개인정보 처리방침</a></span></footer>
-  </div>
+  <a class="skip-link" href="#root">본문으로 바로 가기</a>
+  <aside class="ipad-prompt" id="ipad-prompt" aria-label="홈 화면 추가 안내" hidden>
+    <div><strong>홈 화면에서 뽀미를 바로 열어요</strong><p>아이콘을 한 번 추가하면 다음부터 여기로 바로 올 수 있어요.</p></div>
+    <button class="guide-button" type="button" data-open-install-guide hidden>추가 방법 보기 <span aria-hidden="true">↗</span></button>
+  </aside>
+  <!-- home.js mounts the workbench here: top bar (뽀미 · 로그인/나), the conversation, and the records pane with its sandboxed frames. -->
+  <main id="root" class="workbench-root" tabindex="-1">
+    <noscript><p class="boot-note">뽀미를 열려면 브라우저에서 JavaScript를 켜 주세요.</p></noscript>
+    <p class="boot-note" role="status">뽀미를 여는 중입니다.</p>
+  </main>
   <dialog class="install-guide" id="install-guide" aria-labelledby="install-guide-title" aria-describedby="install-guide-description">
     <div class="guide-heading"><p class="eyebrow">iPad · 홈 화면에 추가</p><button class="guide-close" type="button" data-close-install-guide aria-label="설치 안내 닫기" autofocus>×</button></div>
     <h2 id="install-guide-title">홈 화면에서 바로 열어요</h2>
