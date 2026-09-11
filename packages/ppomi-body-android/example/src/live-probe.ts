@@ -1,4 +1,19 @@
-import { spawnSync } from "node:child_process";
+import {
+  FixedPermissionGate,
+  OsSurface,
+  Runtime,
+  type Playbook,
+} from "../../../ppomi-body/src/index.ts";
+import {
+  AndroidAdapterError,
+  AndroidDriver,
+  LiveAndroidNativeTools,
+  listAdbDevices,
+  liveAndroidClickLabel,
+  liveAndroidRequested,
+  pickLiveAndroidClickTarget,
+  resolveAdbSerial,
+} from "../../src/index.ts";
 
 const LIVE_COMMAND =
   "PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts";
@@ -10,30 +25,21 @@ export interface LiveProbe {
   readonly lines: readonly string[];
 }
 
-function runAdb(args: readonly string[]): { ok: boolean; text: string; missing: boolean } {
-  const result = spawnSync("adb", [...args], { encoding: "utf8" });
-  const missing = result.error !== undefined && "code" in result.error && result.error.code === "ENOENT";
-  const text = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
-  return { ok: result.status === 0 && !missing, text, missing };
+function skipLines(lines: readonly string[], detail: string, extra?: string): LiveProbe {
+  const out = [...lines, `uia       SKIP — ${detail}`];
+  if (extra !== undefined && extra.length > 0) out.push(`          ${extra}`);
+  return { status: "skip", lines: out };
 }
 
-function connectedSerials(): { missing: boolean; serials: string[] } {
-  const listed = runAdb(["devices"]);
-  if (listed.missing) return { missing: true, serials: [] };
-  const serials = listed.text
-    .split(/\r?\n/)
-    .slice(1)
-    .map(line => line.trim())
-    .filter(line => /\tdevice$/.test(line))
-    .map(line => line.split(/\s+/)[0] ?? "")
-    .filter(serial => serial.length > 0);
-  return { missing: false, serials };
+function errorCode(error: unknown): string {
+  if (error instanceof AndroidAdapterError) return error.code;
+  return error instanceof Error ? error.message : String(error);
 }
 
-/** Open Settings on a connected device. No ADB / no device / without PPOMI_BODY_LIVE=1 this skips. */
-export function probeAndroidLive(): LiveProbe {
-  const live = process.env.PPOMI_BODY_LIVE === "1";
-  const { missing, serials } = connectedSerials();
+/** Live dump+tap 1-step through AndroidDriver. No adb / no device / no env → skip (exit 0). */
+export async function probeAndroidLive(): Promise<LiveProbe> {
+  const live = liveAndroidRequested();
+  const { missing, serials } = listAdbDevices();
   const pinned = process.env.ANDROID_SERIAL ?? process.env.PPOMI_ANDROID_SERIAL;
   const lines = [
     `platform  ${process.platform}`,
@@ -44,38 +50,82 @@ export function probeAndroidLive(): LiveProbe {
   if (!live) {
     return {
       status: "ok",
-      lines: [...lines, "probe     dry-run — no Settings launch", `          ${LIVE_COMMAND}`],
+      lines: [...lines, "uia       dry-run — fixture only, no uiautomator dump / tap", `          ${LIVE_COMMAND}`],
     };
   }
-  if (missing) {
-    return { status: "skip", lines: [...lines, "probe     SKIP — adb not on PATH"] };
-  }
-  if (serials.length === 0) {
-    return { status: "skip", lines: [...lines, "probe     SKIP — no authorized Android device"] };
-  }
-  if (serials.length > 1 && (pinned === undefined || !serials.includes(pinned))) {
-    return {
-      status: "skip",
-      lines: [...lines, "probe     SKIP — multiple devices; set ANDROID_SERIAL or PPOMI_ANDROID_SERIAL"],
-    };
+  if (missing) return skipLines(lines, "adb not on PATH");
+  const resolved = resolveAdbSerial(serials, pinned);
+  if (resolved.serial === undefined) {
+    if (resolved.code === "multiple_devices") {
+      return skipLines(lines, "multiple devices; set ANDROID_SERIAL or PPOMI_ANDROID_SERIAL");
+    }
+    return skipLines(lines, "no authorized Android device");
   }
 
-  const serial = pinned !== undefined && serials.includes(pinned) ? pinned : serials[0]!;
-  const opened = runAdb(["-s", serial, "shell", "am", "start", "-a", "android.settings.SETTINGS"]);
-  if (!opened.ok) {
-    return {
-      status: "skip",
-      lines: [...lines, `probe     SKIP — Settings launch failed on ${serial}`, `          ${opened.text}`],
-    };
+  const serial = resolved.serial;
+  const tools = new LiveAndroidNativeTools({ serial });
+
+  try {
+    tools.android_open({ packageName: "com.android.settings" });
+  } catch (error) {
+    return skipLines(lines, `Settings launch failed on ${serial}`, errorCode(error));
   }
-  return { status: "ok", lines: [...lines, `probe     Settings opened on ${serial}`] };
+
+  let preview;
+  try {
+    preview = tools.android_screen();
+  } catch (error) {
+    const code = errorCode(error);
+    if (code === "no_adb" || code === "no_device") return skipLines(lines, `dump skipped on ${serial}`, code);
+    return { status: "fail", lines: [...lines, `uia       FAIL — android_screen ${code}`] };
+  }
+
+  const node = pickLiveAndroidClickTarget(preview.nodes);
+  if (node === undefined) {
+    return skipLines(lines, `Settings dump had no clickable row`, `nodes=${preview.nodes.length}`);
+  }
+
+  const target = liveAndroidClickLabel(node);
+  const oneStep: Playbook = {
+    id: "android-live-uia-1-step",
+    steps: [{ id: "uia-click", kind: "click", target, effect: "navigate" }],
+  };
+
+  try {
+    const result = await new Runtime(
+      new OsSurface(new AndroidDriver(tools)),
+      new FixedPermissionGate(["ui.read", "ui.control"]),
+    ).run(oneStep);
+    if (result.status !== "completed" || result.stepResults[0]?.status !== "ok") {
+      return {
+        status: "fail",
+        lines: [
+          ...lines,
+          `uia       FAIL — Runtime ${result.status} ${result.stepResults[0]?.code ?? "?"}`,
+        ],
+      };
+    }
+    return {
+      status: "ok",
+      lines: [
+        ...lines,
+        `uia       ${serial} click "${target}" via AndroidDriver + LiveAndroidNativeTools (uiautomator dump + tap)`,
+        `          driver=${result.stepResults[0]?.driver ?? "os-android"} nodes=${preview.nodes.length}`,
+      ],
+    };
+  } catch (error) {
+    const code = errorCode(error);
+    if (code === "no_adb" || code === "no_device") return skipLines(lines, `tap skipped on ${serial}`, code);
+    return { status: "fail", lines: [...lines, `uia       FAIL — ${code}`] };
+  }
 }
 
-export function writeLiveProbe(probe: LiveProbe): void {
-  const label = probe.status === "fail" ? "FAIL" : probe.status === "skip" ? "SKIP" : "PASS";
+export async function writeLiveProbe(probe: LiveProbe | Promise<LiveProbe>): Promise<void> {
+  const resolved = await probe;
+  const label = resolved.status === "fail" ? "FAIL" : resolved.status === "skip" ? "SKIP" : "PASS";
   process.stdout.write(`  live     ${label}\n`);
-  for (const line of probe.lines) {
+  for (const line of resolved.lines) {
     process.stdout.write(`           ${line}\n`);
   }
-  if (probe.status === "fail") process.exitCode = 1;
+  if (resolved.status === "fail") process.exitCode = 1;
 }

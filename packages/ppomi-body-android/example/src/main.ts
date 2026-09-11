@@ -40,7 +40,7 @@ async function main(): Promise<void> {
   process.stdout.write("  step     click Next (effect: navigate) via Runtime + FixtureAndroidNativeTools\n");
   process.stdout.write(`  driver   ${result.stepResults[0]?.driver ?? "?"}\n`);
   process.stdout.write(`  status   ${result.status}\n`);
-  writeLiveProbe(probeAndroidLive());
+  await writeLiveProbe(probeAndroidLive());
 }
 
 main().catch(error => {

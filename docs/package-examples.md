@@ -58,6 +58,8 @@ PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-macos/exam
 PPOMI_BODY_AX=1 node --experimental-strip-types packages/ppomi-body-macos/example/src/main.ts
 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/adapter-macos/example/src/main.ts
 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts
+# Android live dump+tap (Settings via AndroidDriver + LiveAndroidNativeTools)
+PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts
 node --experimental-strip-types packages/ppomi-body-iphone-mirroring/example/src/main.ts
 ```
 
