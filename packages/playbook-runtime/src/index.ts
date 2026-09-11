@@ -1,7 +1,7 @@
-export type { OsAdapter, ScreenSnapshot } from "./adapter.ts";
+export type { OsAdapter, ScreenSnapshot } from "./os-adapter.ts";
 export { DummyAdapter, type DummyCall } from "./dummy-adapter.ts";
 export { FixedPermissionGate, defaultPermission, type PermissionGate } from "./permissions.ts";
-export { PlaybookRuntime } from "./runtime.ts";
+export { PlaybookRuntime } from "./playbook-runtime.ts";
 export type {
   Permission,
   Playbook,
@@ -12,4 +12,4 @@ export type {
   StepKind,
   StepOutcome,
   StepRequirement,
-} from "./types.ts";
+} from "./playbook.ts";

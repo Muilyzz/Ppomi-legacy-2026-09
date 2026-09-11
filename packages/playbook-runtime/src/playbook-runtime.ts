@@ -1,4 +1,4 @@
-import type { OsAdapter, ScreenSnapshot } from "./adapter.ts";
+import type { OsAdapter, ScreenSnapshot } from "./os-adapter.ts";
 import { defaultPermission, type PermissionGate } from "./permissions.ts";
 import type {
   Playbook,
@@ -6,7 +6,7 @@ import type {
   RunResult,
   StepEvidence,
   StepOutcome,
-} from "./types.ts";
+} from "./playbook.ts";
 
 /**
  * Runs declared steps against one OS adapter.

@@ -1,4 +1,4 @@
-import type { OsAdapter, ScreenSnapshot } from "./adapter.ts";
+import type { OsAdapter, ScreenSnapshot } from "./os-adapter.ts";
 
 export type DummyCall =
   | { readonly kind: "read" }
@@ -6,7 +6,7 @@ export type DummyCall =
   | { readonly kind: "click"; readonly target: string }
   | { readonly kind: "type"; readonly target: string; readonly text: string };
 
-/** In-memory adapter for unit tests. Not a Windows or Mac implementation. */
+/** In-memory adapter for unit tests. Not `adapter-windows`. */
 export class DummyAdapter implements OsAdapter {
   readonly calls: DummyCall[] = [];
   private screen: ScreenSnapshot;

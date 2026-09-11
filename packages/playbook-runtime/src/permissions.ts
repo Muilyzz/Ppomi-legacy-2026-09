@@ -1,4 +1,4 @@
-import type { Permission, StepKind } from "./types.ts";
+import type { Permission, StepKind } from "./playbook.ts";
 
 export interface PermissionGate {
   allows(permission: Permission): boolean;

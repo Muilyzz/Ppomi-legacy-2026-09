@@ -1,4 +1,4 @@
-/** Minimal OS port. Slice 2 implements this for Windows; this package ships a dummy. */
+/** Minimal OS port. Slice 2 implements this as `adapter-windows`; this package ships a dummy. */
 export interface ScreenSnapshot {
   readonly title: string;
   readonly texts: readonly string[];
