@@ -1,3 +1,4 @@
+/** UI step permissions only. Not a device-approval or Mac-approver gate. */
 export type Permission = "ui.read" | "ui.control";
 
 export type StepKind = "focus" | "click" | "type" | "read";

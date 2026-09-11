@@ -4,8 +4,10 @@ import {
   DummyAdapter,
   FixedPermissionGate,
   PlaybookRuntime,
+  defaultPermission,
   type Playbook,
   type ScreenSnapshot,
+  type StepKind,
 } from "../src/index.ts";
 
 const screen: ScreenSnapshot = {
@@ -87,6 +89,33 @@ test("missing screen text stops without a mutation", () => {
   assert.equal(result.stopReason, "precondition_failed");
   assert.equal(result.evidence[0]?.note, "screen missing Receipt");
   assert.deepEqual(adapter.calls, [{ kind: "read" }]);
+});
+
+test("step permissions are ui.read and ui.control only; a run has no device-approval gate", () => {
+  const kinds: StepKind[] = ["read", "focus", "click", "type"];
+  assert.deepEqual(kinds.map(defaultPermission), [
+    "ui.read",
+    "ui.control",
+    "ui.control",
+    "ui.control",
+  ]);
+
+  const adapter = new DummyAdapter(screen);
+  const runtime = new PlaybookRuntime(
+    adapter,
+    new FixedPermissionGate(["ui.read", "ui.control"]),
+  );
+  const result = runtime.run({
+    id: "fixture-no-device-gate",
+    steps: [{ id: "open-next", kind: "click", target: "Next" }],
+  });
+
+  assert.equal(result.status, "completed");
+  assert.equal(result.stopReason, null);
+  assert.equal("deviceApproved" in result, false);
+  assert.equal("approved" in result, false);
+  assert.match(JSON.stringify(result), /"outcome":"ok"/);
+  assert.doesNotMatch(JSON.stringify(result), /approv/i);
 });
 
 test("missing target stops without a mutation", () => {

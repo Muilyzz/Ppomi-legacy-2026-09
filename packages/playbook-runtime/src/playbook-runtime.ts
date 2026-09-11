@@ -12,6 +12,7 @@ import type {
  * Runs declared steps against one OS adapter.
  * Permission and screen/target preconditions are fail-closed: the run stops
  * and later steps are not sent to the adapter.
+ * There is no device-approval or Mac-approver input.
  */
 export class PlaybookRuntime {
   private readonly adapter: OsAdapter;
