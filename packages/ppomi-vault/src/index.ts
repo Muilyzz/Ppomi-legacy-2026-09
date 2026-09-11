@@ -1,0 +1,26 @@
+export {
+  KEY_LEN,
+  NONCE_LEN,
+  TAG_LEN,
+  VAULT_VERSION,
+  WRAP_VERSION,
+  X25519_LEN,
+  createDeviceKeyPair,
+  createVaultKey,
+  type DeviceKeyPair,
+} from "./crypto.ts";
+export {
+  KB_STAR_BIZ_ACCOUNT_KEY,
+  ClientVault,
+  MemoryCiphertextStore,
+  VaultError,
+  acceptDeviceApproval,
+  assertCiphertextEnvelope,
+  storeContainsPlaintext,
+  vaultEvidence,
+  type CiphertextStore,
+  type VaultEnvelope,
+  type VaultErrorCode,
+  type VaultEvidence,
+  type VaultPutOptions,
+} from "./vault.ts";

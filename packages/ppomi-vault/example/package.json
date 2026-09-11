@@ -1,0 +1,14 @@
+{
+  "name": "ppomi-vault-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mac→Win ciphertext round-trip CLI for ppomi-vault. Not a product UI.",
+  "scripts": {
+    "start": "node --experimental-strip-types src/main.ts",
+    "example": "node --experimental-strip-types src/main.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

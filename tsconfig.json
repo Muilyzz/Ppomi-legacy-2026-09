@@ -10,6 +10,7 @@
       "ppomi-body-android": ["./packages/ppomi-body-android/src/index.ts"],
       "ppomi-body-iphone-mirroring": ["./packages/ppomi-body-iphone-mirroring/src/index.ts"],
       "ppomi-brain": ["./packages/ppomi-brain/src/index.ts"],
+      "ppomi-vault": ["./packages/ppomi-vault/src/index.ts"],
       "playbook-runtime": ["./packages/ppomi-body/src/index.ts"]
     }
   },

@@ -28,6 +28,7 @@ There is no top-level `examples/` tree.
 | --- | --- |
 | `ppomi-path` | `packages/ppomi-path/example` |
 | `ppomi-brain` | `packages/ppomi-brain/example` |
+| `ppomi-vault` | `packages/ppomi-vault/example` |
 | `ppomi-body-windows` | `packages/ppomi-body-windows/example` |
 | `ppomi-body-macos` | `packages/ppomi-body-macos/example` |
 | `ppomi-body-android` | `packages/ppomi-body-android/example` |
@@ -49,6 +50,9 @@ node --experimental-strip-types packages/ppomi-path/example/src/main.ts --legacy
 node --experimental-strip-types packages/ppomi-brain/example/src/main.ts
 PPOMI_BODY=macos node --experimental-strip-types packages/ppomi-brain/example/src/main.ts
 PPOMI_BODY=windows node --experimental-strip-types packages/ppomi-brain/example/src/main.ts
+
+# vault (mock ciphertext store; no Clerk, no live OS)
+node --experimental-strip-types packages/ppomi-vault/example/src/main.ts
 
 # body 1-step fixtures (live UIA/AX skips off-host)
 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts
