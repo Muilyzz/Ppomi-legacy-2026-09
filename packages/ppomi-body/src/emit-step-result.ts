@@ -20,6 +20,7 @@ export type RuntimeCode =
   | "screen_missing"
   | "focus_mismatch"
   | "target_required"
+  | "unsupported_action"
   | "target_not_on_screen"
   | "text_required"
   | "origin_not_declared"
@@ -42,7 +43,7 @@ export interface Decision {
 }
 
 /** Actions that may already have changed the device when a timeout is reported. Never retry them blindly. */
-const MUTATING_ACTIONS: ReadonlySet<StepKind | PageStepKind> = new Set(["click", "fill", "type"]);
+const MUTATING_ACTIONS: ReadonlySet<StepKind | PageStepKind> = new Set(["click", "fill", "type", "key"]);
 
 export const DONE: Decision = { outcome: "ok", status: "ok", attempt: "executed", code: null, note: "step finished" };
 

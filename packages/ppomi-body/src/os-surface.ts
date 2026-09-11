@@ -79,7 +79,7 @@ export class OsSurface implements UiDriver<ScreenSnapshot, OsRef, PlaybookStep> 
       case "key": {
         const name = step.target;
         if (name === undefined || name.length === 0) return unmet("target_required", "step target is required");
-        if (this.os.key === undefined) return unmet("target_required", "driver has no key");
+        if (this.os.key === undefined) return unmet("unsupported_action", "driver has no key");
         return { ok: true, ref: { kind: "key", name } };
       }
       default: {

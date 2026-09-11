@@ -47,6 +47,7 @@ export type {
   PageStepKind,
   RunInvalid,
   RunResult,
+  RunResumedFrom,
   RunStatus,
   StepEffect,
   StepEvidence,

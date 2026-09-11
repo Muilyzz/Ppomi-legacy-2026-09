@@ -17,6 +17,7 @@ import type {
   Permission,
   RunInvalid,
   RunResult,
+  RunResumedFrom,
   StepEffect,
   StepEvidence,
   StepKind,
@@ -91,9 +92,21 @@ export interface RuntimeOptions {
   readonly now?: () => number;
 }
 
-/** Per-run resume. Cold start omits this; continue-after-failure passes the failed/next step id. */
+/**
+ * Per-run resume. Cold start omits this; continue-after-failure passes the failed/next
+ * step id. A prefix that contains a `human` step or a mutation with `effect: "commit"`
+ * (or no effect, which the core treats as commit) is a gate the body never ran: skipping
+ * it is `invalid` (`resume_past_gate`) unless `resumedAfterHuman` states that the
+ * person did those steps. The result then carries `resumedFrom`.
+ */
 export interface RuntimeRunOptions {
   readonly fromStep?: string;
+  readonly resumedAfterHuman?: boolean;
+}
+
+interface ResumePlan {
+  readonly from: number;
+  readonly resumedFrom?: RunResumedFrom;
 }
 
 const DEFAULTS = {
@@ -240,17 +253,17 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
     options: RuntimeRunOptions | undefined,
   ): Generator<Effect<Ref, Step>, RunResult, unknown> {
     const driverName = this.driverName;
-    const from = startIndex(playbook, options?.fromStep);
+    const plan = this.resumePlan(playbook, options);
     const invalid = validatePlaybook(playbook)
-      ?? (typeof from !== "number" ? from : null)
+      ?? ("code" in plan ? plan : null)
       ?? (driverName === undefined
         ? { code: "unknown_driver" as const, detail: "the driver declares no kind and RuntimeOptions.driver is not set" }
         : null);
-    if (invalid !== null || driverName === undefined || typeof from !== "number") {
+    if (invalid !== null || driverName === undefined || "code" in plan) {
       return invalidResult(invalid ?? { code: "unknown_driver", detail: "" }, legacy);
     }
     const runUndeclared = legacy?.runUndeclaredMutations === true;
-    const steps = from === 0 ? playbook.steps : playbook.steps.slice(from);
+    const steps = plan.from === 0 ? playbook.steps : playbook.steps.slice(plan.from);
 
     const evidence: StepEvidence[] = [];
     const stepResults: StepResult[] = [];
@@ -261,6 +274,7 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
       stepResults: stepResults.concat(
         notExecutedRest(playbook.id, driverName, steps, stoppedAt, step => this.driver.target(step)),
       ),
+      ...(plan.resumedFrom === undefined ? {} : { resumedFrom: plan.resumedFrom }),
       ...(runUndeclared ? { legacy: true as const } : {}),
     });
 
@@ -327,6 +341,38 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
     return finish("completed", null, playbook.steps.length);
   }
 
+  /**
+   * Where the run starts. The skipped prefix is inspected with the same classification
+   * the loop uses: a `human` step, or a mutation whose effect is `commit` or undeclared,
+   * is a gate the body would have handed off — resuming past it needs `resumedAfterHuman`.
+   */
+  private resumePlan(playbook: RuntimePlaybook<Step>, options: RuntimeRunOptions | undefined): ResumePlan | RunInvalid {
+    const fromStep = options?.fromStep;
+    if (fromStep === undefined) return { from: 0 };
+    const from = playbook.steps.findIndex(step => step.id === fromStep);
+    if (from < 0) return { code: "unknown_from_step", detail: `fromStep not in playbook: ${fromStep}` };
+    const skipped = playbook.steps.slice(0, from);
+    const skippedGates = skipped
+      .filter(step => isHumanStep(step) || this.isCommitStep(step))
+      .map(step => step.id);
+    const resumedAfterHuman = options?.resumedAfterHuman === true;
+    if (skippedGates.length > 0 && !resumedAfterHuman) {
+      return {
+        code: "resume_past_gate",
+        detail: `fromStep ${fromStep} skips human/commit steps ${skippedGates.join(", ")}; pass resumedAfterHuman: true once the person has done them`,
+      };
+    }
+    return {
+      from,
+      resumedFrom: { stepId: fromStep, skipped: skipped.map(step => step.id), skippedGates, resumedAfterHuman },
+    };
+  }
+
+  private isCommitStep(step: Step): boolean {
+    if (!this.driver.classify(step).mutation) return false;
+    return step.effect === undefined || step.effect === "commit";
+  }
+
   private evidenceRow(step: Step, texts: readonly string[], decision: Decision): StepEvidence {
     return {
       stepId: step.id,
@@ -338,11 +384,9 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
   }
 }
 
-function startIndex(playbook: RuntimePlaybook<RuntimeStep>, fromStep: string | undefined): number | RunInvalid {
-  if (fromStep === undefined) return 0;
-  const index = playbook.steps.findIndex(step => step.id === fromStep);
-  if (index < 0) return { code: "unknown_from_step", detail: `fromStep not in playbook: ${fromStep}` };
-  return index;
+/** `human` is a path-document kind the core never runs; a playbook that still carries one is a gate either way. */
+function isHumanStep(step: RuntimeStep): boolean {
+  return (step.kind as string) === "human";
 }
 
 function invalidResult(invalid: RunInvalid, legacy?: LegacyOptions): RunResult {
