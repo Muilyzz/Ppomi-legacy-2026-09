@@ -10,6 +10,15 @@ enum Rules {
     /// am.title(app): the app's Korean name.
     static let titles = LegacyAccountingRules.bundled.titles
     static func title(_ app: String) -> String { titles[app] ?? app }
+    /// 사업자의 계좌는 사실로 정해진다: 기업뱅킹 앱(사업자로 로그인해야 보이는 계좌)에서 읽은 계좌. 사람이 끌어 넣어 정하는 게 아니다.
+    static let businessApps: Set<String> = ["KBBIZ"]
+    /// 개인 앱 안에서도 이름이 사업자라고 말하는 계좌: 신한 '사업자 보통예금', '<기시>'(기업시설자금)·'<기운>'(기업운전자금) 대출.
+    static let businessLabel = re(#"사업자|^<기[시운]>"#)   // NSRegularExpression: this file is shared with the iPad target (no Re helper there)
+    /// 증권 앱의 잔액은 예금이 아니라 투자자산(평가금액).
+    static let investApps: Set<String> = ["SAMSUNG", "KAKAOPAY", "TOSSINVEST"]
+    static func isBusiness(app: String, label: String) -> Bool {
+        businessApps.contains(app) || businessLabel.firstMatch(in: label, range: NSRange(label.startIndex..., in: label)) != nil
+    }
 
     static func capital(of merchant: String) -> String {
         LegacyAccountingRules.bundled.category(of: merchant) ?? LegacyAccountingRules.bundled.defaultCapital

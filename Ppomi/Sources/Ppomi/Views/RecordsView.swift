@@ -20,13 +20,15 @@ struct RecordsView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Button("← 대화", action: state.toggleRecordsFocus)
-                    .buttonStyle(.plain)
-                    .font(.ppomi(2, weight: .medium))
-                    .help("Esc")
-                    .accessibilityLabel("대화로 돌아가기")
-                    .accessibilityIdentifier("records-back")
-                RecordsNavigation(selection: state.tab, select: state.show)
+                if state.recordsFocused {   // 제어 열 안의 상태 뷰일 땐 대화가 옆에 있으니 돌아갈 곳이 없다
+                    Button("← 대화", action: state.toggleRecordsFocus)
+                        .buttonStyle(.plain)
+                        .font(.ppomi(2, weight: .medium))
+                        .help("Esc")
+                        .accessibilityLabel("대화로 돌아가기")
+                        .accessibilityIdentifier("records-back")
+                }
+                RecordsNavigation(selection: state.tab, select: state.show)   // 첫 화면은 타임라인의 재무 트리맵; 절차(플레이북 나무)를 보려면 탭이 필요해 다시 보인다 (2026-09-11)
                 if let message = state.recordsFocusMessage {
                     Text(message).font(.ppomi(1)).foregroundStyle(.bad).lineLimit(1)
                         .accessibilityIdentifier("records-focus-message")
@@ -105,7 +107,7 @@ private struct RecordsPage: View {
             case .health: HealthView()
             }
         }
-        .environment(\.recordsPageIsActive, state.recordsFocused && state.tab == tab)
+        .environment(\.recordsPageIsActive, (state.recordsFocused || state.recordsOnScreen) && state.tab == tab)   // 평상시 제어 열의 상태 뷰도 살아 있는 페이지
         .ppomiTheme()
     }
 }

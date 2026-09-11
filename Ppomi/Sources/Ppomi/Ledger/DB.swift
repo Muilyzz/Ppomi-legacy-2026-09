@@ -243,6 +243,6 @@ extension Ledger {
     /// A monitor can reuse its read-only connection and hold one read transaction across both tables.
     static func load(db: DB, me: String) throws -> Ledger {
         let snaps = try db.snapshots(), txs = try db.transactions()
-        return load(snapshots: snaps, transactions: txs, me: me)
+        return load(snapshots: snaps, transactions: txs, me: me, lenses: LensStore.load(dbPath: AppSettings.dbPath), nodes: LensStore.nodes(dbPath: AppSettings.dbPath))
     }
 }

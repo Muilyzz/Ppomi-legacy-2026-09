@@ -47,9 +47,13 @@ struct JournalLine: Hashable, Identifiable {
 enum Flow: String { case transfer, conversion, income, reversal, none }
 
 /// A boundary: the accounts considered "mine" when reading. Everything else is outside.
-struct Lens: Hashable, Identifiable {
+/// 계좌 그룹. 기본 렌즈("내 것 전부")는 모든 계좌; 사람이 만든 그룹은 계좌의 부분집합이고 계좌는 그룹 하나에만 속한다(LensStore).
+struct Lens: Hashable, Identifiable, Codable {
+    /// 늘 있는 가계부(개인) 바닥의 이름. 상자가 아니라 바닥이라 저장되는 렌즈가 아니다(아이패드도 같은 이름을 쓴다).
+    static let home = "가계부"
     var name: String
     var inside: Set<String>
+    var x: Int? = nil, y: Int? = nil          // 판 위의 자리(격자 단위); 없으면 페이지가 차례로 놓는다. 렌즈는 늘 가계부 안 용도 그룹; 사업자는 렌즈가 아니라 계좌의 사실(Rules.businessApps)
     var id: String { name }
 }
 
@@ -85,6 +89,8 @@ struct Ledger {
     var series: [String: [Observation]] = [:]           // account label → observations sorted by time (chain rows in chain order)
     var lines: [JournalLine] = []                       // the journal, account names already mapped to balance-sheet labels
     var defaultLens = Lens(name: "내 것 전부", inside: [])
+    var lenses: [Lens] = []                             // 사람이 만든 계좌 그룹(가계부·사업…); 타임라인은 그룹 하나를 골라 본다
+    var nodes: [String: [Int]] = [:]                    // 그룹 밖 계좌 노드의 판 위 자리 [x, y](격자 단위)
 }
 
 

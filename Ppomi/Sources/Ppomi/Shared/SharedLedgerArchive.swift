@@ -10,9 +10,11 @@ struct SharedLedgerArchive: Codable {
     var me: String
     // Exact original rows retain stable source IDs, status, raw observations and provenance.
     var originalTables: Data
+    var lenses: [Lens]?          // 계좌 그룹(없는 옛 기록은 nil)
+    var nodes: [String: [Int]]?  // 그룹 밖 계좌 노드의 자리
 
     func ledger() throws -> Ledger {
         guard formatVersion == 1 else { throw SharedRecordError.invalid }
-        return Ledger.load(snapshots: snapshots.map { ($0.app, $0.account, $0.balance, $0.ts) }, transactions: transactions, me: me)
+        return Ledger.load(snapshots: snapshots.map { ($0.app, $0.account, $0.balance, $0.ts) }, transactions: transactions, me: me, lenses: lenses ?? [], nodes: nodes ?? [:])
     }
 }

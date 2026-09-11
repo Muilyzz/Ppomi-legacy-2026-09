@@ -3,28 +3,58 @@
 <head>
 <meta charset="utf-8"><title>타임라인</title>
 <style>/*THEME*/
-svg{display:block;width:100%} #chart{height:12.5rem;cursor:pointer} #eq{height:10rem}
-.grid{stroke:var(--line)} .axis,.htext{fill:var(--fg-2);font-size:var(--fs-1)} .zero{stroke:var(--line-2)}
-.nw{fill:none;stroke:var(--fg);stroke-width:1.5} .pin,.sel{fill:var(--accent-soft)} .hover{stroke:var(--line-2)}
+svg{display:block;width:100%} #eq{height:10rem}
+.charts{position:relative;margin:.5rem 0 .25rem;border:1px solid var(--line)}   /* 판 전체에 테두리 하나 더: 네모끼리 붙은 곳과 바깥이 다 두 줄 */
+.tile{position:absolute;box-sizing:border-box;margin:0;padding:0;border:1px solid var(--line);background:var(--surface);overflow:visible} .tile.on{border-color:var(--fg)}
+.hoverlay{position:absolute;inset:0;pointer-events:none;z-index:3}
+.hval,.hdate{position:absolute;white-space:nowrap;font-size:var(--fs-1);font-variant-numeric:tabular-nums;text-shadow:0 0 2px var(--surface),0 0 2px var(--surface),0 0 4px var(--surface)}   /* 배경 없이 보색(바탕색) 그림자로만 가독성 */
+.hval{color:var(--fg);transform:translate(4px,-50%)} .hval.flip{transform:translate(calc(-100% - 4px),-50%)}   /* 금액 글자의 가운데 선이 그 값의 높이 */
+.hdate{color:var(--fg-2);transform:translate(-50%,3px)}
+.tile figcaption{position:absolute;left:.5rem;right:.5rem;top:.35rem;z-index:1;display:flex;justify-content:space-between;gap:.5rem;font-size:var(--fs-2);white-space:nowrap}   /* 제목은 고정 크기 오버레이; 작은 칸에선 삐져나와도 그대로 */
+.tile svg{cursor:pointer;display:block}
+.tile figcaption.bare .n,.tile figcaption.bare .meta{display:none}   /* 한 줄에 안 들어가면 이름만(… 없이); 올리면 다 보임 */
+.tile.zoom{z-index:2;border-color:var(--fg-2);box-shadow:0 2px 12px color-mix(in srgb,var(--fg) 20%,transparent)} .tile figcaption{cursor:pointer}
+.grid{stroke:var(--line)} .axis{fill:var(--fg-2);font-size:var(--fs-1)} .zero{stroke:var(--line-2)}
+.area{fill:color-mix(in srgb,var(--fg) 22%,transparent);stroke:none}   /* 면적 그래프: 선 굵기가 없으니 칸이 작아져도 모양이 같다 */ .pin,.sel{fill:var(--accent-soft)} .hover{stroke:var(--line-2)}
 .obs{fill:var(--fg)} .exp{fill:var(--fg-2)} .res{fill:none;stroke:var(--fg);stroke-width:1} .dayhit{fill:transparent}
-.sec .r{min-width:0;overflow:hidden} .sec .r>span{overflow:hidden;text-overflow:ellipsis}   /* 긴 '어디로' 목록은 … 로 (가로 스크롤 없음) */
+.sec .r{min-width:0;overflow:hidden;padding:4px;margin:-4px} .sec .r>span{overflow:hidden;text-overflow:ellipsis}   /* 긴 '어디로' 목록은 … 로 (가로 스크롤 없음) */
 .timeline-section+.timeline-section{margin-top:2rem}
 .transaction{border:0;background:none;padding:0;color:inherit;font:inherit;text-align:inherit;cursor:pointer}
+body{max-width:none}   /* 맵은 제어 열 전부를 쓴다 */
+:root{--k-asset:#2f6fed;--k-expense:#e8792b;--k-liability:#d33a3a;--k-equity:#1f9d6a;--k-income:#0e9aa7}   /* 자산·비용·부채·자본·수익 대표색; 자식은 같은 색의 음영 */
+.eqmap{position:relative;border:1px solid var(--line);overflow:hidden;background:var(--surface)}
+.eqtile{position:absolute;box-sizing:border-box;border:1px solid var(--surface);overflow:visible;cursor:pointer;color:var(--fg)}
+.eqtile.leaf{cursor:default}
+.eqtile.up>span{top:auto;bottom:.25rem}   /* 맨 아래 얇은 띠: 글자가 맵 밖으로 잘리지 않게 위로 삐져나온다 */
+.eqtile>span{position:absolute;left:.4rem;top:.25rem;font-size:var(--fs-2);white-space:nowrap;text-shadow:0 0 2px var(--surface),0 0 2px var(--surface),0 0 4px var(--surface);pointer-events:none}
+.eqtile>span .n{display:block;font-variant-numeric:tabular-nums} .eqtile>span .meta{display:block}
+#crumbs button.on{font-weight:500} #mapToggle.on{color:var(--fg);font-weight:500}
+.eqlist table{margin:.25rem 0} .eqlist.halves{display:grid;grid-template-columns:1fr 1fr;gap:0 1.5rem;align-items:start}
+.eqlist tr td:first-child{padding-left:calc(.5rem + var(--d,0)*1.25rem)} .eqlist .tw{display:inline-block;width:1rem;color:var(--fg-2)} .eqlist tr.kid td{cursor:pointer}   /* 종류는 줄 배경의 옅은 음영으로, 작은 네모 없음 */ .eqlist tr.kid{cursor:pointer} .eqlist tbody+tbody tr:first-child td{padding-top:.75rem}
+.board{--u:1.5rem;position:relative;margin:.75rem 0;user-select:none;-webkit-user-select:none;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface);
+  background-image:linear-gradient(color-mix(in srgb,var(--line) 55%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in srgb,var(--line) 55%,transparent) 1px,transparent 1px);background-size:var(--u) var(--u)}
+.node{position:absolute;box-sizing:border-box}
+.grp{width:calc(var(--u)*14);border:1px solid var(--line-2);border-radius:var(--r);background:var(--bg);padding:.5rem;display:flex;flex-direction:column;gap:.375rem}
+.grp.on{border-color:var(--fg)} .grp.over{background:var(--accent-soft)}
+.home{border:1px solid var(--line-2);border-radius:var(--r);padding:.5rem;background:transparent} .home.on{border-color:var(--fg)} .home>header{display:flex;justify-content:space-between;gap:.5rem;font-weight:500;cursor:pointer;user-select:none;-webkit-user-select:none}
+.ents{border-left:1px dashed var(--line-2);padding:.5rem;background:transparent} .ents>header{color:var(--fg-2)} .grp.ent{border-color:var(--fg-2)}
+.grp>header{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;font-weight:500;user-select:none;-webkit-user-select:none}
+.grp>header .n{font-variant-numeric:tabular-nums}
+.acct{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:.375rem .5rem;display:flex;justify-content:space-between;gap:.5rem;align-items:baseline;font-size:var(--fs-2);user-select:none;-webkit-user-select:none}
+.acct.free{width:calc(var(--u)*12)} .acct .who{min-width:0} .acct .who div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.native .acct,.native .grp>header{cursor:grab} .dragging{opacity:.9;z-index:2;pointer-events:none}
+.board .hint{position:absolute;right:.5rem;bottom:.25rem}
 .transaction:focus-visible,.nav button:focus-visible{outline:1px solid var(--fg);outline-offset:3px}
 </style>
 </head>
 <body>
-<main aria-label="장부 타임라인">
-  <section class="timeline-section" aria-labelledby="net-worth-title">
-    <header class="sec"><h2 id="net-worth-title">순자산</h2><span class="r">관측된 계좌만</span></header>
-    <svg id="chart" role="img" aria-label="날짜별 순자산 추이"></svg>
+<main aria-label="재무 상태">
+  <section class="timeline-section" id="eqmap" aria-labelledby="eqmap-title">
+    <header class="sec"><h2 id="eqmap-title">재무 상태</h2><div class="r"><nav class="nav" id="crumbs" aria-label="경로"></nav><nav class="nav"><button type="button" id="mapToggle" aria-pressed="true">트리맵</button></nav></div></header>
+    <div id="map" class="eqmap" aria-label="차변·대변 트리맵"></div>
+    <div id="list" class="eqlist" hidden></div>
+    <p class="meta" id="eqline"></p>
   </section>
-  <section class="timeline-section" aria-labelledby="range-title">
-    <header class="sec"><h2 id="range-title">기간</h2><div class="r"><nav class="nav" id="chips" aria-label="조회 기간"></nav><span><i style="background:var(--fg)"></i>관측 <i style="background:var(--fg-2)"></i>설명 <i style="border:1px solid var(--fg)"></i>미관측</span></div></header>
-    <svg id="eq" role="img" aria-label="날짜별 관측·설명·미관측 증감 비교"></svg>
-    <div id="eqsum"></div>
-  </section>
-  <section class="timeline-section" id="panel" aria-labelledby="day-title"></section>
 </main>
 <script>
 // The data: Swift (Timeline.html) replaces the placeholder with {accounts, series, inside, lines} — the shape report.py's
@@ -40,7 +70,20 @@ function signed(n){return (n>0?'+':'')+won(n);}
 function fmt(d){return (d.getMonth()+1)+'/'+d.getDate();}
 function fmtFull(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function valueAt(id,t){var a=D.series[id]||[],v=null;for(var i=0;i<a.length;i++){if(P(a[i][0])<=t)v=a[i];else break;}return v;}
-function sheet(t){return D.accounts.map(function(a){return {id:a.id,app:a.app,v:valueAt(a.id,t)};});}
+var LENS=null,NATIVE=!!(window.webkit&&webkit.messageHandlers&&webkit.messageHandlers.ppomi);
+// 두 층: 사업자(사실 — 기업뱅킹 앱에서 사업자로 로그인해 읽은 계좌, D.business; 사람이 끌어 정하지 않는다)와 가계부(늘 있는 바닥 = 사업자 계좌가 아닌 전부).
+// 렌즈(용도 그룹)는 가계부 안에서만. 법인은 여기 없다: 법인은 사람의 장부가 아니라 제 작업공간(구성원 로그인)이다.
+var HOME='가계부',BIZ='사업자';
+function entityLenses(){return (D.business||[]).length?[{name:BIZ,inside:D.business,kind:'entity'}]:[];}
+function homeLenses(){return D.lenses||[];}
+function inEntity(){var m={};entityLenses().forEach(function(l){l.inside.forEach(function(id){m[id]=1;});});return m;}
+function lensNames(){return [D.defaultLens,HOME].concat(homeLenses().map(function(l){return l.name;})).concat(entityLenses().map(function(l){return l.name;}));}
+function lensInside(name){if(name===D.defaultLens)return D.inside;
+  if(name===HOME){var e=inEntity();return D.inside.filter(function(n){return !e[n];});}
+  var l=(D.lenses||[]).filter(function(x){return x.name===name;})[0];return l?l.inside:D.inside;}
+// 순자산·잔액표는 고른 그룹의 계좌만 더한다. 기본 렌즈는 관측된 계좌 전부 — 새 계좌가 관측되기 시작하면 거기서만 합계가 뛴다.
+function inLens(a){return LENS===D.defaultLens||INS[a.id];}
+function sheet(t){return D.accounts.filter(inLens).map(function(a){return {id:a.id,app:a.app,v:valueAt(a.id,t)};});}
 function total(t){var s=0,unk=0;sheet(t).forEach(function(r){if(r.v)s+=r.v[1];else unk++;});return {sum:s,unk:unk};}
 var INS={};
 function flows(t1,t2){var inc=0,out=0,xf=0,cap={},rows=[];
@@ -50,42 +93,253 @@ function flows(t1,t2){var inc=0,out=0,xf=0,cap={},rows=[];
     rows.push({l:l,k:k});});
   return {inc:inc,out:out,xf:xf,cap:cap,rows:rows};}
 // observed change of the assets between two instants: only accounts observed at both ends count
-function observed(a,b){var s=0,n=0;D.accounts.forEach(function(acc){var v1=valueAt(acc.id,a),v2=valueAt(acc.id,b);if(v1&&v2){s+=v2[1]-v1[1];n++;}});return {sum:s,n:n};}
+function observed(a,b){var s=0,n=0;D.accounts.filter(inLens).forEach(function(acc){var v1=valueAt(acc.id,a),v2=valueAt(acc.id,b);if(v1&&v2){s+=v2[1]-v1[1];n++;}});return {sum:s,n:n};}
+// ---- 재무 상태 트리맵: 자산 + 비용 = 부채 + 자본 + 수익. 면적 = 금액. 누르면 그 칸이 맵 전부가 되어 자식(계정과목 → 계좌)이 다시 꽉 찬 트리맵으로.
+var KIND={asset:'자산',expense:'비용',liability:'부채',equity:'자본',income:'수익'},PATH=[];
+function val(n){return n.children?n.children.reduce(function(s,c){return s+val(c);},0):(n.value||0);}
+function eqTree(){var now=new Date(),own={},biz={};D.inside.forEach(function(n){own[n]=1;});D.accounts.forEach(function(a){own[a.id]=1;});(D.business||[]).forEach(function(id){biz[id]=1;});
+  // 사업 구분은 계좌에 고정된 사실(기업뱅킹에서 읽은 계좌 = 사업자). 비용·수익 줄은 반대편 내 계좌의 구분을 따라 가계부/사업자 갈래로 간다.
+  // 내 계좌끼리는 이체라 비용도 수익도 아니다. 가계↔사업 이체는 한쪽의 출자, 다른 쪽의 인출인데 따로 적지 않는다: 구분마다 자본을 잔여로 두면 그 값이 곧 출자·인출이고, 전부에서는 상쇄된다.
+  var seg=function(id){return biz[id]?BIZ:HOME;};
+  var all=D.accounts.map(function(a){var v=valueAt(a.id,now);return {name:a.id,meta:a.app,value:v?v[1]:0,unseen:!v,kind:'asset'};});
+  // 음수 잔액(마이너스 통장·대출 잔액)은 자산이 아니라 부채: 은행에 갚을 돈. 양수·못 본 계좌만 자산에 남는다.
+  var accts=all.filter(function(a){return a.value>=0;}),debts=all.filter(function(a){return a.value<0;}).map(function(a){return {name:a.name,meta:a.app,value:-a.value,kind:'liability'};});
+  var inv={};(D.invest||[]).forEach(function(id){inv[id]=1;});   // 증권 앱의 잔액은 예금이 아니라 투자(평가금액)
+  var home=accts.filter(function(a){return !biz[a.name];}),bizA=accts.filter(function(a){return biz[a.name];}),split=!!(D.business||[]).length;
+  var group=function(name,xs){var h=xs.filter(function(a){return !biz[a.name];}),b=xs.filter(function(a){return biz[a.name];});return {name:name,kind:'asset',children:split?[{name:HOME,kind:'asset',children:h},{name:BIZ,kind:'asset',children:b}].filter(function(g){return g.children.length;}):h};};   // 빈 구분은 안 그린다
+  var deposits=group('예금',accts.filter(function(a){return !inv[a.name];})),invest=accts.some(function(a){return inv[a.name];})?group('투자',accts.filter(function(a){return inv[a.name];})):null;
+  var exp={},inc={};   // 구분 › 라벨 › 금액. 밖으로 나간 돈은 비용(차변 라벨), 밖에서 들어온 돈은 수익(대변 라벨)
+  function add(m,s,k,v){m[s]=m[s]||{};m[s][k]=(m[s][k]||0)+v;}
+  D.lines.forEach(function(l){var d=!!own[l.dr],c=!!own[l.cr];if(d&&c||!d&&!c)return;
+    if(c&&!d)add(exp,seg(l.cr),l.dr,l.amount);else if(l.rev)add(exp,seg(l.dr),l.cr,-l.amount);else add(inc,seg(l.dr),l.cr,l.amount);});
+  function leaves(m,kind){return Object.keys(m||{}).map(function(k){return {name:k,kind:kind,value:m[k]};}).filter(function(x){return x.value>0;});}
+  function bySeg(m,kind){if(!split)return leaves(m[HOME],kind);   // 사업자 계좌가 없으면 갈래 없이 잎만
+    return [HOME,BIZ].filter(function(s){return m[s];}).map(function(s){return {name:s,kind:kind,children:leaves(m[s],kind)};});}
+  var expenses=bySeg(exp,'expense'),incomes=bySeg(inc,'income');
+  var sum=function(xs){return xs.reduce(function(s,x){return s+val(x);},0);},owed=function(s){return debts.filter(function(d){return seg(d.name)===s;});},L=sum(debts);
+  var borrow=split?[HOME,BIZ].filter(function(s){return owed(s).length;}).map(function(s){return {name:s,kind:'liability',children:owed(s)};}):debts;
+  var liability=debts.length?{name:KIND.liability,kind:'liability',children:[{name:'차입',kind:'liability',children:borrow}]}:{name:KIND.liability,kind:'liability',value:0,note:'본 적 없음'};
+  var residual=function(s){return sum(s===BIZ?bizA:home)+sum(leaves(exp[s],'expense'))-sum(leaves(inc[s],'income'))-sum(owed(s));};   // 구분의 자본 = 그 구분의 자산 + 비용 − 수익 − 부채
+  var parts=(split?[HOME,BIZ]:[HOME]).map(function(s){return {name:s,kind:'equity',value:residual(s)};});
+  // 자본이 음수인 구분(부채 > 자산 + 비용 − 수익)은 대변에 그릴 면적이 없다. 그 몫은 차변에 '자본잠식'으로 둔다: 자산 + 비용 + 자본잠식 = 부채 + 자본 + 수익.
+  var plus=parts.filter(function(p){return p.value>=0;}),minus=parts.filter(function(p){return p.value<0;}).map(function(p){return {name:p.name,kind:'equity',value:-p.value};}),eqNote=plus.length?'자산 + 비용 − 수익 − 부채':'자본잠식';
+  var equity=split?{name:KIND.equity,kind:'equity',note:eqNote,children:plus}:{name:KIND.equity,kind:'equity',value:Math.max(0,parts[0].value),note:eqNote};
+  var deficit=!minus.length?null:split?{name:'자본잠식',kind:'equity',note:'부채가 자산보다 큼',children:minus}:{name:'자본잠식',kind:'equity',note:'부채가 자산보다 큼',value:minus[0].value};
+  var debit=[{name:KIND.asset,kind:'asset',children:invest?[deposits,invest]:[deposits]},{name:KIND.expense,kind:'expense',children:expenses,unseen:!D.lines.length,note:D.lines.length?null:'내역 없음'}];if(deficit)debit.push(deficit);
+  return {name:'전부',children:[
+    {name:'차변',children:debit},
+    {name:'대변',children:[liability,equity,{name:KIND.income,kind:'income',children:incomes,unseen:!D.lines.length,note:D.lines.length?null:'내역 없음'}]}]};}
+function squarify(items,x,y,w,h){var out=[],total=0;items.forEach(function(i){total+=i.v;});if(!total||w<=0||h<=0)return out;
+  var k=w*h/total,rest=items.map(function(i){return {item:i,a:i.v*k};}),row=[],rx=x,ry=y,rw=w,rh=h;
+  function worst(r,len){var s=0,mx=0,mn=Infinity;r.forEach(function(e){s+=e.a;mx=Math.max(mx,e.a);mn=Math.min(mn,e.a);});return Math.max(len*len*mx/(s*s),s*s/(len*len*mn));}
+  function lay(r){var s=0;r.forEach(function(e){s+=e.a;});
+    if(rw>=rh){var cw=s/rh,cy=ry;r.forEach(function(e){var ch=e.a/cw;out.push({item:e.item,x:rx,y:cy,w:cw,h:ch});cy+=ch;});rx+=cw;rw-=cw;}
+    else{var ch2=s/rw,cx=rx;r.forEach(function(e){var cw2=e.a/ch2;out.push({item:e.item,x:cx,y:ry,w:cw2,h:ch2});cx+=cw2;});ry+=ch2;rh-=ch2;}}
+  rest.forEach(function(e){var len=Math.min(rw,rh);if(row.length&&worst(row.concat([e]),len)>worst(row,len)){lay(row);row=[e];}else row.push(e);});
+  if(row.length)lay(row);return out;}
+function nodeAt(path){var n=TREE;path.forEach(function(name){n=(n.children||[]).filter(function(c){return c.name===name;})[0]||n;});return n;}
+function drawMap(){var map=document.getElementById('map'),list=document.getElementById('list');if(!map||!TREE)return;var rem=parseFloat(getComputedStyle(document.documentElement).fontSize)/16;
+  var tb=document.getElementById('mapToggle');if(tb){tb.classList.toggle('on',VIEW==='map');tb.setAttribute('aria-pressed',String(VIEW==='map'));}
+  map.hidden=VIEW!=='map';if(list)list.hidden=VIEW==='map';if(VIEW!=='map'){drawList();drawCrumbs();return;}
+  var node=nodeAt(PATH),kids=(node.children||[]).map(function(c){return {n:c,v:Math.max(0,val(c))};}),shown=kids.filter(function(k){return k.v>0;}),skipped=kids.filter(function(k){return k.v<=0;});
+  var cw=map.clientWidth||800,ch=Math.max(320*rem,Math.min(cw*0.6,640*rem));map.style.height=ch+'px';
+  var rects=[],labels='';
+  if(!PATH.length){   // 맨 위: 차변 | 대변 두 반쪽. 반쪽 안에서 갈래(자산·비용 / 부채·자본·수익)는 위아래 띠, 높이가 금액. 얇은 띠는 얇은 대로 둔다(작은 네모나 마찬가지). 갈래 속부터 트리맵.
+    node.children.forEach(function(half,hi){var ks=(half.children||[]).map(function(c){return {v:Math.max(0,val(c)),n:c,pre:half.name};}).filter(function(k){return k.v>0;}),total=0,y=0;ks.forEach(function(k){total+=k.v;});
+      ks.forEach(function(k){var h=ch*k.v/total;rects.push({item:k,x:hi*cw/2,y:y,w:cw/2,h:h});y+=h;});});}   // 차변·대변 글자는 없다: 왼쪽·오른쪽이 이미 보인다
+  else rects=squarify(shown.map(function(k){return {v:k.v,n:k.n};}),0,0,cw,ch);
+  map.innerHTML=rects.map(function(r,i){var n=r.item.n,kind=n.kind||(node.kind),depth=PATH.length,shade=kind?'color-mix(in srgb,var(--k-'+kind+') '+Math.max(8,26-(PATH.length?i*3:0)-depth*2)+'%,var(--surface))':'var(--surface-2)';   // 옅은 음영: 종류색 26%부터, 자식은 조금씩 더 옅게
+    return '<div class="eqtile'+(n.children?'':' leaf')+(r.y+r.h>=ch-1&&r.h<40*rem?' up':'')+'" data-name="'+esc(n.name)+'"'+(r.item.pre?' data-pre="'+esc(r.item.pre)+'"':'')+' style="left:'+r.x+'px;top:'+r.y+'px;width:'+r.w+'px;height:'+r.h+'px;background:'+shade+'"><span>'+esc(n.name)+(n.meta?' <span class="meta">'+esc(n.meta)+'</span>':'')+'<span class="n">'+won(val(n))+'</span></span></div>';}).join('')+labels;
+  map.querySelectorAll('.eqtile:not(.leaf)').forEach(function(el){el.addEventListener('click',function(){if(el.dataset.pre)PATH.push(el.dataset.pre);PATH.push(el.dataset.name);drawMap();});});
+  drawCrumbs();
+  drawEqLine(skipped);}
+function drawCrumbs(){var crumbs=document.getElementById('crumbs');crumbs.innerHTML='';['전부'].concat(VIEW==='map'?PATH:[]).forEach(function(name,i){if(i&&(name==='차변'||name==='대변'))return;   // 반쪽은 경로에도 안 쓴다
+    var b=document.createElement('button');b.type='button';b.textContent=name;b.classList.toggle('on',i===PATH.length);b.addEventListener('click',function(){PATH=PATH.slice(0,i);drawMap();});crumbs.appendChild(b);});
+  if(VIEW!=='map')drawEqLine([]);}
+function drawEqLine(skipped){var r=TREE.children[0],c=TREE.children[1],part=function(x){return x.name+' '+(x.unseen?'내역 없음':won(val(x)));};
+  document.getElementById('eqline').textContent=r.children.map(part).join(' + ')+' = '+c.children.map(function(x){return part(x)+(x.note&&!x.unseen?'('+x.note+')':'');}).join(' + ')+(skipped.length?' · 면적 없음: '+skipped.map(function(k){return k.n.name;}).join(' · '):'');}
+var TREE=null,VIEW='map';try{VIEW=localStorage.getItem('eqview')||'map';}catch(e){}
+// 트리맵을 끄면 차분한 숫자만: 같은 나무를 파일 탐색기처럼. 계정과목을 누르면 그 자리에서 하위가 펼쳐지고(이동 없음), 다시 누르면 접힌다.
+// 면적이 없는 것(부채 0원, 본 잔액 없는 계좌)도 여기서는 보인다.
+var OPEN={};
+function drawList(){var box=document.getElementById('list');if(!box||!TREE)return;
+  var rows=function(n,path,depth,kind){var key=path.join('/'),k=n.kind||kind,tint=k?' style="--d:'+depth+';background:color-mix(in srgb,var(--k-'+k+') 10%,var(--surface))"':' style="--d:'+depth+'"',open=!!OPEN[key],has=!!(n.children&&n.children.length);
+    var amt=n.unseen||(n.note&&!val(n))?'<span class="mute">'+esc(n.note||'본 적 없음')+'</span>':won(val(n));   // 0원이라 쓰지 않는다
+    var h='<tr'+(has?' class="kid'+(open?' open':'')+'"':'')+' data-key="'+esc(key)+'"'+tint+'><td><span class="tw">'+(has?(open?'▾':'▸'):'')+'</span>'+esc(n.name)+(n.meta?' <span class="meta">'+esc(n.meta)+'</span>':'')+(n.note&&val(n)?' <span class="meta">'+esc(n.note)+'</span>':'')+'</td><td class="n">'+amt+'</td></tr>';
+    if(has&&open)n.children.forEach(function(c){h+=rows(c,path.concat([c.name]),depth+1,k);});return h;};
+  box.classList.add('halves');   // 늘 차변 | 대변 두 열, 그 안에서만 펼친다
+  box.innerHTML=TREE.children.map(function(g){return '<table aria-label="'+esc(g.name)+'"><tbody>'+(g.children||[]).map(function(c){return rows(c,[g.name,c.name],0,null);}).join('')+'</tbody></table>';}).join('');
+  box.querySelectorAll('tr.kid').forEach(function(tr){tr.addEventListener('click',function(){var k=tr.dataset.key;if(OPEN[k])delete OPEN[k];else OPEN[k]=1;drawList();});});}
+function setView(v){VIEW=v;try{localStorage.setItem('eqview',v);}catch(e){}var b=document.getElementById('mapToggle');if(b){b.classList.toggle('on',v==='map');b.setAttribute('aria-pressed',String(v==='map'));}drawMap();}
+(function(){var b=document.getElementById('mapToggle');if(b)b.addEventListener('click',function(){setView(VIEW==='map'?'list':'map');});})();
 // ---- shared chart coordinates; the document and its event listeners survive data changes.
 var allTs=[],today,t0,tEnd;
-var svg=document.getElementById('chart'),W,H,L,R,T,B,X,rem;
+var charts=document.getElementById('charts'),CHARTS=[],L,R,T,B,rem;
+// ---- 지금: 고른 그룹의 현재 상태. 본 잔액의 합과 언제 본 것인지, 계좌마다 잔액과 본 때. 시간에 따른 변화는 아래(다음 단계).
+var HOW={'스냅샷':'잔액 화면','거래 사슬':'거래 내역'};   // 저장된 말은 화면에 안 나온다
+function ago(d){var n=Math.round((dayStart(new Date())-dayStart(d))/DAY);return n===0?'오늘':n===1?'어제':n+'일 전';}
+function drawNow(){if(!document.getElementById('nowbody'))return;var now=new Date(),rows=sheet(now),seen=rows.filter(function(r){return r.v;}),h='';
+  if(!D.accounts.length)h='<p class="mute">아직 본 계좌가 없음</p>';
+  else if(!rows.length)h='<p class="mute">이 그룹에 계좌가 없음</p>';
+  else{
+    var sum=0;seen.forEach(function(r){sum+=r.v[1];});
+    if(!seen.length)h+='<p class="mute">본 잔액 없음</p>';
+    else{
+      h+='<div><span class="disp">'+won(sum).replace('원','')+'</span> <span class="meta">원 · 순자산</span></div>';
+      var lo=null,hi=null;seen.forEach(function(r){var d=dayStart(P(r.v[0]));if(!lo||d<lo)lo=d;if(!hi||d>hi)hi=d;});   // 합은 가장 오래된 값만큼만 새롭다
+      var a=ago(lo),when=lo<hi?fmt(lo)+'–'+fmt(hi)+'에 본 잔액 · '+a:(a.slice(-1)==='전'?fmt(lo)+'에 본 잔액 · '+a:a+' 본 잔액');
+      h+='<div class="mute">'+when+'</div>';
+      // ponytail: D 에 부채 계좌가 아직 없다(카드·대출 화면을 읽은 적 없음). timelineData 가 kind 를 보내면 여기서 liability 를 더해 sum 에서 뺀다.
+      h+='<div class="grid3"><div><span class="lbl">자산</span><span class="key n">'+won(sum)+'</span></div><div><span class="lbl">부채</span><span class="key mute">본 적 없음</span></div></div>';
+    }
+    // 판: 왼쪽은 늘 있는 가계부 바닥(그 안에 용도 그룹 상자와 미분류 노드, 격자 좌표 자유), 오른쪽은 사업자 칸(사업자 상자가 위에서 아래로).
+    // 자리는 lenses.json(x,y)·nodes 에서, 없으면 차례로. 계좌는 실체 하나 또는 가계부 그룹 하나에만.
+    var all=D.accounts.map(function(a){return {id:a.id,app:a.app,v:valueAt(a.id,now)};}),placed={},groups=[],ents=[],free=[];
+    entityLenses().forEach(function(l){var rs=all.filter(function(r){return !placed[r.id]&&l.inside.indexOf(r.id)>=0;});rs.forEach(function(r){placed[r.id]=1;});ents.push({name:l.name,rows:rs,est:3+rs.length*2});});
+    var wide=BOARD_W=Math.max(ents.length?31:15,Math.floor((document.getElementById('nowbody').clientWidth||800)/unit())),ENT_W=ents.length?16:0,homeW=HOME_W=wide-ENT_W,cols=Math.max(1,Math.floor((homeW-1)/15));
+    var hl=homeLenses(),rowH=3+hl.reduce(function(m,l){return Math.max(m,l.inside.length);},0)*2+1;
+    hl.forEach(function(l,i){var rs=all.filter(function(r){return !placed[r.id]&&l.inside.indexOf(r.id)>=0;});rs.forEach(function(r){placed[r.id]=1;});   // 계좌는 상자 하나에만(옛 파일이 겹쳐도)
+      groups.push({name:l.name,rows:rs,x:Math.max(1,Math.min(l.x!=null?l.x:1+(i%cols)*15,homeW-15)),y:Math.max(3,l.y!=null?l.y:3+Math.floor(i/cols)*rowH),est:3+rs.length*2});});
+    var gBottom=groups.reduce(function(m,g){return Math.max(m,g.y+g.est);},3),fcols=Math.max(1,Math.floor((homeW-1)/13));
+    var homeRows=all.filter(function(r){return !inEntity()[r.id];});
+    all.filter(function(r){return !placed[r.id];}).forEach(function(r,i){var n=(D.nodes||{})[r.id];free.push({r:r,x:Math.max(1,Math.min(n?n[0]:1+(i%fcols)*13,homeW-13)),y:Math.max(3,n?n[1]:gBottom+1+Math.floor(i/fcols)*3)});});
+    var ey=2,entsY=[];ents.forEach(function(e){entsY.push(ey);ey+=e.est+1;});
+    var bottom=Math.max(gBottom,free.reduce(function(m,f){return Math.max(m,f.y+3);},0),ey,12)+1;
+    var when=function(v){var d=P(v[0]);return esc(HOW[v[2]]||v[2])+' · '+(/전$/.test(ago(d))?fmt(d):ago(d))+' '+esc(v[0].slice(11));};
+    var card=function(r,cls,style){var v=r.v;return '<div class="acct'+(cls?' '+cls:'')+'" data-account="'+esc(r.id)+'"'+(style?' style="'+style+'"':'')+'><div class="who"><div>'+esc(r.id)+'</div><div class="meta">'+esc(r.app)+' · '+(v?when(v):'본 적 없음')+'</div></div><div class="n">'+(v?won(v[1]):'<span class="mute">—</span>')+'</div></div>';};
+    var subtotal=function(rs){var t=0,seenAny=false;rs.forEach(function(r){if(r.v){t+=r.v[1];seenAny=true;}});return seenAny?won(t):'';};
+    var box=function(g,cls,style){return '<section class="node grp'+cls+(LENS===g.name?' on':'')+'" data-lens="'+esc(g.name)+'" style="'+style+'" aria-label="'+esc(g.name)+'">'+
+        '<header><span>'+esc(g.name)+' <span class="meta">'+g.rows.length+'계좌</span></span><span class="n">'+subtotal(g.rows)+'</span></header>'+
+        (g.rows.length?g.rows.map(function(r){return card(r);}).join(''):'<p class="mute">'+(NATIVE?'계좌를 끌어다 넣기':'계좌 없음')+'</p>')+'</section>';};
+    h+='<div id="board" class="board'+(NATIVE?' native':'')+'" style="height:calc(var(--u)*'+bottom+')" aria-label="계좌 그룹 판">'+
+      '<section class="node home'+(LENS===HOME?' on':'')+'" data-home="1" style="left:0;top:0;width:calc(var(--u)*'+homeW+');height:100%" aria-label="'+esc(HOME)+'"><header><span>'+esc(HOME)+' <span class="meta">'+homeRows.length+'계좌</span></span><span class="n">'+subtotal(homeRows)+'</span></header></section>'+
+      (ents.length?'<section class="node ents" style="left:calc(var(--u)*'+homeW+');top:0;width:calc(var(--u)*'+ENT_W+');height:100%" aria-label="사업자"><header><span class="meta">사업자 · 기업뱅킹에서 읽은 대로</span></header></section>':'')+
+      groups.map(function(g){return box(g,'','left:calc(var(--u)*'+g.x+');top:calc(var(--u)*'+g.y+')');}).join('')+
+      free.map(function(f){return card(f.r,'node free','left:calc(var(--u)*'+f.x+');top:calc(var(--u)*'+f.y+')');}).join('')+
+      ents.map(function(e,i){return box(e,' ent','left:calc(var(--u)*'+(homeW+1)+');top:calc(var(--u)*'+entsY[i]+')');}).join('')+
+      (NATIVE?'<span class="meta hint">상자 머리를 끌어 옮기고 · 계좌를 상자에 넣거나 가계부 바닥으로 빼기 · 머리를 누르면 그 그룹만</span>':'')+'</div>';
+    var unseen=lensInside(LENS).filter(function(n){return !D.accounts.some(function(a){return a.id===n;});});   // 경계 안이지만 본 적 없는 곳(현금 등)
+    if(unseen.length)h+='<p class="meta">못 본 곳: '+unseen.map(esc).join(' · ')+'</p>';
+  }
+  var body=document.getElementById('nowbody');body.innerHTML=h;
+  body.querySelectorAll('.home>header').forEach(function(el){el.addEventListener('click',function(){setLens(LENS===HOME?D.defaultLens:HOME);});});
+  if(NATIVE){body.querySelectorAll('.acct').forEach(function(el){if(el.closest('.ent'))return;el.addEventListener('pointerdown',function(e){startDrag(e,el,'acct');});});   // 사업자 계좌는 사실이라 못 옮긴다
+    body.querySelectorAll('.grp:not(.ent)>header').forEach(function(el){el.addEventListener('pointerdown',function(e){startDrag(e,el.parentNode,'grp');});});}}
+// ---- 판 위에서 끌기: 상자 머리 = 상자 옮기기(놓으면 격자에 맞춤), 계좌 = 상자에 넣기 / 판 위로 빼기. 안 움직이고 놓으면 그 그룹만 보기.
+// 바꾼 건 그 자리에서 먼저 그린다(LensStore 와 같은 규칙). 앱이 서버를 한 바퀴 돌아 확정본을 주면 updateTimeline 이 조용히 덮어쓴다.
+function change(c){var lenses=D.lenses=D.lenses||[],nodes=D.nodes=D.nodes||{};
+  if(c.assign){var a=c.assign;lenses.forEach(function(l){var i=l.inside.indexOf(a.account);if(i>=0)l.inside.splice(i,1);});
+    var l=lenses.filter(function(x){return x.name===a.lens;})[0];if(l){l.inside.push(a.account);delete nodes[a.account];}else if(a.x!=null)nodes[a.account]=[a.x,a.y];}
+  if(c.moveLens){var m=lenses.filter(function(x){return x.name===c.moveLens.lens;})[0];if(m){m.x=c.moveLens.x;m.y=c.moveLens.y;}}
+  if(c.newLens&&lensNames().indexOf(c.newLens)<0)lenses.push({name:c.newLens,inside:[]});
+  applyLens(LENS);drawNow();drawNetWorth();if(range)drawEq();if(selDay)showDay(selDay);
+  post(c);}
+var drag=null,BOARD_W=31,HOME_W=15;
+function unit(){return parseFloat(getComputedStyle(document.documentElement).fontSize)*1.5;}
+function boardEl(){return document.getElementById('board');}
+function startDrag(e,el,kind){if(e.button!==0)return;var b=boardEl().getBoundingClientRect(),r=el.getBoundingClientRect();
+  drag={kind:kind,el:el,ghost:null,sx:e.clientX,sy:e.clientY,ox:e.clientX-r.left,oy:e.clientY-r.top,b:b,moved:false,account:el.dataset.account,lens:kind==='grp'?el.dataset.lens:(el.closest('.grp')||{dataset:{}}).dataset.lens||null};
+  e.preventDefault();document.addEventListener('pointermove',onDragMove);document.addEventListener('pointerup',onDragEnd,{once:true});}
+function groupAt(e){var p=[e.clientX,e.clientY];if(drag&&drag.ghost){var r=drag.ghost.getBoundingClientRect();p=[r.left+r.width/2,r.top+r.height/2];}   // 노드의 가운데가 상자 안이면 그 상자
+  var hit=document.elementsFromPoint(p[0],p[1]).filter(function(x){return x.classList&&x.classList.contains('grp')&&!x.classList.contains('ent')&&!x.classList.contains('dragging');})[0];return hit||null;}
+function onDragMove(e){if(!drag)return;
+  if(!drag.moved){if(Math.abs(e.clientX-drag.sx)+Math.abs(e.clientY-drag.sy)<4)return;drag.moved=true;
+    if(drag.kind==='acct'&&!drag.el.classList.contains('free')){var g=drag.el.cloneNode(true);g.classList.add('node','free','dragging');boardEl().appendChild(g);drag.el.style.visibility='hidden';drag.ghost=g;}
+    else{drag.ghost=drag.el;drag.el.classList.add('dragging');}}
+  drag.ghost.style.left=(e.clientX-drag.b.left-drag.ox)+'px';drag.ghost.style.top=(e.clientY-drag.b.top-drag.oy)+'px';
+  if(drag.kind==='acct'){var t=groupAt(e);boardEl().querySelectorAll('.grp.over').forEach(function(x){if(x!==t)x.classList.remove('over');});if(t&&t.dataset.lens!==drag.lens)t.classList.add('over');}}
+function onDragEnd(e){document.removeEventListener('pointermove',onDragMove);var d=drag;if(!d)return;
+  if(!d.moved){drag=null;if(d.kind==='grp')setLens(LENS===d.lens?D.defaultLens:d.lens);return;}
+  var u=unit(),px=(e.clientX-d.b.left)/u,toEnt=px>=HOME_W,x=Math.max(1,Math.min(HOME_W-(d.kind==='grp'?15:13),Math.round((e.clientX-d.b.left-d.ox)/u))),y=Math.max(3,Math.round((e.clientY-d.b.top-d.oy)/u));
+  d.ghost.style.left='calc(var(--u)*'+x+')';d.ghost.style.top='calc(var(--u)*'+y+')';d.ghost.classList.remove('dragging');
+  if(d.kind==='grp'){drag=null;change({moveLens:{lens:d.lens,x:x,y:y}});return;}
+  var t=groupAt(e);drag=null;boardEl().querySelectorAll('.grp.over').forEach(function(g){g.classList.remove('over');});
+  if(t&&t.dataset.lens!==d.lens)change({assign:{account:d.account,lens:t.dataset.lens}});
+  else if(t||toEnt)drawNow();                                     // 제자리(사업자 칸엔 놓을 수 없다)
+  else change({assign:{account:d.account,lens:null,x:x,y:y}});}   // 가계부 바닥으로(미분류)
+// 그룹별 타임라인: 그룹마다 제 눈금의 작은 차트(저축 1억이 가계부 100만을 납작하게 만들지 않게). 그룹을 고르면 그 차트 하나.
+function seriesList(){var ids=function(f){return D.accounts.filter(f).map(function(a){return a.id;});},e=inEntity(),out=[];
+  if(LENS===D.defaultLens){out.push({name:HOME,ids:ids(function(a){return !e[a.id];})});   // 실체 단위: 가계부 하나 + 실체마다 하나
+    entityLenses().forEach(function(l){var g=ids(function(a){return l.inside.indexOf(a.id)>=0;});if(g.length)out.push({name:l.name,ids:g});});return out;}
+  if(LENS===HOME){var placed={};   // 가계부 안: 용도 그룹마다 하나 + 미분류
+    homeLenses().forEach(function(l){var g=ids(function(a){return !e[a.id]&&!placed[a.id]&&l.inside.indexOf(a.id)>=0;});g.forEach(function(id){placed[id]=1;});if(g.length)out.push({name:l.name,ids:g});});
+    var rest=ids(function(a){return !e[a.id]&&!placed[a.id];});if(rest.length||!out.length)out.push({name:out.length?'미분류':HOME,ids:rest});return out;}
+  return [{name:LENS,ids:ids(inLens)}];}
+function sumAt(ids,t){var s=0;ids.forEach(function(id){var v=valueAt(id,t);if(v)s+=v[1];});return s;}
+// 정사각 패킹: 그룹마다 정사각형, 한 변 = √금액(면적 = 지금 금액). 큰 것부터 왼쪽, 나머지는 오른쪽에 위에서 아래로 쌓아 열을 채운다.
+// 전체를 열 너비와 최대 높이에 맞춰 한 번 축척. 가로세로가 늘 같아 어느 칸을 키워도 같은 모양의 선이다.
+function packSquares(items,cw,chh){if(!items.length)return {rects:[],w:0,h:0};
+  var sides=items.map(function(i){return Math.sqrt(i.v);}),S=sides[0],x=S,y=0,colW=0,rects=[{item:items[0],x:0,y:0,s:S}];
+  for(var i=1;i<items.length;i++){var sd=sides[i];if(y>0&&y+sd>S){x+=colW;y=0;colW=0;}rects.push({item:items[i],x:x,y:y,s:sd});y+=sd;colW=Math.max(colW,sd);}
+  var totalW=x+colW,k=Math.min(cw/totalW,chh/S);
+  return {rects:rects.map(function(r){return {item:r.item,x:r.x*k,y:r.y*k,w:r.s*k,h:r.s*k};}),w:totalW*k,h:S*k};}
+function xOf(sv,t){var l=sv._l||0;return l+(t-t0)/(tEnd-t0)*(sv._w-2*l);}   // 칸마다 제 여백
 function drawNetWorth() {
-  rem=parseFloat(getComputedStyle(document.documentElement).fontSize)/16;H=200*rem;L=R=8*rem;T=16*rem;B=26*rem;
-  W=svg.clientWidth||800;
-  svg.setAttribute('viewBox','0 0 '+W+' '+H);
-  X=function(t){return L+(t-t0)/(tEnd-t0)*(W-L-R);};
-  var times=allTs.slice();for(var d=new Date(t0);d<=tEnd;d=addDays(d,1))times.push(new Date(d));times.sort(function(a,b){return a-b;});
-  var pts=times.map(function(t){return [t,total(t).sum];}),ys=pts.map(function(p){return p[1];}),ymin=Math.min.apply(null,ys),ymax=Math.max.apply(null,ys);
-  if(ymax===ymin){ymax+=1;ymin-=1;}var pad=(ymax-ymin)*0.15;ymin-=pad;ymax+=pad;
-  var Y=function(v){return T+(1-(v-ymin)/(ymax-ymin))*(H-T-B);};
-  var g='',nDays=Math.round((tEnd-t0)/DAY);
-  for(var d=new Date(t0);d<=tEnd;d=addDays(d,1)){var x=X(d);if(d.getDate()===1)g+='<line class="grid" x1="'+x+'" y1="'+T+'" x2="'+x+'" y2="'+(H-B)+'"/>';
-    if(d<tEnd&&(nDays<45||d.getDate()===1))g+='<text class="axis" x="'+(x+3*rem)+'" y="'+(H-8*rem)+'">'+fmt(d)+'</text>';}
-  var path='';pts.forEach(function(p,i){var x=X(p[0]),y=Y(p[1]);path+=(i?'H'+x+'V'+y:'M'+x+' '+y);});path+='H'+X(tEnd);
-  g+='<path class="nw" d="'+path+'"/>';
-  g+='<rect id="pinr" class="pin" x="0" y="'+T+'" width="0" height="'+(H-T-B)+'" style="display:none"/>';
-  g+='<line id="hov" class="hover" x1="0" y1="'+T+'" x2="0" y2="'+(H-B)+'" style="display:none"/><text id="htext" class="htext" x="0" y="'+(T+10*rem)+'"></text>';
-  for(var d=new Date(t0);d<tEnd;d=addDays(d,1))g+='<rect class="dayhit" data-t="'+d.getTime()+'" x="'+X(d)+'" y="0" width="'+(X(addDays(d,1))-X(d))+'" height="'+H+'"/>';
-  svg.innerHTML=g;
+  if(!charts)return;
+  rem=parseFloat(getComputedStyle(document.documentElement).fontSize)/16;
+  DAYS=[];for(var d=new Date(t0);d<tEnd;d=addDays(d,1))DAYS.push(new Date(d));   // 하루 단위: 날마다 그날 끝(24:00)의 값 하나
+  var now=new Date(),list=seriesList().map(function(s){return {name:s.name,ids:s.ids,seen:s.ids.some(function(id){return valueAt(id,now);}),v:sumAt(s.ids,now)};});
+  charts.style.width='';var cw=charts.clientWidth||800,chh=Math.max(224*rem,Math.min(cw*0.5,480*rem));   // rem 은 16px 기준 배율; 너비는 열 전체에서 다시 잰다(지난 판 크기에 갇히지 않게)
+  // 면적 = 지금 금액, 작은 그룹은 작게(올리거나 눌러 키운다). 본 잔액 없음·음수는 면적이 없으니 목록.
+  var pos=list.filter(function(s){return s.seen&&s.v>0;}).sort(function(a,b){return b.v-a.v;}),outside=list.filter(function(s){return pos.indexOf(s)<0;});
+  var packed=packSquares(pos,cw,chh),rects=packed.rects;charts.style.height=Math.max(packed.h,pos.length?0:48*rem)+'px';charts.style.width=(pos.length?packed.w:cw)+'px';CHARTS=rects.map(function(r){return r.item;});
+  charts.innerHTML=rects.map(function(r){var s=r.item;return '<figure class="tile'+(LENS===s.name?' on':'')+'" style="left:'+r.x+'px;top:'+r.y+'px;width:'+r.w+'px;height:'+r.h+'px"><figcaption><span>'+esc(s.name)+' <span class="meta">'+s.ids.length+'계좌</span></span><span class="n">'+won(s.v)+'</span></figcaption><svg role="img" aria-label="'+esc(s.name)+' 순자산 추이"></svg></figure>';}).join('')+'<div class="hoverlay" id="hoverlay"></div>';
+  var note=document.getElementById('chartsNote');
+  note.hidden=!outside.length;note.textContent=outside.length?'면적 밖: '+outside.map(function(s){return s.name+' '+(s.seen?won(s.v)+' (음수)':'본 잔액 없음');}).join(' · '):'';
+  charts.querySelectorAll('.tile').forEach(function(fig,i){var r=rects[i];fig._small=r.w<48*rem;drawTile(fig,CHARTS[i],r.w,r.h);   // 너무 작은 네모는 올려도 반응하지 않는다(큰 차트를 올리면 값이 간접으로 뜬다); 누르면 커진다
+    fig.addEventListener('pointerenter',function(){if(!fig._small)zoomTile(fig,true);});
+    fig.addEventListener('pointerleave',function(){if(!fig._sticky)zoomTile(fig,false);});
+    fig.querySelector('figcaption').addEventListener('click',function(e){e.stopPropagation();fig._sticky=!fig._sticky;zoomTile(fig,fig._sticky);});   // 아이패드: 머리를 눌러 키우고 다시 눌러 되돌림
+    fig.addEventListener('click',function(){if(fig._small&&!fig.classList.contains('zoom')){fig._sticky=true;zoomTile(fig,true);}});});
+  if(selDay)pinDay(selDay);
 }
-svg.addEventListener('pointermove',function(e){var t=new Date(t0.getTime()+(e.offsetX-L)/(W-L-R)*(tEnd-t0));if(t<t0||t>tEnd)return;var h=document.getElementById('hov'),ht=document.getElementById('htext');
-  h.style.display='';h.setAttribute('x1',X(t));h.setAttribute('x2',X(t));ht.textContent=fmtFull(dayStart(t))+' '+won(total(t).sum);ht.setAttribute('x',Math.min(X(t)+6*rem,W-170*rem));});
-svg.addEventListener('pointerleave',function(){document.getElementById('hov').style.display='none';document.getElementById('htext').textContent='';});
-svg.addEventListener('click',function(e){var r=e.target.closest('.dayhit');if(r)showDay(new Date(+r.dataset.t));});
+var DAYS=[];
+// 칸 하나의 선: 칸 크기(w×h px)에 맞춰 제 눈금으로. 좁으면 이름·금액을 두 줄로, 달 이름은 넓을 때만.
+function drawTile(fig,s,w,h){var sv=fig.querySelector('svg'),cap=fig.querySelector('figcaption');
+  var iw=Math.max(8,w-2),ih=Math.max(8,h-2);sv._w=iw;sv._h=ih;sv.style.height=ih+'px';sv.setAttribute('viewBox','0 0 '+iw+' '+ih);
+  cap.classList.remove('bare');fig.style.width=w+'px';   // 제목: 한 줄에 다 들어가면 전부, 아니면 이름만(… 없이, 삐져나와도 그대로)
+  if(!fig.classList.contains('zoom')&&capNeeds(cap)>cap.clientWidth)cap.classList.add('bare');
+  sv._l=iw*0.04;   // 여백은 칸 크기의 비율: 작은 칸도 큰 칸과 같은 모양
+  var pts=DAYS.map(function(d){return [d,sumAt(s.ids,addDays(d,1))];}),ys=pts.map(function(p){return p[1];}),ymin=Math.min(0,Math.min.apply(null,ys)),ymax=Math.max(0,Math.max.apply(null,ys));   // 바닥은 0: 면적 = 돈 × 시간; 값은 그날 끝
+  if(ymax===ymin)ymax+=1;var pad=(ymax-ymin)*0.15;ymax+=pad;if(ymin<0)ymin-=pad;
+  var top=ih*0.16,bot=ih*0.12,Y=function(v){return top+(1-(v-ymin)/(ymax-ymin))*(ih-top-bot);},g='',X=function(t){return xOf(sv,t);},wide=iw>256*rem,nDays=Math.round((tEnd-t0)/DAY);sv._Y=Y;sv._bot=bot;sv._wide=wide;
+  for(var d=new Date(t0);d<=tEnd;d=addDays(d,1)){var x=X(d);if(d.getDate()===1)g+='<line class="grid" x1="'+x+'" y1="'+top+'" x2="'+x+'" y2="'+(ih-bot)+'"/>';
+    if(wide&&d<tEnd&&(nDays<45||d.getDate()===1))g+='<text class="axis" x="'+(x+3*rem)+'" y="'+(ih-bot*0.35)+'">'+fmt(d)+'</text>';}
+  var base=Y(0),path='M'+X(pts[0][0])+' '+base;pts.forEach(function(p){path+='V'+Y(p[1])+'H'+X(addDays(p[0],1));});path+='V'+base+'Z';   // 날마다 계단 하나
+  g+='<path class="area" d="'+path+'"/>';
+  g+='<rect class="pin" x="0" y="'+top+'" width="0" height="'+(ih-top-bot)+'" style="display:none"/>';
+  g+='<line class="hover hov" x1="0" y1="'+top+'" x2="0" y2="'+(ih-bot)+'" style="display:none"/>';
+  for(var d=new Date(t0);d<tEnd;d=addDays(d,1))g+='<rect class="dayhit" data-t="'+d.getTime()+'" x="'+X(d)+'" y="0" width="'+(X(addDays(d,1))-X(d))+'" height="'+ih+'"/>';
+  sv.innerHTML=g;}
+function capNeeds(cap){var need=8*rem;Array.prototype.forEach.call(cap.children,function(x){need+=x.scrollWidth;});return need;}   // flex 자식은 줄어드니 내용 폭은 자식의 scrollWidth 로
+// 올리거나 누르면 그 칸이 읽을 만한 정사각형(21rem, 판 안에서)으로 커지고, 떠나면 제 면적으로.
+function zoomTile(fig,on){var i=Array.prototype.indexOf.call(charts.children,fig),s=CHARTS[i];if(!s)return;
+  if(on){if(!fig._rect)fig._rect={l:fig.style.left,t:fig.style.top,w:fig.style.width,h:fig.style.height};
+    var cw=charts.clientWidth,chh=charts.clientHeight,side=Math.min(cw,chh,Math.max(parseFloat(fig._rect.w),336*rem)),w=side,h=side;   // 키워도 정사각형
+    var l=Math.max(0,Math.min(parseFloat(fig._rect.l),cw-w)),t=Math.max(0,Math.min(parseFloat(fig._rect.t),chh-h));
+    fig.style.left=l+'px';fig.style.top=t+'px';fig.style.width=w+'px';fig.style.height=h+'px';fig.classList.add('zoom');drawTile(fig,s,w,h);}
+  else if(fig._rect){var r=fig._rect;fig._rect=null;fig.style.left=r.l;fig.style.top=r.t;fig.style.width=r.w;fig.style.height=r.h;fig.classList.remove('zoom');drawTile(fig,s,parseFloat(r.w),parseFloat(r.h));}
+  if(selDay)pinDay(selDay);}
+function pinDay(day){var end=addDays(day,1);charts.querySelectorAll('svg').forEach(function(sv){var pin=sv.querySelector('.pin');pin.style.display='';pin.setAttribute('x',xOf(sv,day));pin.setAttribute('width',xOf(sv,end)-xOf(sv,day));});}
+if(charts)charts.addEventListener('pointermove',function(e){var sv=e.target.closest('svg');if(!sv||(sv.parentNode._small&&!sv.parentNode.classList.contains('zoom')))return;var r=sv.getBoundingClientRect(),l=sv._l||0,t=new Date(t0.getTime()+((e.clientX-r.left)*(sv._w/r.width)-l)/(sv._w-2*l)*(tEnd-t0));if(t<t0||t>tEnd)return;
+  var day=dayStart(t),end=addDays(day,1);t=end;   // 하루로 양자화: 세로 줄은 그날 끝, 값도 그날 끝
+  var lay=document.getElementById('hoverlay'),html='',colW=(charts.parentNode&&charts.parentNode.clientWidth)||charts.clientWidth;   // 라벨은 열 끝까지 나갈 수 있다(판 오른쪽 빈자리)
+  charts.querySelectorAll('svg').forEach(function(s,i){var h=s.querySelector('.hov'),x=xOf(s,t),fig=s.parentNode,v=sumAt(CHARTS[i].ids,t);h.style.display='';h.setAttribute('x1',x);h.setAttribute('x2',x);
+    var gx=fig.offsetLeft+1+x,flip=gx+120*rem>colW?' flip':'';   // 금액은 그 차트의 값 높이에, 판 위 오버레이라 작은 칸 밖으로 나가도 보인다; 열 끝에 닿을 때만 왼쪽으로
+    html+='<span class="hval'+flip+'" style="left:'+gx+'px;top:'+(fig.offsetTop+1+s._Y(v))+'px">'+won(v)+'</span>';
+    if(s._wide)html+='<span class="hdate" style="left:'+gx+'px;top:'+(fig.offsetTop+1+s._h-s._bot)+'px">'+fmtFull(day)+'</span>';});   // 날짜는 넓은 칸에서 세로 줄 끝 바로 밑(축 띠)에
+  if(lay)lay.innerHTML=html;});
+if(charts)charts.addEventListener('pointerleave',function(){charts.querySelectorAll('.hov').forEach(function(h){h.style.display='none';});var lay=document.getElementById('hoverlay');if(lay)lay.innerHTML='';});
+if(charts)charts.addEventListener('click',function(e){var r=e.target.closest('.dayhit');if(r)showDay(new Date(+r.dataset.t));});
 // ---- range nav
 var RANGES={'오늘':function(){return [today,addDays(today,1)];},'7일':function(){return [addDays(today,-6),addDays(today,1)];},
   '이번 달':function(){return [new Date(today.getFullYear(),today.getMonth(),1),addDays(today,1)];},
   '지난 달':function(){return [new Date(today.getFullYear(),today.getMonth()-1,1),new Date(today.getFullYear(),today.getMonth(),1)];}};
-var chips=document.getElementById('chips');Object.keys(RANGES).forEach(function(k){var b=document.createElement('button');b.type='button';b.textContent=k;b.onclick=function(){setRange(k);};chips.appendChild(b);});
+var chips=document.getElementById('chips');if(chips)Object.keys(RANGES).forEach(function(k){var b=document.createElement('button');b.type='button';b.textContent=k;b.onclick=function(){setRange(k);};chips.appendChild(b);});
 var range=null,selDay=null;
-function setRange(k){range=k;chips.querySelectorAll('button').forEach(function(b){var active=b.textContent===k;b.classList.toggle('on',active);b.setAttribute('aria-pressed',String(active));});drawEq();}
+function setRange(k){if(!chips)return;range=k;chips.querySelectorAll('button').forEach(function(b){var active=b.textContent===k;b.classList.toggle('on',active);b.setAttribute('aria-pressed',String(active));});drawEq();}
 // ---- bottom: per day, observed change vs explained change (income − spend); the difference is what the ledger did not see
-function drawEq(){rem=parseFloat(getComputedStyle(document.documentElement).fontSize)/16;var ab=RANGES[range](),a=ab[0],b=ab[1],days=[];
+function drawEq(){if(!document.getElementById('eq'))return;rem=parseFloat(getComputedStyle(document.documentElement).fontSize)/16;var ab=RANGES[range](),a=ab[0],b=ab[1],days=[];
   for(var d=new Date(a);d<b;d=addDays(d,1)){var o=observed(d,addDays(d,1)),f=flows(d,addDays(d,1));days.push({d:d,obs:o.sum,exp:f.inc-f.out,inc:f.inc,out:f.out,n:o.n});}
   var e=document.getElementById('eq'),w=e.clientWidth||800,h=160*rem,l=8*rem,rr=8*rem,t=16*rem,bb=26*rem;e.setAttribute('viewBox','0 0 '+w+' '+h);
   var vals=[];days.forEach(function(x){vals.push(x.obs,x.exp,x.obs-x.exp);});var m=Math.max.apply(null,vals.map(Math.abs).concat([1]));
@@ -102,11 +356,11 @@ function drawEq(){rem=parseFloat(getComputedStyle(document.documentElement).font
   document.getElementById('eqsum').innerHTML='<div class="grid3"><div><span class="lbl">관측 증감</span><span class="key n">'+signed(O)+'</span></div>'+
     '<div><span class="lbl">설명 = 수입 − 지출</span><span class="key n">'+signed(E)+'</span><div class="meta">'+won(I)+' − '+won(U)+'</div></div>'+
     '<div><span class="lbl">미관측 = 관측 − 설명</span><span class="key n'+(Math.abs(O-E)>0?' strong':'')+'">'+signed(O-E)+'</span><div class="meta">'+(Math.abs(O-E)>0?'경계 밖 돈':'장부 닫힘')+'</div></div></div>';}
-document.getElementById('eq').addEventListener('click',function(e){var r=e.target.closest('.dayhit');if(r)showDay(new Date(+r.dataset.t));});
+if(document.getElementById('eq'))document.getElementById('eq').addEventListener('click',function(e){var r=e.target.closest('.dayhit');if(r)showDay(new Date(+r.dataset.t));});
 // ---- a day: summary, account balances, and transaction evidence links.
 function balanceTable(start, end) {
-  var rows = D.accounts.map(function(account, i) {
-    var before = start[i].v, after = end[i].v;
+  var rows = start.map(function(account, i) {              // sheet() rows: 고른 그룹의 계좌만(id·app·v), start/end 같은 순서
+    var before = account.v, after = end[i].v;
     var missing = '<span class="mute">—</span>';
     return '<tr><td>' + esc(account.id) + ' <span class="meta">' + esc(account.app) + '</span></td>' +
       '<td class="n">' + (before ? won(before[1]) : missing) + '</td>' +
@@ -142,7 +396,7 @@ function daySummary(day, start, end, flow, observation) {
   var unexplained = observation.sum - (flow.inc - flow.out);
   return '<header class="sec"><h2 id="day-title">' + fmtFull(day) +
     '</h2><span class="r">00:00 → 24:00 KST</span></header>' +
-    '<div><span class="disp">' + won(end.sum).replace('원', '') + '</span> <span class="meta">원 · 끝</span></div>' +
+    '<div><span class="key">' + won(end.sum).replace('원', '') + '</span> <span class="meta">원 · 끝</span></div>' +
     '<div class="grid3"><div><span class="lbl">시작 순자산</span><span class="n">' + won(start.sum) + '</span></div>' +
     '<div><span class="lbl">관측 증감</span><span class="n">' + signed(observation.sum) + '</span></div>' +
     '<div><span class="lbl">수입 − 지출</span><span class="n">' + signed(flow.inc - flow.out) + '</span></div>' +
@@ -151,12 +405,11 @@ function daySummary(day, start, end, flow, observation) {
 }
 
 function showDay(day) {
+  if(!document.getElementById('panel'))return;
   selDay = day;
   post({day: fmtFull(day)});
-  var end = addDays(day, 1), flow = flows(day, end), pin = document.getElementById('pinr');
-  pin.style.display = '';
-  pin.setAttribute('x', X(day));
-  pin.setAttribute('width', X(end) - X(day));
+  var end = addDays(day, 1), flow = flows(day, end);
+  pinDay(day);
   var panel = document.getElementById('panel');
   panel.innerHTML = daySummary(day, total(day), total(end), flow, observed(day, end)) +
     balanceTable(sheet(day), sheet(end)) + transactionTable(flow);
@@ -164,15 +417,15 @@ function showDay(day) {
 }
 
 // One parent owns transaction navigation even when a new day replaces its rows.
-document.getElementById('panel').addEventListener('click', function(event) {
+if(document.getElementById('panel'))document.getElementById('panel').addEventListener('click', function(event) {
   var row = event.target.closest('tr[data-uid]');
   if (row) post({evidence: row.dataset.uid, day: fmtFull(selDay)});
 });
 // New committed values replace only the chart/table contents, retaining the user's reading position.
 function updateTimeline(data) {
   var scrollX=window.scrollX,scrollY=window.scrollY;
-  D=data;
-  INS={};D.inside.forEach(function(account){INS[account]=1;});
+  D=data;HOME=D.home||'가계부';
+  applyLens(LENS&&lensNames().indexOf(LENS)>=0?LENS:(D.lens&&lensNames().indexOf(D.lens)>=0?D.lens:D.defaultLens));
   allTs=[];
   Object.keys(D.series).forEach(function(account){
     D.series[account].forEach(function(point){allTs.push(P(point[0]));});
@@ -180,11 +433,20 @@ function updateTimeline(data) {
   today=dayStart(new Date());
   t0=dayStart(allTs.length?new Date(Math.min.apply(null,allTs)):today);
   tEnd=addDays(today,1);
-  drawNetWorth();
-  if(!range)setRange('7일');
-  showDay(selDay||today);
+  TREE=eqTree();drawMap();
+  if(document.getElementById('nowbody'))drawNow();
+  if(document.getElementById('charts'))drawNetWorth();
+  if(document.getElementById('eq')){if(!range)setRange('7일');showDay(selDay||today);}
   window.scrollTo(scrollX,scrollY);
 }
+function applyLens(name){LENS=name;INS={};lensInside(name).forEach(function(a){INS[a]=1;});renderLenses();}
+function setLens(name){applyLens(name);post({lens:name});drawNow();if(charts)drawNetWorth();if(document.getElementById('panel'))showDay(selDay||today);}
+function renderLenses(){var nav=document.getElementById('lenses');if(!nav)return;var had=nav.contains(document.activeElement);nav.innerHTML='';
+  lensNames().forEach(function(name){var b=document.createElement('button');b.type='button';b.textContent=name;b.classList.toggle('on',name===LENS);b.setAttribute('aria-pressed',String(name===LENS));
+    b.addEventListener('click',function(){setLens(name);});nav.appendChild(b);});
+  if(NATIVE){var add=document.createElement('button');add.type='button';add.textContent='+ 그룹';add.title='가계부 안 그룹 이름 (생활비·저축…)';
+    add.addEventListener('click',function(){var name=prompt('가계부 안 그룹 이름 (생활비·저축…)');if(name&&name.trim())change({newLens:name.trim()});});nav.appendChild(add);}
+  if(had)(nav.querySelector('.on')||nav.firstChild).focus();}
 if(D)updateTimeline(D);
 </script>
 </body>

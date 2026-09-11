@@ -30,6 +30,8 @@ final class AppState: ObservableObject {
     @Published var windowsWindowVisible = false
     /// The records page is showing (the control window is parked). Only the controller flips it.
     @Published private(set) var recordsFocused = false
+    /// 기록 영역이 화면에 있음(집중 모드이거나, 평상시 제어 열에 상태 뷰로). 집중이 아니어도 보이면 페이지는 살아 있어야 한다.
+    @Published var recordsOnScreen = false
     @Published private(set) var recordsFocusRequest = 0
     @Published var recordsFocusMessage: String?
 
@@ -94,7 +96,6 @@ final class AppState: ObservableObject {
     @Published var evidenceFocus: EvidenceFocus? = nil   // the 증빙·전표 window; nil until first open
     enum Tab: String, CaseIterable { case timeline, evidence, accounting, playbooks, health, spatial }
     @Published var tab: Tab = .timeline                  // what the workbench shows in either size mode
-    @Published var voiceOn = AppSettings.wakeWord        // the "뽀미야" listener (설정 › 음성, saved)
     @Published var listening = false                     // a voice conversation is open (after 뽀미야, until 그만 or 25 s quiet)
     /// A question from another process (the MCP server) or the voice session's tools, waiting for a workbench button.
     @Published var ask: (id: String, text: String, options: [String])? = nil
@@ -105,7 +106,6 @@ final class AppState: ObservableObject {
     @Published var voiceOpen = 0                         // bumps: open it (`Ppomi --voice` left "voice:open" in the state table)
 
     func talk() { voiceToggle += 1 }
-    func toggleGreet() { greetOnArrival.toggle(); try? askDB?.setState("greet:on", greetOnArrival ? "1" : "0") }
 
     /// Poll the state table every second (Tools.askViaDB leaves questions there, `--voice` its trigger); a new question
     /// highlights the approval area and shows the workbench in its current size mode.
@@ -219,7 +219,7 @@ final class AppState: ObservableObject {
     func reloadLedger() {
         if SharedRecordVault.enabled {
             if sharedRecordsMonitor == nil { watchLedger() }
-            else { sharedRecordsMonitor?.request() }
+            else { sharedRecordsMonitor?.request(only: ["ledger"]) }   // 방금 고친 건 장부(그룹·자리)뿐: 한 기록만 왕복
             return
         }
         do {
@@ -271,7 +271,6 @@ final class AppState: ObservableObject {
     var statusLine: String {
         if listening { return "대화 중 · " + phaseLine }
         if case .idle = phase, !Permissions.ready { return "손과 눈 권한이 아직 없어요 · 설정 › 시작하기" }
-        if case .idle = phase, voiceOn { return phaseLine + " · 뽀미야 라고 부르면 들음" }
         return phaseLine
     }
 
