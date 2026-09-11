@@ -37,6 +37,14 @@ Android는 앱이 보이는 상태에서 사용자가 시작한 대화를 유지
 
 접근성 미연결·허용하지 않은 앱·설치되지 않은 앱·변경된 화면·보호 동작은 구분된 실패로 모델에 전달한다. 기기 예외 원문은 전달하지 않는다. 금융·인증·권한 변경 등 보호 동작은 현재 음성 실행기로 승인할 수 없으며 사용자가 직접 처리한다. 화면 읽기와 실제 결과 확인 없이 완료를 주장하지 않는다.
 
+## 플레이북 스텝 기록 (작업대)
+
+`src/ui/highlight-overlay.tsx`와 `src/ui/step-timeline.tsx`는 ppomi-body 의 `StepResult` / `Evidence`를 props로만 받는다(`packages/ppomi-body`에서 직접 가져오며 `playbook-runtime` 심은 쓰지 않는다). 타임라인은 `driver`·`attempt`·대상과, 있을 때 구조화 `code`를 보여 준다. 좌표·세션 노드 ID·기록된 스크린샷 경로는 DOM에 넣지 않는다. 픽스처 JSON은 `src/ui/fixtures/`, 스토리는 `storybook/step-result-views.stories.jsx`.
+
+`src/ui/step-record-panel.tsx`의 `StepRecordPanel`(「스텝 기록」)이 둘을 조합한다. `RunResult.stepResults`를 `steps`로 받고 선택 상태를 스스로 갖는다(카드 클릭, ↑↓·Home·End). 증빙 스크린샷은 `screenshots` 리졸버가 브라우저가 그릴 수 있는 URL(object/data/https)로 바꿔 줄 때만 보인다. 라이브 대화·에이전트 루프에는 아직 연결하지 않는다 — 오케스트레이터가 나중에 붙인다.
+
+`src/ui/step-record-fixture-run.ts`의 `runFixturePlaybook(surface)`은 런타임 코어 `Runtime`이 인메모리 드라이버로 작은 픽스처 ppomi-path 를 실행해 방출한 `RunResult.stepResults`를 그대로 돌려준다(비동기) — `"os"`는 `OsSurface`(확인 클릭이 시간 초과 → 사람 차례), `"page"`는 `PageSurface`(결제 클릭이 `effect: "commit"` → 코어가 사람에게 넘김). 모든 변경 스텝은 `effect`를 선언하고, 런타임이 남기지 않은 증빙은 붙이지 않는다. 픽스처 페이지 `StepRecordPreview`와 스토리 「스텝 기록 / 런타임 실행」·「런타임 실행 · 페이지」가 이 결과를 그려 emit → 뷰를 라이브 드라이버 없이 확인한다.
+
 ## 개발
 
 ```sh

@@ -102,3 +102,12 @@
 .step-card[data-status="failed"] .step-card-status { color: var(--bad); }
 
 .step-result-preview { display: grid; gap: .75rem; min-width: 0; }
+
+/* 작업대 기록 패널 「스텝 기록」: 머리 · 증빙 오버레이(또는 한 줄) · 타임라인. 색은 토큰만. */
+.step-record-panel { display: grid; gap: .75rem; min-width: 0; align-content: start; }
+.step-record-header { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; }
+.step-record-title { margin: 0; color: var(--fg); font-size: var(--fs-3); font-weight: 500; }
+.step-record-count, .step-record-empty, .step-record-no-evidence { margin: 0; color: var(--fg-2); font-size: var(--fs-2); }
+.step-record-count { font-variant-numeric: tabular-nums; }
+.step-record-empty { padding: 1.5rem 0; text-align: center; }
+.step-record-no-evidence { padding: .75rem; border: 1px dashed var(--line-2); border-radius: var(--r); }
