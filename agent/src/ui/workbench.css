@@ -149,8 +149,9 @@
   color: var(--fg);
   font: inherit;
 }
-.step-card:focus-visible { outline: 2px solid var(--accent-fg); outline-offset: 2px; }
-.step-card[aria-pressed="true"] { outline: 2px solid var(--accent-fg); outline-offset: 2px; }
+/* Focus is the workbench ink ring; selection is a fill plus an inset accent bar, so the two never look alike. */
+.step-card:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.step-card[aria-pressed="true"] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
 .step-card-status { font-size: var(--fs-1); font-weight: 500; color: var(--fg-2); }
 .step-card-title { font-size: var(--fs-3); font-weight: 500; }
 .step-card-meta, .step-card-summary, .step-card-timing { font-size: var(--fs-2); color: var(--fg-2); }
