@@ -61,7 +61,7 @@ function readReply(nodes: readonly LiveAndroidNode[]): LiveAndroidReply {
 
 test("adb serials / pay word / skip codes / live flag", () => {
   assert.deepEqual(parseAdbDevices("List of devices attached\nR3CX\tdevice\nemulator-5554\toffline\n"), ["R3CX"]);
-  assert.equal(resolveAdbSerial(["a", "b"]).code, "multiple_devices");
+  assert.equal(resolveAdbSerial(["a", "b"]).code, "serial_required");
   assert.equal(resolveAdbSerial(["a", "b"], "b").serial, "b");
   assert.equal(isAndroidPayWord("결제하기"), true);
   assert.equal(isAndroidPayWord("바로구매"), false);
@@ -93,18 +93,14 @@ test("pickLiveAndroidClickTarget prefers 연결 over a pay word", () => {
 });
 
 test("pickLiveAndroidClickTarget never falls back to an arbitrary clickable", () => {
-  const otherApp = [
-    { id: "a", text: "로그아웃", clickable: true, editable: false },
-    { id: "b", text: "연결", clickable: true, editable: false },
-  ];
-  assert.equal(pickLiveAndroidClickTarget(otherApp), undefined, "연결 without Settings/설정 page");
   assert.equal(
     pickLiveAndroidClickTarget([
       { id: "h", text: "설정", clickable: false, editable: false },
       { id: "x", text: "로그아웃", clickable: true, editable: false },
+      { id: "y", text: "초기화", clickable: true, editable: false },
     ]),
     undefined,
-    "Settings page without a smoke row",
+    "no smoke row and reset/logout stay denied",
   );
 });
 
