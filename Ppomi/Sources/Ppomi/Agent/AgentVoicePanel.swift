@@ -13,8 +13,10 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
     var onSurfaceHint: ((WorkSurface) -> Void)?
     /// Marks to draw over the docked window (tap rings, validated fields, reading sweep, a VLM line).
     var onOverlay: ((OverlayMark) -> Void)?
-    /// Workbench Home → KB (same Tools.path_cold_start as the control toolbar).
+    /// Smoke button: run path_cold_start from the title bar. Chat happy path uses executeTool instead.
     var onPathColdStart: (() -> Void)?
+    /// Chat already ran path_cold_start; apply the same workbench stop as the smoke button.
+    var onPathResult: ((String) -> Void)?
     var onClose: (() -> Void)?
     /// When this returns a host, the conversation is mounted there instead of opening its own window.
     var host: (() -> ConversationHost?)?
@@ -312,6 +314,9 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
                             guard MCPServer.tools.contains(where: { $0.name == name }), let mcp = self.mcp else { throw AgentNativeError.invalidRequest }
                             let r = mcp.call(name, payload)
                             let text = ((r["content"] as? [[String: Any]]) ?? []).compactMap { $0["type"] as? String == "text" ? $0["text"] as? String : nil }.joined(separator: "\n")
+                            if name == "path_cold_start" {
+                                DispatchQueue.main.async { [weak self] in self?.onPathResult?(text) }
+                            }
                             return ["text": text, "error": (r["isError"] as? Bool) ?? false] as [String: Any]
                         }
                     }
@@ -333,7 +338,7 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
     static func surfaceHint(for tool: String, args: [String: Any]) -> WorkSurface? {
         if tool.hasPrefix("windows_") { return .windows }
         if tool.hasPrefix("android_") { return .android }
-        if tool.hasPrefix("phone_") || tool == "run_combo" || tool == "bank_profile_capture" || tool == "inbody_capture" { return .iphone }
+        if tool.hasPrefix("phone_") || tool == "run_combo" || tool == "path_cold_start" || tool == "bank_profile_capture" || tool == "inbody_capture" { return .iphone }
         if tool == "profile_fill" { return ((args["form"] as? String) ?? "").hasPrefix("kb_enterprise") ? .iphone : .windows }
         if tool == "screen_inspect" { return (args["surface"] as? String) == "windows" ? .windows : .iphone }
         return nil

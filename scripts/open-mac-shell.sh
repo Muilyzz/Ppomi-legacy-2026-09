@@ -2,7 +2,7 @@
 # Open the existing 뽀미.app Mac shell. No new package. No store / notarized signing.
 # Finder: double-click scripts/open-mac-shell.command
 # CLI:    scripts/open-mac-shell.sh [--build] [--dry-run] [--self-check]
-# Test in the main app (Home → KB), not packages/*/example.
+# Test in the main app chat (one line, not the Home → KB button), not packages/*/example.
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
@@ -41,10 +41,11 @@ v0.2 Mac 셸 = 이미 있는 뽀미.app. 새 패키지 없음.
 CEO 한 줄:
   1. 이 스크립트 또는 scripts/open-mac-shell.command 로 뽀미.app 을 연다.
   2. 나(아바타)에서 Google 로그인(선택). 작업대가 열리면 이 Mac 이 플릿에 붙는다 (DeviceRegistry.attach).
-  3. 제어 머리띠 또는 대화 창의 **Home → KB** 를 누른다.
+  3. 채팅에 **KB 사업자 계좌 읽어줘** 라고 보낸다. **Home → KB** 버튼은 누르지 않는다.
+     에이전트가 path_cold_start(app: kb-enterprise) 를 호출한다.
      iPhone 미러링이 붙은 뒤 Home(phone_key home) → KB스타기업뱅킹 열기(phone_open).
      Face ID·로그인 화면에서 멈춘다. 계좌·비밀은 읽지 않는다.
-  같은 동작: Ppomi --mcp 의 path_cold_start(app: kb-enterprise)
+  같은 동작: Ppomi --mcp 에 같은 한 줄을 보내 path_cold_start(app: kb-enterprise)
 
 web / Clerk (ppomi-web, who — 앱 로그인과 별개):
   cd "$ROOT/web" && test -f .env.local || cp .env.example .env.local
@@ -78,6 +79,7 @@ self_check() {
     echo "$out" | grep -q 'ppomi-web' || { echo "self-check: missing ppomi-web" >&2; exit 1; }
     echo "$out" | grep -q 'ppomi-hub' || { echo "self-check: missing ppomi-hub" >&2; exit 1; }
     echo "$out" | grep -q 'path_cold_start' || { echo "self-check: missing path_cold_start" >&2; exit 1; }
+    echo "$out" | grep -q 'KB 사업자 계좌' || { echo "self-check: missing chat line" >&2; exit 1; }
     echo "$out" | grep -q 'Home → KB' || { echo "self-check: missing Home → KB" >&2; exit 1; }
     echo "$out" | grep -q 'example 아님' || { echo "self-check: missing main-app-not-example" >&2; exit 1; }
     echo "$out" | grep -q '/account' || { echo "self-check: missing /account" >&2; exit 1; }

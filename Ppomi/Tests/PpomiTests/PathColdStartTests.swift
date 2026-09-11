@@ -43,10 +43,29 @@ final class PathColdStartTests: XCTestCase {
         XCTAssertTrue(hands.isEmpty)
     }
 
+    @MainActor func testChatPathResultDocksIPhoneAndStopsAtHumanLoginWithoutSecrets() {
+        let state = AppState()
+        state.applyPathColdStart("멈춤: 사람 로그인(Face ID). 이 Mac · macos · 온라인. 계좌·비밀은 읽지 않음.")
+        XCTAssertEqual(state.workSurface, .iphone)
+        XCTAssertFalse(state.pathBusy)
+        XCTAssertTrue(state.pathStatus?.contains("멈춤") == true, state.pathStatus ?? "")
+        XCTAssertFalse(state.pathStatus?.contains("123456") == true)
+        XCTAssertFalse(state.pathStatus?.contains("계좌번호") == true)
+        if case .humanTurn(let reason) = state.phase {
+            XCTAssertTrue(reason.contains("Face ID"), reason)
+        } else {
+            XCTFail("expected humanTurn, got \(state.phase)")
+        }
+        XCTAssertEqual(AgentVoicePanel.surfaceHint(for: "path_cold_start", args: ["app": "kb-enterprise"]), .iphone)
+    }
+
     func testBundledKBEnterpriseDeclaresHomeThenOpenThenHumanLogin() throws {
         let record = try XCTUnwrap(PlaybookCatalog.resolve("kb-enterprise"))
         let cap = try XCTUnwrap(record.manifest.capabilities.first { $0.id == "cold-start-open" })
         XCTAssertEqual(cap.steps.map(\.id), ["go-home", "open-kb", "human-login"])
         XCTAssertEqual(cap.steps.map(\.kind), ["close", "open", "human"])
+        XCTAssertTrue(record.manifest.capabilities.first { $0.id == "cold-start-open" }?.description.contains("path_cold_start") == true)
+        XCTAssertTrue(record.guideText.contains("KB 사업자 계좌"))
+        XCTAssertTrue(record.guideText.contains("버튼을 누르지 않는다") || record.guideText.contains("누르지 않는다"))
     }
 }

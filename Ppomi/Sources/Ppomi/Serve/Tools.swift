@@ -357,7 +357,7 @@ final class Tools {
         T("windows_open", "Windows에서 URL(기본 브라우저의 새 탭) 또는 프로그램 이름을 연다(Win+R). app에 플레이북 ID를 주면 그 URL을 연다. launch.target=windows(exe 설치·공동인증서 사이트)인 플레이북의 기본 경로.", ["target": ("string", "URL 또는 프로그램"), "app": ("string", "플레이북 ID 또는 이름")]),
         T("run_combo", "아는 길을 두뇌 없이 재생한다. 낯선 화면·승인 지점·사용자 차례에서 멈추고 마지막 화면을 돌려준다. 폰 앱 작업은 phone_screen 전에 이걸 먼저 불러라.",
           ["app": ("string", "플레이북 ID 또는 앱 이름(비우면 마지막으로 연 앱)"), "max_steps": ("integer", "기본 12")]),
-        T("path_cold_start", "뽀미.app 작업대에서 KB스타기업뱅킹을 콜드스타트한다: phone_key home 후 phone_open. Face ID·로그인은 사람 차례에서 멈춘다. 계좌번호·비밀번호를 읽거나 반환하지 않는다. packages/*/example 이 아니다.",
+        T("path_cold_start", "채팅에서 KB스타기업뱅킹·사업자 계좌 요청이 오면 바로 호출한다: phone_key home 후 phone_open. Face ID·로그인은 사람 차례에서 멈춘다. 계좌번호·비밀번호를 읽거나 반환하지 않는다. Home → KB 버튼은 스모크이며 사람에게 누르라고 시키지 않는다. packages/*/example 이 아니다.",
           ["app": ("string", "기본 kb-enterprise")]),
         T("phone_wait", "폰이 ‘사용 중’(미러링 끊김)이거나 사람이 폰에서 로그인·인증을 하는 동안 폰이 다시 잠겨 미러링이 붙을 때까지 기다린다(최대 seconds초, 기본 90). 되묻거나 턴을 끝내는 대신 이걸 부르고, 결과가 ‘연결됨’이면 같은 단계를 이어간다.", ["seconds": ("integer", "5~150, 기본 90")]),
         T("phone_installed", "이름을 준 앱들이 폰에 설치돼 있는지 Spotlight로 확인한다. 결제 수단을 고를 때: 토스(토스페이), 카카오톡(카카오페이), 네이버(네이버페이), 페이코 같은 결제앱 중 설치된 것만 고르라.",

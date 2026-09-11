@@ -1,6 +1,6 @@
 # KB스타기업뱅킹
 
-**메인 앱에서 테스트한다.** 작업대 제어 머리띠 또는 대화 창의 **Home → KB** (MCP `path_cold_start`). `packages/*/example` 이 아니다. Home 후 앱을 열고 Face ID·로그인에서 멈춘다.
+**메인 앱 채팅에서 테스트한다.** 한 줄: `KB 사업자 계좌 읽어줘`. 에이전트가 `path_cold_start(app: kb-enterprise)` 를 호출한다. **Home → KB** 버튼은 스모크일 뿐 누르지 않는다. `packages/*/example` 이 아니다. Home 후 앱을 열고 Face ID·로그인에서 멈춘다.
 
 ## 목적과 범위
 

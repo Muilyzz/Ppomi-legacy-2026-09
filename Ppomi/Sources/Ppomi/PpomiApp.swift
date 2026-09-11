@@ -99,6 +99,7 @@ struct PpomiApp: App {
         let conversation = AgentVoicePanel()
         conversation.onSurfaceHint = { [weak s] surface in s?.selectSurface(surface) }   // the workbench docks the window the assistant is driving
         conversation.onPathColdStart = { [weak s] in s?.runKBColdStart() }
+        conversation.onPathResult = { [weak s] result in s?.applyPathColdStart(result) }
         let workbench = KioskController(state: s, conversation: conversation)
         kiosk = workbench
         conversation.onOverlay = { mark in workbench.showMark(mark) }   // taps, filled fields and reading drawn over the docked window
