@@ -2,12 +2,14 @@ import { NativeBridge, NativeBridgeError, type Bootstrap, type NativeFailureCode
 import type { ChatHost } from "../agent/src/chat-host";
 import { BootstrapReadiness } from "../agent/src/update-readiness";
 
-/** Offline preview of the actual chat panel. No native hooks, credentials or network transport. */
-export function createStoryChatHost(patch: Partial<Bootstrap> = {}): ChatHost {
+/** Offline preview of the actual chat panel. No native hooks, credentials or network transport.
+ *  `patch` overrides the bootstrap; a function is read on every bootstrap so a story can stand in for an executor whose
+ *  state changes (the Windows shell before and after the owner's approval). */
+export function createStoryChatHost(patch: Partial<Bootstrap> | (() => Partial<Bootstrap>) = {}): ChatHost {
   let active = false, responses = 0;
   const bootstrap = (): Bootstrap => ({
     platform: "macos", deviceLabel: "오프라인 미리보기", configured: true,
-    endpoint: "https://preview.invalid", tools: [], ...patch,
+    endpoint: "https://preview.invalid", tools: [], ...(typeof patch === "function" ? patch() : patch),
   });
   const bridge = new NativeBridge(raw => {
     const request = JSON.parse(raw) as { id: string; method: string; args: Record<string, unknown> };

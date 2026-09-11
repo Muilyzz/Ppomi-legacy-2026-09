@@ -20,6 +20,10 @@ uuid = { version = "1", features = ["v4"] }
 [target.'cfg(not(target_os = "android"))'.dependencies]
 tokio = { version = "1", features = ["process", "io-util", "sync", "time", "rt", "macros"] }
 tauri-plugin-dialog = "2.7.2"
+# Google sign-in round trip: system browser out, ppomi://auth deep link back into the one running instance.
+tauri-plugin-opener = "2"
+tauri-plugin-deep-link = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 tauri-plugin-ppomi-executor = { path = "../plugins/tauri-plugin-ppomi-executor" }

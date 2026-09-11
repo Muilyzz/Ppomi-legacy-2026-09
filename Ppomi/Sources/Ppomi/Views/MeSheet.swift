@@ -10,6 +10,9 @@ struct MeSheet: View {
     @State private var unlocking = false
     @State private var signingIn = false
     @State private var error: String?
+    @State private var pending: [PendingDevice] = []   // 승인을 기다리는 기기(Windows·iPad·새 Mac·웹). 이 Mac 이 승인해야 기록 키를 받는다
+    @State private var deciding: String?
+    private let pendingRefresh = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,6 +39,29 @@ struct MeSheet: View {
                         Text("아이패드와 같은 계정으로 로그인하면 같은 장부를 봅니다").font(.ppomi(1)).foregroundStyle(.fg2)
                     }
                 }
+                if let account, account.registered {
+                    Section("기기 승인") {
+                        if pending.isEmpty {
+                            Text("승인을 기다리는 기기가 없습니다").foregroundStyle(.fg2)
+                        }
+                        ForEach(pending) { device in
+                            HStack(spacing: 10) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(device.label)
+                                    Text(device.platformName).font(.ppomi(1)).foregroundStyle(.fg2)
+                                }
+                                Spacer()
+                                if deciding == device.id { ProgressView().controlSize(.ppomiSmall) }
+                                Button("승인") { Task { await decide(device, approve: true) } }
+                                Button("거절", role: .destructive) { Task { await decide(device, approve: false) } }
+                            }
+                            .disabled(deciding != nil)
+                            .accessibilityElement(children: .contain)
+                            .accessibilityLabel("\(device.label) · \(device.platformName) 승인 대기")
+                        }
+                        Text("같은 Google 계정으로 로그인한 새 기기입니다. 승인한 기기에만 이 Mac 이 기록 키를 감싸 전달합니다").font(.ppomi(1)).foregroundStyle(.fg2)
+                    }
+                }
                 if account != nil {
                     if unlocked {
                         IdentityProfilesView()
@@ -57,6 +83,26 @@ struct MeSheet: View {
         .frame(width: 480 * max(1, AppSettings.uiScale), height: 620 * max(1, AppSettings.uiScale))
         .ppomiTheme()
         .onAppear { unlocked = IdentityVault.shared.isUnlocked }
+        .task { await loadPending() }
+        .onReceive(pendingRefresh) { _ in Task { await loadPending() } }
+    }
+
+    /// 승인 대기 목록. 로그인·등록 전이거나 서버가 닿지 않으면 비운다(오류 배너는 결정할 때만).
+    private func loadPending() async {
+        guard account?.registered == true, deciding == nil else { return }
+        let devices = await Task.detached { try? GoogleAccount.pendingDevices() }.value
+        if let devices, devices != pending { pending = devices }
+    }
+    private func decide(_ device: PendingDevice, approve: Bool) async {
+        deciding = device.id; error = nil
+        defer { deciding = nil }
+        do {
+            try await Task.detached {
+                if approve { try GoogleAccount.approve(device.id) } else { try GoogleAccount.revoke(device.id) }
+            }.value
+            pending.removeAll { $0.id == device.id }
+        } catch { self.error = (approve ? "승인 실패: " : "거절 실패: ") + SharedServerClient.safe(error).description }
+        await loadPending()
     }
 
     private func unlock() async {

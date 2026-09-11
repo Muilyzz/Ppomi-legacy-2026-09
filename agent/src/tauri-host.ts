@@ -16,6 +16,15 @@ export function tauriTransport(receive: (reply: Reply) => void): (message: strin
   };
 }
 
+/** Presentation state of the Windows Google account. Never a token, email or key. */
+export type ExecutorAccount = {
+  signedIn: boolean;
+  registered: boolean;
+  approved: boolean;
+  pendingApproval: boolean;
+  recordKey?: boolean;
+  displayName?: string | null;
+};
 export type ExecutorStatus = {
   platform: "macos" | "windows" | "android";
   active: boolean;
@@ -23,8 +32,12 @@ export type ExecutorStatus = {
   approval?: { id: string; text: string; options: string[] } | null;
   availableApps?: { label: string; packageName: string; allowed: boolean }[];
   capabilities?: Record<string, unknown>;
+  /** Windows: mirrors bootstrap.configured so the panel can refresh when the owner's approval arrives. */
+  configured?: boolean;
+  account?: ExecutorAccount;
 };
-export type ManagementAction = "status" | "answerApproval" | "setControlApps" | "openSettings" | "openAccount" | "openRecords" | "configureDevice";
+export type ManagementAction = "status" | "answerApproval" | "setControlApps" | "openSettings" | "openAccount" | "openRecords" | "configureDevice"
+  | "signIn" | "signOut" | "refreshAccount";
 
 /** This API is used by app settings and human approval controls, never by createAgentTools. */
 export async function manageExecutor<T>(action: ManagementAction, args: object = {}): Promise<T> {

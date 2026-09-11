@@ -71,6 +71,33 @@ final class GoogleSessionTests: XCTestCase {
         XCTAssertEqual(session.refreshToken, "synthetic-new-refresh")
     }
 
+    func testPendingDevicesAreApprovedByExplicitRPCBeforeAnyKeyExchange() throws {
+        let session = account()
+        let windows = "7f4a1c2e-3b5d-4e6f-8a9b-0c1d2e3f4a5b"
+        var calls: [(name: String, body: String)] = []
+        let client = SharedServerClient(configuration: { nil }, session: { session }, deviceID: { self.deviceID }) { request in
+            let name = request.url?.lastPathComponent ?? ""
+            calls.append((name, String(decoding: request.httpBody ?? Data(), as: UTF8.self)))
+            switch name {
+            case "ppomi_devices_pending":
+                return .init(data: Data(#"[{"id":"\#(windows.uppercased())","label":"Windows","platform":"windows"},{"id":"not-a-device","label":"x","platform":"web"}]"#.utf8), status: 200)
+            case "ppomi_device_approve":
+                return .init(data: Data(#"{"device":{"id":"\#(windows)","label":"Windows","platform":"windows","approved":true}}"#.utf8), status: 200)
+            default:
+                return .init(data: Data(#"{"found":false}"#.utf8), status: 200)   // no key on this test Mac: nothing to wrap, nothing to receive
+            }
+        }
+        let pending = try GoogleAccount.pendingDevices(client)
+        XCTAssertEqual(pending.map(\.id), [windows])   // malformed rows are dropped, IDs are normalized
+        XCTAssertEqual(pending.first?.platformName, "Windows")
+        try GoogleAccount.approve(windows, client)
+        XCTAssertEqual(calls.map(\.name).prefix(2), ["ppomi_devices_pending", "ppomi_device_approve"])
+        XCTAssertTrue(calls[1].body.contains(windows))
+        XCTAssertEqual(calls.count, 3)   // approval is followed by exactly one key-exchange round
+        XCTAssertThrowsError(try GoogleAccount.approve("not-a-device", client))
+        XCTAssertEqual(calls.count, 3)   // an invalid ID never reaches the server
+    }
+
     func testLegacyConfigurationDoesNotMeanGoogleSignedIn() {
         let client = SharedServerClient(configuration: {
             SharedServerConfiguration(url: "https://abcdefghijklmnopqrst.supabase.co", publishableKey: "sb_publishable_syntheticpublicvalue123456789",

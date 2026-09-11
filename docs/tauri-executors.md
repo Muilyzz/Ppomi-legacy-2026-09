@@ -57,8 +57,14 @@ Android는 `npm --prefix shell run android:init` 후 JDK/SDK/NDK 환경에서
 
 Rust 셸에는 `executor_request`와 UI 관리용 `executor_manage`만 열려 있다.
 프로세스 경로·임의 셸 명령·범용 파일시스템 플러그인을 웹뷰에 노출하지 않는다.
-사용자 확인 응답, 기기 등록 파일 선택, 앱 허용 변경은 모델 도구가 아니다.
+사용자 확인 응답, 기기 등록 파일 선택, 앱 허용 변경, 계정 동작(`signIn`·`signOut`·`refreshAccount`)은 모델 도구가 아니다.
 확인 응답은 실행기의 현재 질문 ID/선택지와 일치해야 한다.
+
+데스크톱의 `signIn`은 실행기의 `beginSignIn`이 돌려준 Supabase 구글 authorize 주소(프로젝트 호스트의 HTTPS
+`/auth/v1/authorize`만)를 tauri-plugin-opener로 **시스템 브라우저**에 열고, 브라우저가 돌려보내는
+`ppomi://auth?code=…` 딥 링크(tauri-plugin-deep-link, 두 번째 인스턴스는 tauri-plugin-single-instance가
+실행 중인 창으로 넘긴다)를 실행기의 `completeSignIn`에 전달한다. 웹뷰는 주소·코드·토큰을 보지 못한다.
+Windows 번들만 `ppomi` 스킴을 등록한다(`tauri.windows.conf.json`); macOS 는 Swift 계정 창이 스스로 로그인한다.
 
 일반 사용자에게 서버 주소를 입력받지 않는다. 기존 제품의
 `PpomiServer.agentEndpoint`와 같은 기본 서비스 주소를 실행기에 둔다.
@@ -105,9 +111,12 @@ Android Tauri 앱은 기존 APK와 다른 앱 ID를 사용한다. 기존 데이�
 공통 Tauri 채팅의 필수 경로가 아니지만, 기기별 백그라운드 음성·IME·권한 동작의
 실기기 검증과 출시 정책 검토는 별도로 필요하다.
 
-Windows와 Android에는 Google 로그인 구현이 아직 없다. 로그인 버튼이나 로그인
-완료 상태를 가장하지 않는다. 현재 Windows는 개발용 기기 파일 등록, Android는
-debug 전용 provisioning 경로로 시험한다. 소비자용 계정 연결은 후속 이식 범위다.
+Windows는 Mac·iPad와 같은 Google 로그인(Supabase PKCE)으로 기기를 등록하고, 소유자가
+Mac의 나 › 기기 승인에서 승인해야 `configured`가 된다([Windows 실행기](windows-executor.md)).
+Windows의 `로그인`/`나`는 앱 안의 계정 시트(로그인 전 · Mac 승인 대기 · 기기 등록됨)를 열고,
+설정 시트에는 `제어할 앱`만 남는다(개발용 기기 파일 등록은 `PPOMI_DEVELOPER_DEVICE_IMPORT=1`일 때만).
+Android에는 Google 로그인 구현이 아직 없다. 로그인 버튼이나 로그인 완료 상태를 가장하지 않는다.
+Android는 debug 전용 provisioning 경로로 시험하며, 소비자용 계정 연결은 후속 이식 범위다.
 macOS 계정 시트에서 돌아와도 공통 대화 문서와 입력 초안은 유지하며 bootstrap만
 새로 읽어 로그인 상태를 갱신한다.
 활성 대화에서는 계정 창을 열 수 없고, 계정 창이 열려 있는 동안에는 새 대화를

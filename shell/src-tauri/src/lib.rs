@@ -6,9 +6,13 @@ mod media_macos;
 mod media_windows;
 #[cfg(not(target_os = "android"))]
 mod desktop;
+#[cfg(not(target_os = "android"))]
+mod account;
 
 use protocol::{failure, Request};
 use serde_json::{json, Value};
+#[cfg(not(target_os = "android"))]
+use tauri::Emitter;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 fn trusted(window: &WebviewWindow) -> bool {
@@ -43,6 +47,41 @@ async fn executor_request(app: AppHandle, window: WebviewWindow, request: Reques
     reply
 }
 
+/// Google sign-in (desktop): the executor mints the Supabase authorize URL, the system browser shows Google, and the
+/// `ppomi://auth?code=…` deep link comes back through the single running instance. Only the executor sees tokens.
+#[cfg(not(target_os = "android"))]
+async fn sign_in(app: &AppHandle, id: String) -> Value {
+    use tauri_plugin_opener::OpenerExt;
+    let begun = dispatch(app, account::begin_frame()).await;
+    if let Some(error) = begun.get("error") { return json!({"id": id, "error": error}); }
+    let url = begun.get("result").and_then(|result| result.get("url")).and_then(Value::as_str).and_then(|text| tauri::Url::parse(text).ok());
+    let Some(url) = url.filter(account::is_authorize_url) else { return failure(&id, "sign_in_failed"); };
+    let callbacks = app.state::<account::SignInCallback>();
+    let receiver = callbacks.arm();
+    if app.opener().open_url(url.as_str(), None::<&str>).is_err() { callbacks.disarm(); return failure(&id, "sign_in_failed"); }
+    // The person may take a while in the browser. This wait only bounds the account sheet's "signing in" state: the executor
+    // keeps the PKCE verifier for ten minutes (GoogleAccount.cs PendingSignIn), and a callback that arrives after the wait is
+    // still handed to it by complete_late_sign_in. A newer attempt replaces this waiter, which then fails.
+    let callback = match tokio::time::timeout(std::time::Duration::from_secs(300), receiver).await {
+        Ok(Ok(callback)) => callback,
+        Ok(Err(_)) => return failure(&id, "sign_in_failed"),
+        Err(_) => { callbacks.disarm(); return failure(&id, "sign_in_timeout"); }
+    };
+    dispatch(app, account::complete_frame(id, callback)).await
+}
+
+/// A `ppomi://auth` callback nobody waits for: the person finished in the browser after the sign-in wait had ended. The
+/// executor still judges the code with its own verifier. Success shows through the panel's status poll; a stale code earns
+/// one visible notice instead of being dropped in silence.
+#[cfg(not(target_os = "android"))]
+async fn complete_late_sign_in(app: &AppHandle, callback: String) {
+    let reply = dispatch(app, account::complete_frame(uuid::Uuid::new_v4().to_string(), callback)).await;
+    let Some(error) = reply.get("error") else { return; };
+    let text = if error.get("code").and_then(Value::as_str) == Some("sign_in_failed") { "로그인 시간이 지났어요. 계정 창에서 다시 시도해 주세요." }
+        else { "Google 로그인을 완료하지 못했습니다. 계정 창에서 다시 시도해 주세요." };
+    let _ = app.emit_to("main", "ppomi-executor", json!({"event": "notice", "payload": {"text": text}}));
+}
+
 /// Settings and human answers are separate from the model's request channel.
 #[tauri::command]
 async fn executor_manage(app: AppHandle, window: WebviewWindow, action: String, args: Value) -> Value {
@@ -55,6 +94,14 @@ async fn executor_manage(app: AppHandle, window: WebviewWindow, action: String, 
         "openSettings" => ("openSettings", json!({})),
         "openAccount" => ("openAccount", json!({})),
         "openRecords" => ("openRecords", json!({})),
+        "signIn" => {
+            #[cfg(not(target_os = "android"))]
+            { return sign_in(&app, id).await; }
+            #[cfg(target_os = "android")]
+            { ("openAccount", json!({})) }
+        }
+        "signOut" => ("signOut", json!({})),
+        "refreshAccount" => ("refreshAccount", json!({})),
         "configureDevice" => {
             #[cfg(not(target_os = "android"))]
             {
@@ -78,14 +125,35 @@ async fn executor_manage(app: AppHandle, window: WebviewWindow, action: String, 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default().manage(media::MediaPolicy::default());
+    let builder = tauri::Builder::default();
+    // Single instance first: a `ppomi://auth` deep link launched by the browser must reach this window, not a second one.
     #[cfg(not(target_os = "android"))]
-    let builder = builder.manage(desktop::Executor::default()).plugin(tauri_plugin_dialog::init());
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        if let Some(window) = app.get_webview_window("main") { let _ = window.set_focus(); }
+    }));
+    let builder = builder.manage(media::MediaPolicy::default());
+    #[cfg(not(target_os = "android"))]
+    let builder = builder.manage(desktop::Executor::default()).manage(account::SignInCallback::default())
+        .plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_opener::init()).plugin(tauri_plugin_deep_link::init());
     #[cfg(target_os = "android")]
     let builder = builder.plugin(tauri_plugin_ppomi_executor::init());
     let app = builder
         .invoke_handler(tauri::generate_handler![executor_request, executor_manage])
         .setup(|app| {
+            #[cfg(not(target_os = "android"))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                // Installers register ppomi:// too; registering here covers `tauri dev` and portable runs (no schemes are configured on macOS).
+                #[cfg(any(target_os = "windows", target_os = "linux"))]
+                let _ = app.deep_link().register_all();
+                let handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    if let account::Delivery::Unclaimed(callback) = handle.state::<account::SignInCallback>().deliver(&event.urls()) {
+                        let app = handle.clone();
+                        tauri::async_runtime::spawn(async move { complete_late_sign_in(&app, callback).await });
+                    }
+                });
+            }
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("뽀미").inner_size(1000.0, 780.0).min_inner_size(360.0, 480.0)
                 .incognito(true)

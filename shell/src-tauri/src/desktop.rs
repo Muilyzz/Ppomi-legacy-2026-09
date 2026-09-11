@@ -38,7 +38,12 @@ impl Connection {
             return failure(&id, "native_unavailable");
         }
         // A native approval or long playbook can remain pending; other requests, especially Stop, keep flowing.
-        let timeout = if request.method == "executeTool" { Duration::from_secs(900) } else { Duration::from_secs(60) };
+        // Completing a sign-in is two server round trips (token exchange, device registration) that the executor bounds at 90 s.
+        let timeout = match request.method.as_str() {
+            "executeTool" => Duration::from_secs(900),
+            "completeSignIn" => Duration::from_secs(120),
+            _ => Duration::from_secs(60),
+        };
         match tokio::time::timeout(timeout, receive).await {
             Ok(Ok(value)) => value,
             Ok(Err(_)) => failure(&id, "native_unavailable"),

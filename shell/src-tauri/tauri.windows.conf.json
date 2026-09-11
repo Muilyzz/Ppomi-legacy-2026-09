@@ -1,3 +1,4 @@
 {
-  "bundle": {"resources": {"resources/executor/": "executor/"}}
+  "bundle": {"resources": {"resources/executor/": "executor/"}},
+  "plugins": {"deep-link": {"desktop": {"schemes": ["ppomi"]}}}
 }
