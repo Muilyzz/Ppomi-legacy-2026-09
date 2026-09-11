@@ -86,7 +86,7 @@ class AsyncDummyAdapter implements OsUiDriver {
   }
 }
 
-function virtualClock(onSleep: (elapsed: number) => void): RuntimeOptions {
+function virtualClock(onSleep: (elapsed: number) => void): Omit<RuntimeOptions, "driver"> {
   let clock = 0;
   const advance = (ms: number): void => {
     clock += ms;

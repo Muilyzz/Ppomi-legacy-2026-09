@@ -35,8 +35,8 @@ export {
   type StepClass,
   type UiDriver,
 } from "./runtime-core.ts";
-export { PlaybookRuntime } from "./playbook-runtime.ts";
-export { PagePlaybookRuntime } from "./page-playbook-runtime.ts";
+export { PlaybookRuntime, type PlaybookRuntimeOptions } from "./playbook-runtime.ts";
+export { PagePlaybookRuntime, type PagePlaybookRuntimeOptions } from "./page-playbook-runtime.ts";
 export type {
   MaybePromise,
   Permission,

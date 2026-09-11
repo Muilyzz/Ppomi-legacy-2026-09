@@ -13,7 +13,7 @@ There is **one runtime loop**, `Runtime`, and **two surfaces** it can drive thro
 | `OsSurface` | `OsUiDriver` (`readScreen` / `focus` / `click` / `type`, `kind`) | screen texts, accessible-name `target` | `driver-windows` (UIA), `driver-macos` (AX), `driver-android`, `driver-iphone-mirroring`; fixtures via `DummyAdapter` |
 | `PageSurface` | `BrowserPageDriver` (`readPage` / `goto` / `click` / `fill` / `waitFor`) | url + page texts + locators, `locator` / `url` | `driver-playwright`; fixtures via `DummyPageAdapter` |
 
-Every driver name is defined in `src/drivers.ts`. `OsAdapter`, `OsAdapterKind`, `BrowserPageAdapter`, `AdapterTimeoutError` and `StepAdapter` remain as deprecated aliases until the sibling packages rename. `PlaybookRuntime` and `PagePlaybookRuntime` remain as thin, deprecated, synchronous wrappers over the core so existing drivers and tests keep working (see *Compatibility*).
+Every driver name is defined in `src/drivers.ts`. `OsAdapter`, `OsAdapterKind`, `BrowserPageAdapter`, `AdapterTimeoutError` and `StepAdapter` remain as deprecated aliases until the sibling packages rename. `PlaybookRuntime` and `PagePlaybookRuntime` remain as thin, deprecated, synchronous wrappers over the core so existing ports keep **compiling**; each sibling needs one line to keep **running** (see *Compatibility*).
 
 ```ts
 import { DummyAdapter, FixedPermissionGate, OsSurface, Runtime } from "playbook-runtime";
@@ -44,7 +44,18 @@ Ppomi onboarding and playbook packages have **no device-approval or Mac-approver
 
 ## Compatibility
 
-`PlaybookRuntime(driver, gate)` and `PagePlaybookRuntime(driver, gate)` call `runSync` with `undeclaredMutations: "run"`: legacy playbooks whose mutations have no `effect` still execute there, while a declared `commit` is handed off. New code uses `Runtime` directly and declares `effect` on every mutation. `waitFor` still works; prefer `read` with `require: { locators: [...], wait }`. `parseStepResult` accepts `adapter` as a deprecated alias of `driver`; dumps emit `driver` only.
+`PlaybookRuntime(port, gate)` and `PagePlaybookRuntime(port, gate)` call `runSync` with `undeclaredMutations: "run"`: legacy playbooks whose mutations have no `effect` still execute there, while a declared `commit` is handed off. New code uses `Runtime` directly and declares `effect` on every mutation. `waitFor` still works; prefer `read` with `require: { locators: [...], wait }`. `parseStepResult` accepts `adapter` as a deprecated alias of `driver`; dumps emit `driver` only.
+
+Every `StepResult` names its driver, and the runtime never guesses it: an `OsUiDriver` that does not declare `kind` makes each run `invalid` (`unknown_driver`) until one of these one-line changes lands in the sibling package —
+
+| Sibling | One-line change |
+| --- | --- |
+| `adapter-windows` (#7), `driver-windows` live (#15) | `readonly kind = "os-windows" as const;` on the port class, or `new PlaybookRuntime(port, gate, { driver: "os-windows" })` in the smoke test |
+| `adapter-macos` (#10) | `readonly kind = "os-macos" as const;`, or `{ driver: "os-macos" }` |
+| `adapter-android` (#20), `adapter-iphone-mirroring` (#21) | `"os-android"` / `"phone"` likewise |
+| `adapter-playwright` (#11 / #13) | nothing for `driver` (page runs are always `page`); `tsconfig.json` gains `"extends": "../tsconfig.base.json"` like every package here |
+
+All siblings compile the core through relative imports, so they also need the `extends` line above to typecheck it (node types instead of the DOM lib).
 
 ## Tests
 
