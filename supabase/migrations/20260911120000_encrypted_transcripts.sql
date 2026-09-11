@@ -128,9 +128,11 @@ returns bytea language sql stable security definer set search_path = '' as $$
     select public.ppomi_at_rest_master_key();
 $$;
 
+-- encode(..., 'base64') wraps lines at 76 columns; strip the breaks or the
+-- envelope regex rejects every ciphertext longer than 57 bytes.
 create function public.ppomi_b64url(p_data bytea)
 returns text language sql immutable strict set search_path = '' as $$
-    select rtrim(translate(encode(p_data, 'base64'), '+/', '-_'), '=');
+    select rtrim(translate(replace(encode(p_data, 'base64'), E'\n', ''), '+/', '-_'), '=');
 $$;
 
 create function public.ppomi_unb64url(p_text text)
