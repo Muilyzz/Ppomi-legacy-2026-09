@@ -142,7 +142,7 @@ internal sealed class ExecutorHost : IDisposable
         account = new GoogleAccount(store, http, DeviceLabel());
         server = new ServerProxy(DeveloperDeviceImport ? store.Load() : null, account: account, sharedClient: http);
         endpoint = store.LoadEndpoint();
-        _ = Task.Run(() => Monitor(monitor.Token));
+        _ = Task.Run(() => WatchAccount(monitor.Token));
     }
 
     /// Display label for the owner's approval list ("Windows (DESKTOP-…)"), never an identifier.
@@ -163,7 +163,7 @@ internal sealed class ExecutorHost : IDisposable
     }
 
     /// While a signed-in device waits for the owner, ask the server every 15 seconds; once approved, recheck rarely (revocation).
-    private async Task Monitor(CancellationToken cancellation)
+    private async Task WatchAccount(CancellationToken cancellation)
     {
         var delay = TimeSpan.FromSeconds(3);
         while (!cancellation.IsCancellationRequested)
