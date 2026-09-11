@@ -186,6 +186,7 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
    * error and throws `TypeError` — use `Runtime.run` for both.
    */
   runSync(playbook: RuntimePlaybook<Step>, legacy?: LegacyOptions): RunResult {
+    if (this.refusedLegacyOption) return invalidResult({ code: "legacy_not_allowed", detail: "legacy options belong to the deprecated wrappers, not Runtime" }, legacy);
     if (playbook.steps.some(step => (step.require?.wait ?? 0) > 0)) {
       return invalidResult(
         { code: "wait_requires_run", detail: "require.wait polls the driver; use Runtime.run, the synchronous wrappers cannot sleep" },

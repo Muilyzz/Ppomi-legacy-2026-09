@@ -220,11 +220,11 @@ test("the wrappers' legacy opt-in runs undeclared mutations loudly; Runtime refu
   assert.match(result.stepResults[0]?.observation.summary ?? "", /legacy mode/);
   assert.deepEqual(adapter.calls.filter(call => call.kind === "click"), [{ kind: "click", target: "Next" }]);
 
-  const refused = await new Runtime(new OsSurface(new DummyAdapter(screen)), all, { legacy: { runUndeclaredMutations: true } } as never).run({
-    id: "core-legacy",
-    steps: [{ id: "n", kind: "click", target: "Next" }],
-  });
+  const smuggled = new Runtime(new OsSurface(new DummyAdapter(screen)), all, { legacy: { runUndeclaredMutations: true } } as never);
+  const refused = await smuggled.run({ id: "core-legacy", steps: [{ id: "n", kind: "click", target: "Next" }] });
   assert.deepEqual([refused.status, refused.invalid?.code], ["invalid", "legacy_not_allowed"]);
+  const refusedSync = smuggled.runSync({ id: "core-legacy-sync", steps: [{ id: "n", kind: "click", target: "Next" }] });
+  assert.deepEqual([refusedSync.status, refusedSync.invalid?.code], ["invalid", "legacy_not_allowed"]);
 });
 
 test("an adapter throw during act keeps earlier evidence and its executor code decides the status", () => {
@@ -368,6 +368,7 @@ test("results bound observed texts, keep urls to origin+pathname, never carry ty
   const adapter = new DummyPageAdapter({ ...page, texts: [...page.texts, "x".repeat(1000), ...many] });
   const result = new PagePlaybookRuntime(adapter, all).run({
     id: "hygiene",
+    allowedOrigins: ["https://shop.test"],
     steps: [
       { id: "fill-pw", kind: "fill", locator: "#pw", text: "hunter2", effect: "input" },
       { id: "confirm", kind: "read", require: { url: "https://shop.test/receipt" } },
@@ -411,6 +412,22 @@ test("goto refuses non-HTTP(S), credentialed, relative and undeclared-origin url
   });
   assert.deepEqual(noOrigins.stepResults.map(row => [row.status, row.attempt, row.code]), [["failed", "not_executed", "origins_required"]]);
   assert.equal(undeclared.calls.some(call => call.kind === "goto"), false);
+
+  // Mutations on a page the playbook never named are refused the same way; reads need no origins.
+  for (const step of [
+    { id: "c", kind: "click" as const, locator: "#name", effect: "navigate" as const },
+    { id: "f", kind: "fill" as const, locator: "#name", text: "x", effect: "input" as const },
+  ]) {
+    const mutating = new DummyPageAdapter(page);
+    const refusedMutation = new PagePlaybookRuntime(mutating, all).run({ id: "mutate-no-origins", steps: [step] });
+    assert.deepEqual(refusedMutation.stepResults.map(row => [row.status, row.code]), [["failed", "origins_required"]], step.id);
+    assert.deepEqual(mutating.calls, [{ kind: "read" }], step.id);
+  }
+  const readOnlyPage = new PagePlaybookRuntime(new DummyPageAdapter(page), all).run({
+    id: "read-no-origins",
+    steps: [{ id: "r", kind: "read", require: { texts: ["Checkout"] } }, { id: "w", kind: "waitFor", locator: "#name" }],
+  });
+  assert.equal(readOnlyPage.status, "completed");
 
   // Opaque origins produce no url target, and the refused run still dumps and round-trips.
   for (const url of ["javascript:alert(1)", "file:///etc/passwd", "data:text/html,<h1>x</h1>", "not a url"]) {

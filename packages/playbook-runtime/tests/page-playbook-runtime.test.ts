@@ -132,6 +132,7 @@ test("missing page text stops without a mutation", () => {
   );
   const result = runtime.run({
     id: "fixture-page-texts",
+    allowedOrigins: ["https://example.test"],
     steps: [
       { id: "need-receipt", kind: "click", locator: "#next", effect: "navigate", require: { texts: ["Receipt"] } },
       { id: "fill-name", kind: "fill", locator: "#name", text: "fixture", effect: "input" },
@@ -156,6 +157,7 @@ test("missing click locator stops without a mutation", () => {
   );
   const result = runtime.run({
     id: "fixture-page-locator",
+    allowedOrigins: ["https://example.test"],
     steps: [
       { id: "submit", kind: "click", locator: "#submit", effect: "navigate" },
       { id: "fill-name", kind: "fill", locator: "#name", text: "fixture", effect: "input" },
@@ -187,6 +189,7 @@ test("page step permissions are ui.read and ui.control only; a run has no device
   );
   const result = runtime.run({
     id: "fixture-page-no-device-gate",
+    allowedOrigins: ["https://example.test"],
     steps: [{ id: "open-next", kind: "click", locator: "#next", effect: "navigate" }],
   });
 

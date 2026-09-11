@@ -63,6 +63,10 @@ export class PageSurface implements UiDriver<PageSnapshot, PageRef, PagePlaybook
     if (step.kind !== "goto" && this.allowedOrigins !== undefined && !this.allowedOrigins.includes(originOf(snap.url))) {
       return unmet("origin_not_declared", `page origin ${originOf(snap.url)} is not declared`);
     }
+    // Acting on a page the playbook never named is as unbounded as navigating to it; reads stay observation-only.
+    if ((step.kind === "click" || step.kind === "fill") && this.allowedOrigins === undefined) {
+      return unmet("origins_required", `${step.kind} needs the playbook's allowedOrigins`);
+    }
 
     if (step.require?.url !== undefined && publicUrl(snap.url) !== publicUrl(step.require.url)) {
       return unmet("url_mismatch", `url ${publicUrl(snap.url)} !== ${publicUrl(step.require.url)}`);

@@ -150,7 +150,7 @@ test("proposal 4: a timed-out click / fill / type is needs_human, never retryabl
     waitFor(locator: string): void { throw new AdapterTimeoutError(`waitFor timed out: ${locator}`); }
   }
   const pageRuntime = new PagePlaybookRuntime(new TimeoutPage(), all);
-  const fill = pageRuntime.run({ id: "t-fill", steps: [{ id: "f", kind: "fill", locator: "#name", text: "x", effect: "input" }] });
+  const fill = pageRuntime.run({ id: "t-fill", allowedOrigins: ["https://shop.test"], steps: [{ id: "f", kind: "fill", locator: "#name", text: "x", effect: "input" }] });
   assert.equal(fill.stepResults[0]?.status, "needs_human");
   const wait = pageRuntime.run({ id: "t-wait", steps: [{ id: "w", kind: "waitFor", locator: "#cert" }] });
   assert.deepEqual([wait.stepResults[0]?.status, wait.stepResults[0]?.attempt], ["retryable", "timeout"]);
