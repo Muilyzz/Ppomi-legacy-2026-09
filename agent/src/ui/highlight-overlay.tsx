@@ -23,11 +23,17 @@ export type ImageRect = {
 
 export const FULL_FRAME: ImageRect = { left: 0, top: 0, width: 1, height: 1 };
 
+/** Which recorded screenshot the overlay shows; `after` wins when both exist. */
+export type ScreenshotPhase = "before" | "after";
+
 export type HighlightOverlayProps = {
   evidence?: Evidence;
   boxes?: readonly OverlayBox[];
   selectedBoxId?: string;
-  /** Optional static image. File paths on evidence stay captions unless they are URLs. */
+  /**
+   * Optional picture to show (object URL, data URL or https). Evidence paths only decide
+   * whether the overlay is visible; they are never rendered or requested.
+   */
   imageSrc?: string;
   alt?: string;
 };
@@ -37,8 +43,27 @@ export function evidenceScreenshot(evidence: Evidence | undefined): string | und
   return evidence.screenshotAfter ?? evidence.screenshotBefore;
 }
 
+export function evidencePhase(evidence: Evidence | undefined): ScreenshotPhase | undefined {
+  if (!evidence) return undefined;
+  if (evidence.screenshotAfter) return "after";
+  if (evidence.screenshotBefore) return "before";
+  return undefined;
+}
+
+export function phaseLabel(phase: ScreenshotPhase): string {
+  switch (phase) {
+    case "before": return "실행 전";
+    case "after": return "실행 후";
+    default: {
+      const _never: never = phase;
+      return _never;
+    }
+  }
+}
+
+/** Only URL schemes a browser can show. A leading `/` is a file path, not a URL. */
 export function isStaticImageSrc(src: string): boolean {
-  return /^(data:|blob:|https?:\/\/|\/)/.test(src);
+  return /^(data:|blob:|https?:\/\/)/i.test(src);
 }
 
 export function visibleOverlayBoxes(boxes: readonly OverlayBox[] | undefined): OverlayBox[] {
@@ -108,6 +133,8 @@ export function HighlightOverlay({ evidence, boxes, selectedBoxId, imageSrc, alt
 
   const shown = visibleOverlayBoxes(boxes);
   const label = alt ?? "스텝 증빙";
+  const phase = evidencePhase(evidence);
+  const caption = phase ? `${label} · ${phaseLabel(phase)}` : label;
   const rect = src ? imageRect : FULL_FRAME;
 
   return <figure className="highlight-overlay" data-empty="false">
@@ -126,7 +153,7 @@ export function HighlightOverlay({ evidence, boxes, selectedBoxId, imageSrc, alt
         })}
       </ol>}
     </div>
-    <figcaption className="highlight-overlay-caption">{path}</figcaption>
+    <figcaption className="highlight-overlay-caption">{caption}</figcaption>
   </figure>;
 }
 

@@ -6,10 +6,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { parseStepResultsJson } from "../../packages/playbook-runtime/src/step-result";
 import {
   containedImageRect,
+  evidencePhase,
   evidenceScreenshot,
   FULL_FRAME,
   HighlightOverlay,
   isStaticImageSrc,
+  phaseLabel,
   placeBox,
   visibleOverlayBoxes,
 } from "./ui/highlight-overlay";
@@ -70,7 +72,8 @@ test("HighlightOverlay draws a placeholder and session boxes for file-path evide
 
   assert.match(html, /data-empty="false"/);
   assert.match(html, /highlight-overlay-placeholder/);
-  assert.match(html, /runs\/fixture\/open-next.after.png/);
+  assert.doesNotMatch(html, /runs\/fixture/, "evidence paths never reach the DOM");
+  assert.match(html, /스텝 증빙 · 실행 후/);
   assert.match(html, /data-box-id="next"/);
   assert.match(html, /data-selected="true"/);
   assert.match(html, /left:70%/);
@@ -93,6 +96,33 @@ test("HighlightOverlay uses a static image src when one is provided", () => {
   assert.match(html, /data-measured="false"/, "boxes wait for the picture rect when an image is shown");
   assert.equal(isStaticImageSrc(overlay.imageSrc), true);
   assert.equal(isStaticImageSrc("runs/fixture/open-next.after.png"), false);
+});
+
+test("HighlightOverlay never renders or requests a machine path from evidence", () => {
+  const home = "/Users/kim/Library/Application Support/ppomi/runs/7/after.png";
+  const html = renderToStaticMarkup(createElement(HighlightOverlay, {
+    evidence: { screenshotBefore: "C:\\Users\\kim\\ppomi\\before.png", screenshotAfter: home },
+  }));
+  assert.match(html, /data-empty="false"/);
+  assert.doesNotMatch(html, /<img/, "a leading slash is a file path, not a URL");
+  assert.doesNotMatch(html, /Users/);
+  assert.doesNotMatch(html, /\.png/);
+  assert.match(html, /실행 후/);
+
+  const before = renderToStaticMarkup(createElement(HighlightOverlay, {
+    evidence: { screenshotBefore: "runs/fixture/open-next.before.png" },
+    alt: "인증서 화면",
+  }));
+  assert.match(before, /인증서 화면 · 실행 전/);
+  assert.doesNotMatch(before, /runs\//);
+
+  assert.equal(isStaticImageSrc(home), false);
+  assert.equal(isStaticImageSrc("C:\\Users\\kim\\x.png"), false);
+  assert.equal(isStaticImageSrc("blob:http://127.0.0.1:5173/3f0a"), true);
+  assert.equal(isStaticImageSrc("https://example.test/shot.png"), true);
+  assert.equal(evidencePhase({}), undefined);
+  assert.equal(evidencePhase({ screenshotBefore: "a", screenshotAfter: "b" }), "after");
+  assert.equal(phaseLabel("before"), "실행 전");
 });
 
 test("containedImageRect letterboxes like object-fit: contain and placeBox keeps boxes on the picture", () => {
