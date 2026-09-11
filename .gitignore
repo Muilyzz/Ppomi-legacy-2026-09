@@ -16,6 +16,10 @@ __pycache__/
 *.pyc
 .DS_Store
 
+# staged Windows executor (local publish or CI download)
+shell/src-tauri/resources/executor/*.exe
+executors/windows/artifacts/
+
 # packaging (scripts/make-app.sh)
 dist/
 *.icns
