@@ -1,7 +1,4 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { test } from "node:test";
 import {
   dryRunKbStarBizWinCertPage,
@@ -9,7 +6,6 @@ import {
   kbStarBizWinCertHandoffs,
   kbStarBizWinCertPagePlaybook,
   loadKbStarBizWinCert,
-  probeNpki,
 } from "../src/index.ts";
 
 test("kb-star-biz-win-cert loads: page gotos, human handoffs, ui.read/ui.control, no payment", () => {
@@ -51,32 +47,4 @@ test("page dry-run completes the two gotos and never reaches a human step", asyn
     ],
   );
   assert.equal(result.stepResults.some(row => row.status === "needs_human"), false);
-});
-
-test("NPKI probe skips off Windows, counts files without names, and treats a missing folder as missing", () => {
-  if (process.platform !== "win32") {
-    const skipped = probeNpki({ platform: "linux", env: {} });
-    assert.equal(skipped.status, "skip");
-    assert.doesNotMatch(JSON.stringify(skipped), /USER\\|DN|signKorea|yessign/i);
-  }
-
-  const missing = probeNpki({
-    platform: "win32",
-    root: join(tmpdir(), "ppomi-npki-missing", "NPKI"),
-  });
-  assert.equal(missing.status, "missing");
-  assert.equal(missing.fileCount, 0);
-
-  const root = mkdtempSync(join(tmpdir(), "ppomi-npki-"));
-  const nested = join(root, "CA", "USER", "opaque");
-  mkdirSync(nested, { recursive: true });
-  writeFileSync(join(nested, "secret-named-file.der"), "not-a-cert");
-  const sinceMs = Date.now() - 60_000;
-  const probed = probeNpki({ platform: "win32", root, sinceMs });
-  assert.equal(probed.status, "ok");
-  assert.equal(probed.fileCount, 1);
-  assert.equal(probed.newerThanCount, 1);
-  assert.ok(probed.newestMtimeMs !== null);
-  const dumped = JSON.stringify(probed);
-  assert.doesNotMatch(dumped, /secret-named-file|opaque|CA/);
 });

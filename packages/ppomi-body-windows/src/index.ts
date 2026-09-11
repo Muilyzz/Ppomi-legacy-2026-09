@@ -11,11 +11,15 @@ export {
   publicStepUrl,
 } from "./kb-star-biz-win-cert.ts";
 export {
+  NPKI_MAX_DEPTH,
+  NPKI_MAX_ENTRIES,
   defaultNpkiRoot,
   probeNpki,
+  resolveNpkiRoot,
   type NpkiProbe,
   type NpkiProbeOptions,
   type NpkiProbeStatus,
+  type NpkiRootSource,
 } from "./npki-probe.ts";
 export { WindowsDriver } from "./windows-driver.ts";
 export {

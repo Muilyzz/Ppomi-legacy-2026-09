@@ -44,8 +44,12 @@ function writeNpki(): void {
     process.stdout.write("  npki     missing — verify AppData\\LocalLow\\NPKI manually after the person finishes\n");
     return;
   }
+  if (probe.status === "refused") {
+    process.stdout.write("  npki     refused — PPOMI_NPKI_ROOT must be an absolute directory under %USERPROFILE% (not the profile itself, not a link)\n");
+    return;
+  }
   const newest = probe.newestMtimeMs === null ? "-" : new Date(probe.newestMtimeMs).toISOString();
-  process.stdout.write(`  npki     files=${probe.fileCount} newest=${newest}\n`);
+  process.stdout.write(`  npki     files=${probe.fileCount} newest=${newest} root=${probe.root}${probe.truncated ? " (truncated)" : ""}\n`);
 }
 
 async function openIssueInEdge(url: string): Promise<"ok" | "skip"> {
