@@ -788,6 +788,10 @@ final class Tools {
                 } else { target = str("url") }
                 guard let url = PlaybookManifest.Launch.webURL(target) else { return "오류: 사용자명·비밀번호 없는 HTTP(S) url 또는 웹 플레이북 app이 필요하다." }
                 let browser = str("browser")
+                // Validate the browser name here, not only inside the (injectable) launcher, so a typo never reports Chrome as opened.
+                if !browser.isEmpty, (try? MacBrowser.bundleID(for: browser)) == nil {
+                    return "오류: \(MacBrowser.Failure.invalidBrowser.localizedDescription)"
+                }
                 do {
                     if browser.isEmpty { try openBrowser(url) }
                     else { try openNamedBrowser(url, browser) }
