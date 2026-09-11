@@ -14,6 +14,7 @@ import type { RunResult, StepEvidence, StepOutcome } from "./playbook.ts";
  * See `docs/adapter-selection.md`.
  * Permission and page preconditions are fail-closed: the run stops
  * and later steps are not sent to the adapter.
+ * `RunResult.evidence` is `StepEvidence`. Emitting `StepResult` is the next slice.
  * Does not call `OsAdapter`. There is no device-approval input.
  */
 export class PagePlaybookRuntime {

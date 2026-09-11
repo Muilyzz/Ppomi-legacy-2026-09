@@ -27,3 +27,20 @@ export type {
   PagePlaybookStep,
   PageStepRequirement,
 } from "./page-playbook.ts";
+export {
+  dumpStepResults,
+  parseStepResult,
+  parseStepResults,
+  parseStepResultsJson,
+  StepResultError,
+} from "./step-result.ts";
+export type {
+  Evidence,
+  StepAction,
+  StepAdapter,
+  StepAttempt,
+  StepObservation,
+  StepResult,
+  StepResultStatus,
+  StepTarget,
+} from "./step-result.ts";

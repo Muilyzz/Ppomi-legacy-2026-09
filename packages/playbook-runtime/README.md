@@ -43,6 +43,26 @@ Ppomi onboarding and playbook packages have **no device-approval or Mac-approver
 - Before an OS mutation, `PlaybookRuntime` reads the screen and checks declared screen/target/focus preconditions. Before a page mutation, `PagePlaybookRuntime` reads the page and checks declared url/text/locator preconditions (`waitFor` is the wait and is not fail-closed on locator presence).
 - Permission denial or a failed precondition **stops the run**. Later steps are not sent to the adapter.
 - Evidence records each attempted step and its outcome. `completed` means declared steps finished. It is not a business-result claim and does not write a journal.
+- `StepResult` / `Evidence` is the stable per-step schema for a later workbench timeline (and for an LLM that only reads `status`). `dumpStepResults` writes one run as a JSON array. Runtimes still return `StepEvidence` on `RunResult`; emitting `StepResult` from `PagePlaybookRuntime` / `PlaybookRuntime` is the next slice. No workbench UI, OCR/CU, or `playbook-kr-cert` in this package yet.
+
+```ts
+import { dumpStepResults, type StepResult } from "playbook-runtime";
+
+const steps: StepResult[] = [{
+  stepId: "go",
+  playbookId: "demo",
+  adapter: "page",
+  action: "click",
+  status: "ok",
+  attempt: "executed",
+  target: { kind: "locator", locator: "#next" },
+  observation: { summary: "clicked #next" },
+  timingMs: 12,
+}];
+dumpStepResults(steps);
+```
+
+`attempt` is `executed` | `timeout` | `not_executed`. A page `waitFor` timeout is `timeout`, not "the native step never ran". `target` is an observation-bound locator / URL / accessibility name. Coordinates and session node IDs are not a contract.
 
 ```ts
 import { DummyAdapter, FixedPermissionGate, PlaybookRuntime } from "playbook-runtime";

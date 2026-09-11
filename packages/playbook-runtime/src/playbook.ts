@@ -29,6 +29,7 @@ export interface Playbook {
   readonly steps: readonly PlaybookStep[];
 }
 
+/** Current runner log. Workbench/LLM status uses `StepResult` (not emitted yet). */
 export interface StepEvidence {
   readonly stepId: string;
   readonly kind: StepKind | PageStepKind;
