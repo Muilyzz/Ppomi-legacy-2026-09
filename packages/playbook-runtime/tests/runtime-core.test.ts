@@ -211,9 +211,10 @@ test("an adapter throw during act keeps earlier evidence and its executor code d
   assert.equal(result.stopReason, "failed");
   assert.deepEqual(result.evidence.map(row => [row.stepId, row.outcome]), [["focus-app", "ok"], ["open-next", "failed"]]);
   assert.equal(result.evidence[1]?.note, "executor refused the node");
+  // protected_action is raised before the control is touched: the click did not execute.
   assert.deepEqual(result.stepResults.map(row => [row.stepId, row.status, row.attempt]), [
     ["focus-app", "ok", "executed"],
-    ["open-next", "protected", "executed"],
+    ["open-next", "protected", "not_executed"],
     ["fill-name", "failed", "not_executed"],
   ]);
   assert.deepEqual(refused.calls, ["readScreen", "focus", "readScreen", "click"]);
@@ -223,7 +224,14 @@ test("an adapter throw during act keeps earlier evidence and its executor code d
     id: "stale",
     steps: [{ id: "open-next", kind: "click", target: "Next", effect: "navigate" }],
   });
-  assert.deepEqual(staleResult.stepResults.map(row => [row.status, row.attempt]), [["retryable", "executed"]]);
+  assert.deepEqual(staleResult.stepResults.map(row => [row.status, row.attempt]), [["retryable", "not_executed"]]);
+
+  const unknown = new CodedFailureAdapter("click", "");
+  const unknownResult = new PlaybookRuntime(unknown, all).run({
+    id: "unknown",
+    steps: [{ id: "open-next", kind: "click", target: "Next", effect: "navigate" }],
+  });
+  assert.deepEqual(unknownResult.stepResults.map(row => [row.status, row.attempt, row.code]), [["failed", "executed", "act_failed"]]);
 });
 
 test("an adapter throw during read is a failed step, not an escaping exception", () => {
@@ -234,8 +242,13 @@ test("an adapter throw during read is a failed step, not an escaping exception",
   });
   assert.equal(result.stopReason, "failed");
   assert.equal(result.evidence[0]?.note, "lease lost");
-  assert.deepEqual(result.stepResults.map(row => [row.status, row.attempt]), [["retryable", "executed"]]);
+  // The screen read for a click failed: the click never ran.
+  assert.deepEqual(result.stepResults.map(row => [row.status, row.attempt, row.code]), [["retryable", "not_executed", "stale_screen"]]);
   assert.deepEqual(adapter.calls, ["readScreen"]);
+
+  const readStep = new CodedFailureAdapter("readScreen", "stale_screen");
+  const readResult = new PlaybookRuntime(readStep, all).run({ id: "read-step", steps: [{ id: "look", kind: "read" }] });
+  assert.deepEqual(readResult.stepResults.map(row => [row.status, row.attempt]), [["retryable", "executed"]]);
 });
 
 test("require.wait polls the surface until the precondition holds, then acts (sync and async drivers)", async () => {

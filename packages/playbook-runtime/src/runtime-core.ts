@@ -263,7 +263,7 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
       try {
         snap = (yield { type: "read" }) as Snap;
       } catch (error) {
-        return stop([], driverFailed(error, "read_failed", step.kind), this.now() - startedAt);
+        return stop([], driverFailed(error, "read", step.kind), this.now() - startedAt);
       }
 
       if (cls.mutation) {
@@ -280,7 +280,7 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
         try {
           snap = (yield { type: "read" }) as Snap;
         } catch (error) {
-          return stop([], driverFailed(error, "read_failed", step.kind), this.now() - startedAt);
+          return stop([], driverFailed(error, "read", step.kind), this.now() - startedAt);
         }
         resolution = this.driver.resolve(snap, step);
       }
@@ -292,7 +292,7 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
       try {
         yield { type: "act", step, ref: resolution.ref };
       } catch (error) {
-        return stop(this.driver.observed(snap), driverFailed(error, "act_failed", step.kind), this.now() - actedAt);
+        return stop(this.driver.observed(snap), driverFailed(error, "act", step.kind), this.now() - actedAt);
       }
       record(this.driver.observed(snap), DONE, this.now() - actedAt);
     }
