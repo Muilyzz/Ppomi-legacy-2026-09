@@ -13,6 +13,29 @@
   },
   "capabilities": [
     {
+      "id": "cold-start-open",
+      "title": "Home 후 KB스타기업뱅킹 열기 (로그인 전 멈춤)",
+      "description": "뽀미.app 작업대에서 iPhone 미러링에 Home을 보낸 뒤 KB스타기업뱅킹을 연다. Face ID·로그인은 당사자. 계좌번호·비밀번호는 읽지 않는다. packages/*/example CLI가 아니라 메인 앱의 Home → KB 또는 path_cold_start다.",
+      "inputs": [],
+      "steps": [
+        {
+          "id": "go-home",
+          "title": "phone_key home",
+          "kind": "close"
+        },
+        {
+          "id": "open-kb",
+          "title": "KB스타기업뱅킹 열기",
+          "kind": "open"
+        },
+        {
+          "id": "human-login",
+          "title": "Face ID·로그인은 당사자",
+          "kind": "human"
+        }
+      ]
+    },
+    {
       "id": "prepare-enterprise-certificate-info",
       "title": "KB국민인증서(기업) 정보 입력과 로그인 준비",
       "description": "현재 iPhone KB스타기업뱅킹의 로그인 상태를 확인하고, 사용자가 선택한 KB국민인증서(기업) 정보 화면을 준비합니다. 저장된 사업자번호와 휴대폰번호는 검증된 전용 비공개 입력 경로로 전달하고 실제 SMS·비밀번호·발급 인증은 당사자가 처리합니다. Windows 공동인증서 발급과 구분하며 실제 모바일 인증서 준비와 로그인 성공은 아직 검증하지 않았습니다.",

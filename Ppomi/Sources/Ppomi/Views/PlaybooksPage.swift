@@ -6,7 +6,7 @@ enum PlaybooksPage {
     private struct Pkg: Encodable {
         var id, name, path, target, version: String
         var manifest: PlaybookManifest; var verification: VerificationSummary; var footprints: [Footprint]
-        var guide: String; var humanSteps: [String]; var openable: Bool
+        var guide: String; var humanSteps: [String]; var openable: Bool; var runnable: Bool
     }
     private struct Data: Encodable { var packages: [Pkg] }
 
@@ -15,7 +15,9 @@ enum PlaybooksPage {
             let launch = e.record.manifest.launch
             return Pkg(id: e.id, name: e.record.name, path: categories[e.id] ?? "기타", target: launch.isBrowser ? "Mac 브라우저" : launch.isWindows ? "Windows" : "폰",
                        version: e.record.manifest.version, manifest: e.record.manifest, verification: VerificationStore.summary(e.record, in: dir), footprints: e.footprints,
-                       guide: e.record.guideText, humanSteps: e.record.manifest.humanSteps, openable: launch.browserURL != nil || launch.windowsURL != nil)
+                       guide: e.record.guideText, humanSteps: e.record.manifest.humanSteps,
+                       openable: launch.browserURL != nil || launch.windowsURL != nil,
+                       runnable: e.id == "kb-enterprise")
         }
         let enc = JSONEncoder(); enc.outputFormatting = [.sortedKeys]
         let json = String(decoding: try! enc.encode(Data(packages: pkgs)), as: UTF8.self)   // "/" is escaped: no "</script>" can leak

@@ -28,6 +28,7 @@ final class Tools {
     // Tests can check the real gate branching without querying TCC or touching the phone.
     var phoneGateStatus: (() -> (permissions: Bool, state: String))? = nil
     var wakePhone: () throws -> Void = { try Phone.wake() }
+    var deviceRegistry = DeviceRegistry.shared
     var windowsGateStatus: (() -> (permissions: Bool, state: String))? = nil
     var androidCall: (String, [String: Any]) throws -> [String: Any] = { try AndroidRuntime.call($0, $1) }
     var androidCapture: () throws -> URL = { try AndroidRuntime.capture() }
@@ -356,6 +357,8 @@ final class Tools {
         T("windows_open", "Windows에서 URL(기본 브라우저의 새 탭) 또는 프로그램 이름을 연다(Win+R). app에 플레이북 ID를 주면 그 URL을 연다. launch.target=windows(exe 설치·공동인증서 사이트)인 플레이북의 기본 경로.", ["target": ("string", "URL 또는 프로그램"), "app": ("string", "플레이북 ID 또는 이름")]),
         T("run_combo", "아는 길을 두뇌 없이 재생한다. 낯선 화면·승인 지점·사용자 차례에서 멈추고 마지막 화면을 돌려준다. 폰 앱 작업은 phone_screen 전에 이걸 먼저 불러라.",
           ["app": ("string", "플레이북 ID 또는 앱 이름(비우면 마지막으로 연 앱)"), "max_steps": ("integer", "기본 12")]),
+        T("path_cold_start", "뽀미.app 작업대에서 KB스타기업뱅킹을 콜드스타트한다: phone_key home 후 phone_open. Face ID·로그인은 사람 차례에서 멈춘다. 계좌번호·비밀번호를 읽거나 반환하지 않는다. packages/*/example 이 아니다.",
+          ["app": ("string", "기본 kb-enterprise")]),
         T("phone_wait", "폰이 ‘사용 중’(미러링 끊김)이거나 사람이 폰에서 로그인·인증을 하는 동안 폰이 다시 잠겨 미러링이 붙을 때까지 기다린다(최대 seconds초, 기본 90). 되묻거나 턴을 끝내는 대신 이걸 부르고, 결과가 ‘연결됨’이면 같은 단계를 이어간다.", ["seconds": ("integer", "5~150, 기본 90")]),
         T("phone_installed", "이름을 준 앱들이 폰에 설치돼 있는지 Spotlight로 확인한다. 결제 수단을 고를 때: 토스(토스페이), 카카오톡(카카오페이), 네이버(네이버페이), 페이코 같은 결제앱 중 설치된 것만 고르라.",
           ["names": ("string", "쉼표로 구분한 앱 이름들")], ["names"]),
@@ -574,7 +577,9 @@ final class Tools {
         return answer
     }
     private func sleep(_ s: Double) { if Self.fake == nil { Phone.sleep(s) } }
-    private func catalog(_ app: String) -> PlaybookRecord? { FootprintStore.record(app, in: footprintDir) }
+    private func catalog(_ app: String) -> PlaybookRecord? {
+        FootprintStore.record(app, in: footprintDir) ?? PlaybookCatalog.resolve(app)
+    }
     private func open(_ title: String, _ search: String, record: PlaybookRecord? = nil) throws -> Bool {
         if let launch = record?.manifest.launch, let tool = launch.openTool {
             throw PlaybookCatalog.Invalid.package("\(launch.routeName) 플레이북입니다. \(tool)으로 여세요.")
@@ -930,6 +935,24 @@ final class Tools {
                 case .handoff(let s, let fp): why = "멈춤: \(s) — 다음 걸음 \(fp.glyph)\(fp.target)" + (s == "승인 필요 지점" ? " (confirm_payment 승인 뒤 phone_tap)" : "")
                 }
                 return (r.steps.map { "\($0.fp.glyph) \($0.fp.target) \($0.ok ? "✓" : "✗")" } + [why, Self.screenText(r.lastWords)]).joined(separator: "\n")
+            case "path_cold_start":
+                let requested = str("app").isEmpty ? "kb-enterprise" : str("app")
+                let definition = catalog(requested)
+                guard requested == "kb-enterprise" || definition?.id == "kb-enterprise" else {
+                    runtimeRecorder.emit(.blocked)
+                    return "실행 안 함: 앱 셸 콜드스타트는 kb-enterprise만. 패키지 example이 아니라 뽀미.app에서 연다."
+                }
+                let fleet = deviceRegistry.attachThisMac()
+                let home = perform("phone_key", ["name": "home"])
+                if home.hasPrefix("오류:") || home.hasPrefix("실행 안 함:") { return home }
+                let opened = perform("phone_open", ["app": "kb-enterprise"])
+                // Only a verified open ("열었다.") hands off to Face ID; a Spotlight miss or error must not claim a human login.
+                guard opened.hasPrefix("열었다") else {
+                    if opened.hasPrefix("오류:") || opened.hasPrefix("실행 안 함:") { return opened }
+                    return "오류: app_not_found · KB스타기업뱅킹을 열지 못했다(로그인 화면으로 넘어가지 않음). \(opened)"
+                }
+                runtimeRecorder.emit(.handedOff, method: .human)
+                return "멈춤: 사람 로그인(Face ID). \(DeviceRegistry.displayLine(fleet)). 계좌·비밀은 읽지 않음. 메인 앱에서 실행(example 아님)."
             default: return "unknown tool \(name)"
             }
         } catch { runtimeRecorder.emit(.failed); return "오류: \(error)" }

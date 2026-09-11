@@ -3,6 +3,7 @@
 import SwiftUI
 
 struct MeSheet: View {
+    @EnvironmentObject private var state: AppState
     @Environment(\.dismiss) private var dismiss
     @State private var account = GoogleAccount.session
     @State private var unlocked = false
@@ -69,7 +70,7 @@ struct MeSheet: View {
     }
     private func signIn() async {
         signingIn = true; error = nil
-        do { account = try await GoogleAccount.shared.signIn() }
+        do { account = try await GoogleAccount.shared.signIn(); state.attachThisMac() }
         catch { self.error = "로그인 실패: " + SharedServerClient.safe(error).description }
         signingIn = false
     }

@@ -98,6 +98,7 @@ struct PpomiApp: App {
         s.reloadLedger()
         let conversation = AgentVoicePanel()
         conversation.onSurfaceHint = { [weak s] surface in s?.selectSurface(surface) }   // the workbench docks the window the assistant is driving
+        conversation.onPathColdStart = { [weak s] in s?.runKBColdStart() }
         let workbench = KioskController(state: s, conversation: conversation)
         kiosk = workbench
         conversation.onOverlay = { mark in workbench.showMark(mark) }   // taps, filled fields and reading drawn over the docked window
@@ -108,6 +109,10 @@ struct PpomiApp: App {
         watcher.start()
         AppDelegate.pendingState = s
         // Ordinary launch opens chat. Explicit kiosk launch keeps its existing workbench route.
+        DeviceRegistry.shared.persistURL = URL(fileURLWithPath: AppSettings.dbPath)
+            .deletingLastPathComponent().appendingPathComponent("fleet.json")
+        DeviceRegistry.shared.loadPersisted()
+        s.attachThisMac()
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { s.openInitialScreen(kiosk: CommandLine.arguments.contains("--kiosk")) }
         // `--snapshot [APP …]`: collect and exit, no UI (launchd / cron / a terminal). Default: every app.
         if let i = CommandLine.arguments.firstIndex(of: "--snapshot") {

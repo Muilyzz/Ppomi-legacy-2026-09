@@ -48,3 +48,4 @@ storybook/storybook-static/
 iPad/build/
 iPad/PpomiPad.xcodeproj/
 data/lenses.json
+data/fleet.json
