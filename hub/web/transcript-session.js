@@ -1,6 +1,6 @@
 /**
  * UI-independent lifetime of one account's shared conversation.
- * The client owns RPC/crypto/realtime; the workbench receives decrypted turns only.
+ * The client owns RPC/realtime; the workbench receives stored turns.
  */
 export function createTranscriptSession({
   createClient, onTurns = () => {},
@@ -39,7 +39,7 @@ export function createTranscriptSession({
         status: result.status,
         transcript: result.transcript,
         turns: result.turns,
-        error: result.status === 'waiting-key' ? Object.freeze({ code: 'waiting' }) : null,
+        error: null,
       });
       if (result.status === 'ready') await task.client.startRealtime();
     } catch (error) {

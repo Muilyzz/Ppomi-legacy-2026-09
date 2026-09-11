@@ -43,7 +43,7 @@ function nativeTurns(value: unknown): TranscriptTurn[] {
   });
 }
 
-/** Native page asks the Swift host to encrypt and upload; decrypted turns come back as data, never keys. */
+/** Native page asks the Swift host to upload stored turns. The agent server is not on this path. */
 function unsupported(error: unknown) {
   return error instanceof NativeBridgeError && (error.code === "invalid_request" || error.code === "native_unavailable" || error.code === "server_unconfigured");
 }

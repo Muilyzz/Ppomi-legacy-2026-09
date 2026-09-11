@@ -7,19 +7,21 @@ import { RecordError } from '../web/record-crypto.js';
 
 const T = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const W = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-const K = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const U = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
-test('transcript protocol accepts list metadata and rejects plaintext-looking envelopes without identity', () => {
-  const listed = transcriptList([{
-    id: T, workspace_id: W, key_id: K, created_by_device_id: K, created_at: 't', updated_at: 't', last_seq: 0,
-  }]);
+test('transcript protocol accepts list metadata and stored turn payloads', () => {
+  const listed = transcriptList({
+    transcripts: [{
+      id: T, workspace_id: W, created_by_user_id: U, created_at: 't', updated_at: 't', last_seq: 0,
+    }],
+  });
   assert.equal(listed[0].lastSeq, '0');
   const page = transcriptTurnPage({
-    found: true, transcript_id: T, workspace_id: W, key_id: K,
-    turns: [{ turn_id: T, seq: 1, writer_device_id: K, key_id: K,
-      envelope: { version: 1, nonce: 'AAAAAAAAAAAA', tag: 'AAAAAAAAAAAAAAAAAAAAAA', ciphertext: 'dGVzdA' } }],
+    found: true, transcript_id: T, workspace_id: W,
+    turns: [{ turn_id: T, seq: 1, writer_user_id: U,
+      payload: { id: T, role: 'user', parts: [{ type: 'text', text: '카드값' }] } }],
   }, T);
-  assert.equal(page.turns[0].turnID, T);
+  assert.equal(page.turns[0].payload.parts[0].text, '카드값');
   assert.throws(() => transcriptPayload({ id: T, role: 'system', parts: [] }), error => error instanceof RecordError);
 });
 
@@ -49,7 +51,7 @@ test('transcript session hydrates, appends, and forwards remote turns without ex
   assert.equal(session.getState().status, 'idle');
 });
 
-test('realtime client joins postgres_changes and decrypts nothing', async () => {
+test('realtime client joins postgres_changes and forwards stored payloads', async () => {
   const sockets = [];
   class FakeSocket {
     constructor(url) { this.url = url; this.readyState = 1; this.handlers = {}; sockets.push(this); queueMicrotask(() => this.handlers.open?.({})); }
@@ -71,7 +73,8 @@ test('realtime client joins postgres_changes and decrypts nothing', async () => 
   assert.equal(join.payload.config.postgres_changes.some(item => item.table === 'ppomi_transcript_turns'), true);
   sockets[0].handlers.message({ data: JSON.stringify({
     event: 'postgres_changes',
-    payload: { data: { type: 'INSERT', table: 'ppomi_transcript_turns', record: { workspace_id: W, transcript_id: T, turn_id: T, envelope: { ciphertext: 'x' } } } },
+    payload: { data: { type: 'INSERT', table: 'ppomi_transcript_turns',
+      record: { workspace_id: W, transcript_id: T, turn_id: T, payload: { id: T, role: 'user', parts: [{ type: 'text', text: '원격' }] } } } },
   }) });
   assert.deepEqual(events, ['turn']);
   realtime.stop();

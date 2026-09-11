@@ -1,7 +1,8 @@
 -- Run as the migration owner using psql -v ON_ERROR_STOP=1 -f ... .
 -- Every fixture and write rolls back. Auth users are synthetic isolated UUIDs.
--- Covers 20260911120000_encrypted_transcripts.sql: approved web read/write,
--- pending/anonymous denial, append idempotency, tombstone wipe, workspace isolation.
+-- Covers 20260911120000_encrypted_transcripts.sql: member R/W without
+-- wrapped keys or device approval, pending-device access, JWT-only access,
+-- append idempotency, tombstone wipe, workspace isolation.
 begin;
 
 create temporary table ppomi_test_results(label text not null) on commit drop;
@@ -46,10 +47,16 @@ insert into auth.users(id) values
  ('96a00000-0000-4000-8000-000000000001'),
  ('96a00000-0000-4000-8000-000000000002'),
  ('96a00000-0000-4000-8000-000000000003'),
- ('96a00000-0000-4000-8000-000000000004');
+ ('96a00000-0000-4000-8000-000000000004'),
+ ('96a00000-0000-4000-8000-000000000005');
 insert into public.ppomi_workspaces(id, name) values
  ('96b00000-0000-4000-8000-000000000001', 'Synthetic transcript A'),
  ('96b00000-0000-4000-8000-000000000002', 'Synthetic transcript B');
+insert into public.ppomi_members(workspace_id, auth_user_id) values
+ ('96b00000-0000-4000-8000-000000000001', '96a00000-0000-4000-8000-000000000001'),
+ ('96b00000-0000-4000-8000-000000000001', '96a00000-0000-4000-8000-000000000002'),
+ ('96b00000-0000-4000-8000-000000000002', '96a00000-0000-4000-8000-000000000003'),
+ ('96b00000-0000-4000-8000-000000000001', '96a00000-0000-4000-8000-000000000004');
 insert into public.ppomi_devices(id, workspace_id, auth_user_id, label, platform, revoked_at, approved_at) values
  ('96c00000-0000-4000-8000-000000000001', '96b00000-0000-4000-8000-000000000001',
   '96a00000-0000-4000-8000-000000000001', 'Synthetic Mac', 'macos', null, statement_timestamp()),
@@ -59,168 +66,154 @@ insert into public.ppomi_devices(id, workspace_id, auth_user_id, label, platform
   '96a00000-0000-4000-8000-000000000003', 'Other workspace', 'macos', null, statement_timestamp()),
  ('96c00000-0000-4000-8000-000000000004', '96b00000-0000-4000-8000-000000000001',
   '96a00000-0000-4000-8000-000000000004', 'Pending web', 'web', null, null);
-insert into public.ppomi_wrapped_keys(workspace_id, device_id, key_id, records, wrapped, wrapped_by_device_id) values
- ('96b00000-0000-4000-8000-000000000001', '96c00000-0000-4000-8000-000000000001',
-  '96f00000-0000-4000-8000-000000000001', '{"ledger":"96e00000-0000-4000-8000-000000000001"}',
-  'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-  '96c00000-0000-4000-8000-000000000001'),
- ('96b00000-0000-4000-8000-000000000001', '96c00000-0000-4000-8000-000000000002',
-  '96f00000-0000-4000-8000-000000000001', '{"ledger":"96e00000-0000-4000-8000-000000000001"}',
-  'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-  '96c00000-0000-4000-8000-000000000001'),
- ('96b00000-0000-4000-8000-000000000002', '96c00000-0000-4000-8000-000000000003',
-  '96f00000-0000-4000-8000-000000000002', '{"ledger":"96e00000-0000-4000-8000-000000000002"}',
-  'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-  '96c00000-0000-4000-8000-000000000003');
 
--- Valid AES-GCM envelope shape (ciphertext is opaque; server never decrypts).
-create function pg_temp.ppomi_envelope()
+create function pg_temp.ppomi_turn(p_id uuid, p_text text)
 returns jsonb language sql as $$
-    select '{"version":1,"nonce":"AAAAAAAAAAAA","tag":"AAAAAAAAAAAAAAAAAAAAAA","ciphertext":"dGVzdA"}'::jsonb;
+    select jsonb_build_object(
+        'id', p_id,
+        'role', 'user',
+        'parts', jsonb_build_array(jsonb_build_object('type', 'text', 'text', p_text)));
 $$;
 
 set local role authenticated;
 select pg_temp.ppomi_as('96a00000-0000-4000-8000-000000000001', '96c00000-0000-4000-8000-000000000001');
 select pg_temp.ppomi_assert(
-    (public.ppomi_transcript_open('96d00000-0000-4000-8000-000000000001', '96f00000-0000-4000-8000-000000000001')->>'id')
+    (public.ppomi_transcript_open('96d00000-0000-4000-8000-000000000001')->>'id')
       = '96d00000-0000-4000-8000-000000000001',
-    'approved native device can open a transcript');
+    'workspace member can open a transcript');
 select pg_temp.ppomi_assert(
-    (public.ppomi_transcript_open('96d00000-0000-4000-8000-000000000099', '96f00000-0000-4000-8000-000000000001')->>'id')
+    (public.ppomi_transcript_open('96d00000-0000-4000-8000-000000000099')->>'id')
       = '96d00000-0000-4000-8000-000000000001',
     'open returns the existing live transcript instead of forking');
 select pg_temp.ppomi_assert(
     (public.ppomi_transcript_append(
         '96d00000-0000-4000-8000-000000000001',
         '96e00000-0000-4000-8000-000000000001',
-        '96f00000-0000-4000-8000-000000000001',
-        pg_temp.ppomi_envelope())->>'seq') = '1',
-    'first encrypted turn is seq 1');
+        pg_temp.ppomi_turn('96e00000-0000-4000-8000-000000000001', 'hello'))->>'seq') = '1',
+    'first turn is seq 1');
 select pg_temp.ppomi_assert(
     (public.ppomi_transcript_append(
         '96d00000-0000-4000-8000-000000000001',
         '96e00000-0000-4000-8000-000000000001',
-        '96f00000-0000-4000-8000-000000000001',
-        pg_temp.ppomi_envelope())->>'seq') = '1',
+        pg_temp.ppomi_turn('96e00000-0000-4000-8000-000000000001', 'hello'))->>'seq') = '1',
     'turn retry is idempotent');
 select pg_temp.ppomi_expect_error(
     $q$select public.ppomi_transcript_append(
         '96d00000-0000-4000-8000-000000000001',
         '96e00000-0000-4000-8000-000000000001',
-        '96f00000-0000-4000-8000-000000000001',
-        '{"version":1,"nonce":"BBBBBBBBBBBB","tag":"AAAAAAAAAAAAAAAAAAAAAA","ciphertext":"dGVzdA"}'::jsonb)$q$,
-    '22023', 'same turn id cannot change ciphertext');
+        pg_temp.ppomi_turn('96e00000-0000-4000-8000-000000000001', 'changed'))$q$,
+    '22023', 'same turn id cannot change payload');
 select pg_temp.ppomi_assert(
     (public.ppomi_transcript_append(
         '96d00000-0000-4000-8000-000000000001',
         '96e00000-0000-4000-8000-000000000002',
-        '96f00000-0000-4000-8000-000000000001',
-        pg_temp.ppomi_envelope())->>'seq') = '2',
+        pg_temp.ppomi_turn('96e00000-0000-4000-8000-000000000002', 'second'))->>'seq') = '2',
     'second turn advances seq');
 select pg_temp.ppomi_assert(
     jsonb_array_length(public.ppomi_transcript_turns('96d00000-0000-4000-8000-000000000001')->'turns') = 2,
-    'list returns both ciphertext turns');
+    'list returns both turns');
 select pg_temp.ppomi_assert(
     jsonb_array_length(public.ppomi_transcript_turns('96d00000-0000-4000-8000-000000000001', 1)->'turns') = 1,
     'list after seq skips earlier turns');
 select pg_temp.ppomi_assert(
-    (public.ppomi_transcript_turns('96d00000-0000-4000-8000-000000000001')->'turns'->0->>'envelope')
-      not like '%hello%' and
-    (public.ppomi_transcript_turns('96d00000-0000-4000-8000-000000000001')->'turns'->0->'envelope' ? 'ciphertext'),
-    'listed turns expose envelope ciphertext only');
+    (public.ppomi_transcript_turns('96d00000-0000-4000-8000-000000000001')->'turns'->0->'payload'->>'id')
+      = '96e00000-0000-4000-8000-000000000001' and
+    (public.ppomi_transcript_turns('96d00000-0000-4000-8000-000000000001')->'turns'->0->'payload'->'parts'->0->>'text')
+      = 'hello',
+    'listed turns expose the stored payload the server can read');
 select pg_temp.ppomi_expect_error(
     $q$select public.ppomi_transcript_append(
         '96d00000-0000-4000-8000-000000000001',
         '96e00000-0000-4000-8000-000000000003',
-        '96f00000-0000-4000-8000-000000000001',
-        '{"version":1,"nonce":"AAA","tag":"AAAAAAAAAAAAAAAAAAAAAA","ciphertext":"dGVzdA"}'::jsonb)$q$,
-    '22023', 'invalid envelope rejected');
-select pg_temp.ppomi_expect_error(
-    $q$select public.ppomi_transcript_open(
-        '96d00000-0000-4000-8000-000000000002',
-        '96f00000-0000-4000-8000-000000000099')$q$,
-    '42501', 'unknown key id cannot open');
+        '{"role":"user"}'::jsonb)$q$,
+    '22023', 'invalid payload rejected');
 select pg_temp.ppomi_expect_error($q$insert into public.ppomi_transcripts
-    (workspace_id, id, created_by_device_id, key_id)
+    (workspace_id, id, created_by_user_id)
     values ('96b00000-0000-4000-8000-000000000001',
             '96d00000-0000-4000-8000-0000000000aa',
-            '96c00000-0000-4000-8000-000000000001',
-            '96f00000-0000-4000-8000-000000000001')$q$,
+            '96a00000-0000-4000-8000-000000000001')$q$,
     '42501', 'direct transcript insert denied');
 select pg_temp.ppomi_expect_error($q$delete from public.ppomi_transcript_turns$q$,
     '42501', 'direct turn delete denied');
 
--- Approved web devices may read and write (exception vs record writer lock).
+-- Web member may read and write without a wrapped key.
 select pg_temp.ppomi_as('96a00000-0000-4000-8000-000000000002', '96c00000-0000-4000-8000-000000000002');
 select pg_temp.ppomi_assert(
     (public.ppomi_transcript_turns('96d00000-0000-4000-8000-000000000001')->>'found') = 'true',
-    'approved web device may read ciphertext turns');
+    'web member may read turns');
 select pg_temp.ppomi_assert(
     (public.ppomi_transcript_append(
         '96d00000-0000-4000-8000-000000000001',
         '96e00000-0000-4000-8000-000000000010',
-        '96f00000-0000-4000-8000-000000000001',
-        pg_temp.ppomi_envelope())->>'seq') = '3',
-    'approved web device may append a turn');
+        pg_temp.ppomi_turn('96e00000-0000-4000-8000-000000000010', 'from-web'))->>'seq') = '3',
+    'web member may append a turn');
 select pg_temp.ppomi_assert(
-    jsonb_array_length(public.ppomi_transcript_list()) = 1,
-    'approved web device may list live transcripts');
+    jsonb_array_length(public.ppomi_transcript_list()->'transcripts') = 1,
+    'web member may list live transcripts');
 
--- Pending web cannot read or write.
+-- Pending web device of a member may still read and write (no approval gate).
 select pg_temp.ppomi_as('96a00000-0000-4000-8000-000000000004', '96c00000-0000-4000-8000-000000000004');
-select pg_temp.ppomi_expect_error(
-    $q$select public.ppomi_transcript_turns('96d00000-0000-4000-8000-000000000001')$q$,
-    '42501', 'pending device cannot read turns');
-select pg_temp.ppomi_expect_error(
-    $q$select public.ppomi_transcript_append(
+select pg_temp.ppomi_assert(
+    (public.ppomi_transcript_turns('96d00000-0000-4000-8000-000000000001')->>'found') = 'true',
+    'pending device of a member may read turns');
+select pg_temp.ppomi_assert(
+    (public.ppomi_transcript_append(
         '96d00000-0000-4000-8000-000000000001',
         '96e00000-0000-4000-8000-000000000011',
-        '96f00000-0000-4000-8000-000000000001',
-        pg_temp.ppomi_envelope())$q$,
-    '42501', 'pending device cannot append');
+        pg_temp.ppomi_turn('96e00000-0000-4000-8000-000000000011', 'pending'))->>'seq') = '4',
+    'pending device of a member may append');
+select pg_temp.ppomi_assert((select count(*) from public.ppomi_transcripts) = 1,
+    'pending member RLS shows transcript heads');
+
+-- JWT without a device header still works for a member.
+select pg_temp.ppomi_as('96a00000-0000-4000-8000-000000000002', null);
+select pg_temp.ppomi_assert(
+    (public.ppomi_transcript_turns('96d00000-0000-4000-8000-000000000001')->>'found') = 'true',
+    'member JWT without device header may read turns');
+
+-- Signed-in user with no membership is denied.
+select pg_temp.ppomi_as('96a00000-0000-4000-8000-000000000005', null);
+select pg_temp.ppomi_expect_error(
+    $q$select public.ppomi_transcript_list()$q$,
+    '42501', 'non-member cannot list transcripts');
 select pg_temp.ppomi_assert((select count(*) from public.ppomi_transcripts) = 0,
-    'pending device RLS hides transcript heads');
-select pg_temp.ppomi_assert((select count(*) from public.ppomi_transcript_turns) = 0,
-    'pending device RLS hides transcript turns');
+    'non-member RLS hides transcript heads');
 
 -- Cross-workspace isolation.
 select pg_temp.ppomi_as('96a00000-0000-4000-8000-000000000003', '96c00000-0000-4000-8000-000000000003');
 select pg_temp.ppomi_assert(
     (public.ppomi_transcript_turns('96d00000-0000-4000-8000-000000000001')->>'found') = 'false',
     'cross workspace transcript hidden');
-select pg_temp.ppomi_assert(jsonb_array_length(public.ppomi_transcript_list()) = 0,
+select pg_temp.ppomi_assert(    jsonb_array_length(public.ppomi_transcript_list()->'transcripts') = 0,
     'cross workspace list is empty');
 select pg_temp.ppomi_assert((select count(*) from public.ppomi_transcripts) = 0,
     'transcript RLS isolates workspaces');
 select pg_temp.ppomi_assert((select count(*) from public.ppomi_transcript_turns) = 0,
     'turn RLS isolates workspaces');
 
--- Tombstone wipes ciphertext and hides the conversation.
+-- Tombstone wipes payload and hides the conversation.
 select pg_temp.ppomi_as('96a00000-0000-4000-8000-000000000002', '96c00000-0000-4000-8000-000000000002');
 select pg_temp.ppomi_assert((public.ppomi_transcript_delete('96d00000-0000-4000-8000-000000000001')->>'deleted') = 'true',
-    'approved web device may tombstone');
+    'web member may tombstone');
 select pg_temp.ppomi_assert((public.ppomi_transcript_delete('96d00000-0000-4000-8000-000000000001')->>'deleted') = 'true',
     'tombstone retry is idempotent');
-select pg_temp.ppomi_assert(jsonb_array_length(public.ppomi_transcript_list()) = 0,
+select pg_temp.ppomi_assert(    jsonb_array_length(public.ppomi_transcript_list()->'transcripts') = 0,
     'tombstoned transcript leaves the list');
 select pg_temp.ppomi_assert(
     (public.ppomi_transcript_turns('96d00000-0000-4000-8000-000000000001')->>'found') = 'false',
     'tombstoned transcript turns are hidden');
 select pg_temp.ppomi_assert(
-    (select bool_and(envelope = '{}'::jsonb) from public.ppomi_transcript_turns
+    (select bool_and(payload = '{}'::jsonb) from public.ppomi_transcript_turns
       where transcript_id = '96d00000-0000-4000-8000-000000000001'),
-    'tombstone clears turn ciphertext');
+    'tombstone clears turn payload');
 select pg_temp.ppomi_expect_error(
     $q$select public.ppomi_transcript_append(
         '96d00000-0000-4000-8000-000000000001',
         '96e00000-0000-4000-8000-000000000020',
-        '96f00000-0000-4000-8000-000000000001',
-        pg_temp.ppomi_envelope())$q$,
+        pg_temp.ppomi_turn('96e00000-0000-4000-8000-000000000020', 'late'))$q$,
     'PT410', 'cannot append to a tombstoned transcript');
 select pg_temp.ppomi_expect_error(
-    $q$select public.ppomi_transcript_open(
-        '96d00000-0000-4000-8000-000000000001',
-        '96f00000-0000-4000-8000-000000000001')$q$,
+    $q$select public.ppomi_transcript_open('96d00000-0000-4000-8000-000000000001')$q$,
     'PT410', 'open refuses a tombstoned id when no live transcript remains');
 
 reset role;

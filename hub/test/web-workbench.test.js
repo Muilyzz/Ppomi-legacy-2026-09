@@ -42,10 +42,11 @@ test('the service worker caches the workbench bundle as a public file and nothin
   const worker = await read('../service-worker.js');
   const paths = [...worker.matchAll(/'(\/[^']*)'/g)].map(match => match[1]);
   for (const path of ['/', '/web/workbench/app.js', '/web/workbench/app.css', '/web/home.js', '/web/vendor/tokens.css',
-    '/web/transcript-session.js', '/web/transcript-realtime.js']) assert.ok(paths.includes(path), `${path} is cached`);
+    '/web/transcript-session.js', '/web/transcript-realtime.js', '/web/transcript-protocol.js']) assert.ok(paths.includes(path), `${path} is cached`);
+  assert.equal(paths.includes('/web/transcript-crypto.js'), false);
   assert.equal(paths.some(path => path.startsWith('/api/') || path.includes('supabase')), false);
   assert.match(worker, /request\.headers\.has\('Authorization'\)/, 'authenticated requests bypass the cache');
-  assert.match(worker, /ppomi-public-home-20260911-9/, 'the cache version moved with the new static files');
+  assert.match(worker, /ppomi-public-home-20260911-10/, 'the cache version moved with the new static files');
 });
 
 test('the committed bundle exposes the mount function, points at the shared font and carries no credential', async () => {

@@ -2,8 +2,8 @@ import { SUPABASE_URL, PUBLISHABLE_KEY } from './config.js';
 import { RecordError } from './record-crypto.js';
 
 /**
- * Phoenix Realtime client for transcript ciphertext only. The caller decrypts.
- * Tokens are requested per connect and never stored on the returned handle.
+ * Phoenix Realtime client for transcript rows. Tokens are requested per
+ * connect and never stored on the returned handle.
  */
 export function createTranscriptRealtime({
   getAccessToken, onEvent, signal,
@@ -78,7 +78,7 @@ export function createTranscriptRealtime({
         if (table === 'ppomi_transcripts' || change?.table === 'ppomi_transcripts') {
           onEvent({ type: record.deleted_at ? 'tombstone' : 'transcript', record });
         } else {
-          onEvent({ type: kind === 'UPDATE' && record.envelope && Object.keys(record.envelope).length === 0 ? 'wiped' : 'turn', record });
+          onEvent({ type: kind === 'UPDATE' && record.payload && Object.keys(record.payload).length === 0 ? 'wiped' : 'turn', record });
         }
       } catch { /* A view cannot break the socket. */ }
     });

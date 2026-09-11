@@ -7,7 +7,7 @@ Mac 에이전트 → Mac 뽀미 MCP → Supabase ← Android 뽀미
                                          └ 접근성 서비스 → 기기의 앱
 ```
 
-공유 작업·기록 경로에서 두 앱은 Supabase에 HTTPS로 직접 연결하며 ADB 중계나 Mac의 상시 실행이 필요하지 않다. 새 음성 에이전트는 별도의 Vercel API에서 Realtime 임시 키를 발급받고, AI가 고른 기억만 암호화해 Supabase에 저장한다. 워크벤치 대화 원문은 에이전트 서버가 아니라 클라이언트가 암호화해 `ppomi_transcript_*`에 올린다. [음성 에이전트 구조](../agent/README.md)와 [대화 transcript](#대화-transcript-e2e)를 참고한다.
+공유 작업·기록 경로에서 두 앱은 Supabase에 HTTPS로 직접 연결하며 ADB 중계나 Mac의 상시 실행이 필요하지 않다. 새 음성 에이전트는 별도의 Vercel API에서 Realtime 임시 키를 발급받고, AI가 고른 기억만 서버 키로 암호화해 Supabase에 저장한다. 워크벤치 대화 원문은 에이전트 서버가 아니라 클라이언트가 `ppomi_transcript_*`에 올리며, 접근은 Auth·작업 공간 구성원 RLS다. [음성 에이전트 구조](../agent/README.md)와 [대화 transcript](#대화-transcript)를 참고한다.
 
 ## 서버와 기기의 역할
 
@@ -119,15 +119,15 @@ dist/Ppomi.app/Contents/MacOS/Ppomi --verify-records
 
 2026-09-09 설치 검증: Mac 0.5.0을 기존 개발 서명으로 설치했다. 관련 Swift 검사 77개와 증빙 직렬화 안정화 후 화면/암호화 검사 10개가 통과했다. 원격 권한·CAS·불변 이력 검사 34개도 통과했으며 공식 CLI의 23개 SQL 문장으로 두 번째 마이그레이션 이력을 등록하고 로컬/원격 일치를 확인했다. 설치된 앱의 빈 캐시 검증에서 6종 자료가 모두 수집 원본과 일치했다. 타임라인 입력도 기존 계산 결과와 같으며, 실행 중인 상단에 `Supabase · 서버 v1`과 실제 그래프가 표시되는 것을 확인했다. 증빙은 키 순서를 고정해 재실행마다 불필요한 버전이 생기지 않도록 했다. 비공개 검증 결과는 `.ppomi/ssot/records-verification.json`에 보관한다.
 
-## 대화 transcript (E2E)
+## 대화 transcript
 
-`20260911120000_encrypted_transcripts.sql`은 장부(`ppomi_record_*`)·에이전트 기억(`ppomi_agent_memories`)과 분리된 대화 테이블을 둔다. 서버는 AES-GCM 봉투(`version`·`nonce`·`ciphertext`·`tag`)만 보관한다. 평문은 기기에서만 풀리며, 작업 공간 기록 키(`ppomi_wrapped_keys`)를 재사용한다. 승인된 등록 기기(웹 포함)가 `ppomi_transcript_open`·`append`·`turns`·`delete`(tombstone)를 호출한다. 에이전트 `/v1/session`·`/v1/responses`는 여전히 요청마다 끝나며 원문을 저장하지 않는다.
+`20260911120000_encrypted_transcripts.sql`은 장부(`ppomi_record_*`)·에이전트 기억(`ppomi_agent_memories`)과 분리된 대화 테이블을 둔다. 정책은 [MZZ-27](https://linear.app/muilyzz/issue/MZZ-27)의 Auth + RLS다. 구성원이 turn JSON(`id`·`role`·`parts`)을 올리고, 서버가 그 내용을 읽을 수 있다. 클라이언트 E2E 봉투와 `ppomi_wrapped_keys` 게이트, 기기 승인 게이트는 쓰지 않는다. 에이전트 `/v1/session`·`/v1/responses`는 여전히 요청마다 끝나며 원문을 저장하지 않는다. 에이전트 기억은 기존처럼 `PPOMI_AGENT_MEMORY_KEY`로 서버가 암호화한다.
 
-Realtime은 `ppomi_transcript_turns` INSERT/UPDATE와 `ppomi_transcripts` UPDATE를 구독한다. RLS는 승인된 계정 기기의 작업 공간 암호문만 보이게 해서, WebSocket에 `X-Ppomi-Device`가 없어도 구독이 된다. 웹 홈은 `wss://…supabase.co`로 붙고 도착한 암호문을 로컬에서 푼다. Mac은 같은 RPC로 쓰고, 창이 다시 보일 때 목록을 다시 읽어 합친다.
+Realtime은 `ppomi_transcript_turns` INSERT/UPDATE와 `ppomi_transcripts` UPDATE를 구독한다. RLS는 `ppomi_members`의 작업 공간만 보이게 해서, WebSocket에 `X-Ppomi-Device`나 승인 여부가 없어도 구독이 된다. 웹 홈은 `wss://…supabase.co`로 붙고 도착한 turn을 그대로 합친다. Mac은 같은 RPC로 쓰고, 창이 다시 보일 때 목록을 다시 읽어 합친다.
 
-검증: [서버 회귀](../supabase/tests/encrypted_transcripts_regression.sql)는 웹 쓰기·대기 기기 거부·작업 공간 격리·tombstone 암호문 삭제·익명 거부를 롤백한다. 허브는 `hub/test/web-transcripts-crypto.test.js`와 `web-transcript-session.test.js`가 봉투 바인딩과 Realtime join을 검사한다. 두 실제 기기에서 새로고침 없이 같은 말이 보이는지는 아래 수동 절차로 확인한다.
+검증: [서버 회귀](../supabase/tests/encrypted_transcripts_regression.sql)는 웹·대기 기기·헤더 없는 JWT 쓰기, 비구성원 거부, 작업 공간 격리, tombstone 삭제, 익명 거부를 롤백한다. 허브는 `hub/test/web-transcripts-crypto.test.js`와 `web-transcript-session.test.js`가 payload 검증과 Realtime join을 검사한다. 두 실제 기기에서 새로고침 없이 같은 말이 보이는지는 아래 수동 절차로 확인한다.
 
-1. 같은 Google 계정으로 승인된 Mac(또는 이미 키가 있는 웹)과 두 번째 승인·키 전달된 웹(ppomi.muilyzz.com)을 연다.
+1. 같은 Google 계정으로 웹(ppomi.muilyzz.com) 두 창, 또는 웹과 Mac을 연다. 채팅 기록에는 기기 승인·감싼 키가 필요 없다.
 2. 한쪽에서 텍스트 한 줄을 보내고 응답이 끝날 때까지 기다린다.
-3. 다른쪽은 새로고침하지 않은 채 같은 사용자/비서 말이 나타나는지 본다. 웹은 Realtime INSERT 후 로컬 복호화, Mac은 포커스/가시성 때 `transcriptOpen`으로 합친다.
-4. 서버 SQL/대시보드에서 해당 turn 행의 `envelope`만 확인하고 평문 컬럼이 없음을 본다.
+3. 다른쪽은 새로고침하지 않은 채 같은 사용자/비서 말이 나타나는지 본다. 웹은 Realtime INSERT, Mac은 포커스/가시성 때 `transcriptOpen`으로 합친다.
+4. 서버 SQL/대시보드에서 해당 turn 행의 `payload`가 저장된 대화 JSON인지 본다.
