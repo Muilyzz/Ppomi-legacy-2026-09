@@ -10,6 +10,8 @@ Each DI-separated package keeps **two** ways to check it. Do not fold them toget
 
 An `example` is **not** the hub and **not** the Mac/Windows app. It wires **one** package port to a real (or skippable) implementation.
 
+The consumer Mac window is the existing `뽀미.app` (`scripts/make-app.sh`). Double-click `scripts/open-mac-shell.command`. Do not add a package for that shell. [v0.2 runbook](v0.2-mac-shell.md).
+
 ## Layout (locked)
 
 ```text
