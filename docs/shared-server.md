@@ -125,7 +125,7 @@ dist/Ppomi.app/Contents/MacOS/Ppomi --verify-records
 
 Realtime은 암호문 INSERT/UPDATE만 밀어 준다. 웹은 이를 신호로 `ppomi_transcript_turns`를 다시 불러 복호화된 turn을 합친다. Mac은 같은 RPC로 쓰고, 창이 다시 보일 때 `transcriptOpen`으로 합친다.
 
-키(MZZ-28): Vault 비밀 `ppomi-at-rest-key`(별칭 `ppomi-transcript-key`). SQL 검사는 `app.ppomi_at_rest_key` 또는 `app.ppomi_transcript_key`(32바이트 base64). 회전은 `vault.update_secret` 뒤 기존 봉투를 다시 봉하는 별도 작업이다. 대화는 이 헬퍼로 봉한다. 기억 **읽기**는 이중이다(`20260911131000_memory_dual_read.sql` + `20260911132000_memory_list_membership.sql`): at-rest 봉투는 `ppomi_agent_memory_list`가 열고, 옛 AES-GCM 봉투는 에이전트가 `PPOMI_AGENT_MEMORY_KEY`로 연다. 목록 권한은 transcript와 같이 **구성원**이다. 기기 승인·Mac 게이트가 아니다. 기억 **쓰기**는 아직 에이전트 GCM + `ppomi_private_device`다.
+키(MZZ-28): Vault 비밀 `ppomi-at-rest-key`(별칭 `ppomi-transcript-key`). SQL 검사는 `app.ppomi_at_rest_key` 또는 `app.ppomi_transcript_key`(32바이트 base64). 회전은 `vault.update_secret` 뒤 기존 봉투를 다시 봉하는 별도 작업이다. 대화와 기억 **쓰기·읽기·삭제**는 이 헬퍼와 구성원 RPC다(`20260911133000_memory_membership_write.sql`). 기기 승인·Mac 게이트가 아니다. `X-Ppomi-Device`는 선택 귀속이다. 옛 AES-GCM 행은 목록이 봉투로 남기고, 에이전트가 `PPOMI_AGENT_MEMORY_KEY`로 연 뒤 `ppomi_agent_memory_rewrap`으로 옮긴다. 그 환경 변수 폐기는 다음 조각이다.
 
 검증: [서버 회귀](../supabase/tests/encrypted_transcripts_regression.sql)는 공유 seal/open 왕복·AAD 바인딩·별칭 GUC, RPC 복호화·직접 SELECT에 평문 없음·웹·대기 기기·헤더 없는 JWT 쓰기, 비구성원 거부, 작업 공간 격리, tombstone, 익명 거부를 롤백한다. 허브는 payload 검증과 Realtime join(신호)을 검사한다.
 

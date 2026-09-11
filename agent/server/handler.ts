@@ -30,7 +30,7 @@ const NO_STORE = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Con
 /** The web home (hub) runs the same bundled conversation in a browser tab with the same Supabase session and device header. */
 const WEB_ORIGIN_DEFAULT = 'https://ppomi.muilyzz.com';
 const ORIGIN = /^https:\/\/[a-z0-9.-]+(?::\d{1,5})?$/;
-/** Only the conversation paths are reachable from a browser; memory paths stay native (web devices are read-only on the shared server). */
+/** Only the conversation paths are reachable from a browser; memory HTTP stays native_only. Members may call the memory RPCs directly. */
 const WEB_PATHS = new Set(['/v1/session', '/v1/responses']);
 const WEB_ALLOWED_HEADERS = 'authorization, content-type, x-ppomi-device';
 
@@ -118,15 +118,19 @@ function encryptionKey(env: Environment): Buffer {
 function aad(workspace: string, id: string, replacesId: string | null): Buffer {
   return Buffer.from(JSON.stringify(['ppomi-agent-memory', 1, workspace, id, replacesId]));
 }
+function memoryPayload(input: MemoryInput): Json {
+  return { id: input.id, kind: input.kind, text: input.text, source: input.source, confidence: input.confidence, replacesId: input.replacesId ?? null, selection: 'automatic' };
+}
+
+/** Leftover GCM rows (slice 3 dual-read). New writes seal in Postgres. Removed in slice 4. */
 function encrypt(input: MemoryInput, workspace: string, key: Buffer): { envelope: Json; digest: string } {
-  const payload = JSON.stringify({ id: input.id, kind: input.kind, text: input.text, source: input.source, confidence: input.confidence, replacesId: input.replacesId ?? null, selection: 'automatic' });
+  const payload = JSON.stringify(memoryPayload(input));
   const binding = aad(workspace, input.id, input.replacesId ?? null);
   const nonce = randomBytes(12), cipher = createCipheriv('aes-256-gcm', key, nonce);
   cipher.setAAD(binding);
   const encrypted = Buffer.concat([cipher.update(payload, 'utf8'), cipher.final()]);
   return {
     envelope: { version: 1, nonce: nonce.toString('base64url'), ciphertext: encrypted.toString('base64url'), tag: cipher.getAuthTag().toString('base64url') },
-    // A keyed digest deduplicates random-nonce encryptions without publishing a plaintext hash.
     digest: createHmac('sha256', key).update('ppomi-memory-idempotency\0').update(binding).update(payload).digest('hex'),
   };
 }
@@ -211,9 +215,9 @@ export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment
       const context = await rpc('ppomi_context', {}) as Context;
       if (!context?.workspace || !UUID.test(context.workspace.id) || !context.device || !UUID.test(context.device.id))
         throw new SafeError(401, 'unauthorized', '등록된 기기의 인증을 확인하지 못했습니다.');
-      // Memory list is membership (MZZ-27): no Mac approval gate. Tool execution
-      // and other native-only paths may still require an approved device.
-      if (context.device.approved === false && path !== '/v1/memories/list') {
+      // Memory crypto is membership (MZZ-27): no Mac approval gate. native_only
+      // is the browser-vs-agent-HTTP boundary, not a decrypt/write gate.
+      if (context.device.approved === false && !path.startsWith('/v1/memories/')) {
         throw new SafeError(403, 'device_unapproved', '이 기기는 아직 승인되지 않았습니다. Mac 에서 기기를 승인해 주세요.');
       }
       if (!(request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) invalid();
@@ -261,12 +265,24 @@ export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment
         exactFields(body, []);
         const rows = await rpc('ppomi_agent_memory_list', {});
         if (!Array.isArray(rows) || rows.length > 50) throw new SafeError(502, 'invalid_response', '저장 기록 응답을 확인하지 못했습니다.');
-        result = { records: rows.map(row => readStoredMemory(row as StoredMemory, context.workspace.id, env)) };
+        const records: Memory[] = [];
+        for (const raw of rows) {
+          const row = raw as StoredMemory;
+          const record = readStoredMemory(row, context.workspace.id, env);
+          records.push(record);
+          if (!row.payload) {
+            try {
+              await rpc('ppomi_agent_memory_rewrap', { p_id: record.id, p_payload: memoryPayload(record) });
+            } catch (error) {
+              if (!(error instanceof SafeError)) throw error;
+            }
+          }
+        }
+        result = { records };
       } else if (path === '/v1/memories/save') {
-        const input = memoryInput(body), key = encryptionKey(env);
-        const encrypted = encrypt(input, context.workspace.id, key);
-        const row = await rpc('ppomi_agent_memory_save', { p_id: input.id, p_envelope: encrypted.envelope, p_request_digest: encrypted.digest, p_replaces_id: input.replacesId ?? null });
-        result = { record: decrypt(row as StoredMemory, context.workspace.id, key) };
+        const input = memoryInput(body);
+        const row = await rpc('ppomi_agent_memory_save', { p_id: input.id, p_payload: memoryPayload(input), p_replaces_id: input.replacesId ?? null });
+        result = { record: memoryFromOpened(row as StoredMemory, context.workspace.id) };
       } else {
         exactFields(body, ['id']);
         const deleted = await rpc('ppomi_agent_memory_delete', { p_id: uuid(body.id) });

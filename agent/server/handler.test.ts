@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { randomBytes } from 'node:crypto';
+import { createCipheriv, createHash, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createHandler } from './handler.js';
 
@@ -8,8 +8,14 @@ const WORKSPACE = 'aaaaaaaa-1111-4111-8111-111111111111';
 const DEVICE = 'dddddddd-1111-4111-8111-111111111111';
 const ID = 'bbbbbbbb-1111-4111-8111-111111111111';
 const NEXT = 'cccccccc-1111-4111-8111-111111111111';
-const environment = () => ({ SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co', SUPABASE_ANON_KEY: 'sb_publishable_test_public_key_only_123456', OPENAI_API_KEY: 'server-only-test-key', AI_GATEWAY_API_KEY: 'gateway-only-test-key', PPOMI_AGENT_MEMORY_KEY: randomBytes(32).toString('base64') });
-type Row = { id: string; workspace_id: string; replaces_id: string | null; created_at: string; deleted_at: string | null; envelope: Record<string, unknown>; request_digest: string };
+const environment = (): Record<string, string | undefined> => ({ SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co', SUPABASE_ANON_KEY: 'sb_publishable_test_public_key_only_123456', OPENAI_API_KEY: 'server-only-test-key', AI_GATEWAY_API_KEY: 'gateway-only-test-key', PPOMI_AGENT_MEMORY_KEY: randomBytes(32).toString('base64') });
+type Row = { id: string; workspace_id: string; replaces_id: string | null; created_at: string; deleted_at: string | null; envelope: Record<string, unknown>; request_digest: string; payload?: Record<string, unknown> };
+function opened(row: Row) {
+  return { id: row.id, workspace_id: row.workspace_id, replaces_id: row.replaces_id, created_at: row.created_at, deleted_at: row.deleted_at, payload: row.payload };
+}
+function digestOf(payload: unknown) {
+  return createHash('sha256').update(JSON.stringify(payload ?? null)).digest('hex');
+}
 function fixture() {
   const env = environment(), rows = new Map<string, Row>(), calls: { url: string; body: Record<string, unknown>; auth: string; safety: string | null; device: string | null }[] = [];
   let active = true;
@@ -22,18 +28,30 @@ function fixture() {
     const json = (data: unknown, status = 200) => Response.json(data, { status });
     if (address.endsWith('ppomi_context')) return active ? json({ workspace: { id: WORKSPACE }, device: { id: DEVICE } }) : json({ sensitive_upstream_details: 'must not leak' }, 403);
     if (address.endsWith('/client_secrets')) return json({ value: 'ek_ephemeral_test_only', expires_at: 100, session: { id: 'not-returned' } });
-    if (address.endsWith('ppomi_agent_memory_list')) return json([...rows.values()].filter(row => row.deleted_at === null && ![...rows.values()].some(child => child.replaces_id === row.id)));
+    if (address.endsWith('ppomi_agent_memory_list')) {
+      return json([...rows.values()].filter(row => row.deleted_at === null && ![...rows.values()].some(child => child.replaces_id === row.id))
+        .map(row => row.payload ? opened(row) : row));
+    }
     if (address.endsWith('ppomi_agent_memory_save')) {
+      const payload = body.p_payload as Record<string, unknown> | undefined;
+      const digest = digestOf(payload);
       const old = rows.get(String(body.p_id));
-      if (old) return old.deleted_at ? json({}, 410) : old.request_digest === body.p_request_digest && old.replaces_id === body.p_replaces_id ? json(old) : json({}, 409);
-      const row: Row = { id: String(body.p_id), workspace_id: WORKSPACE, replaces_id: body.p_replaces_id as string | null, created_at: '2026-09-09T13:00:00Z', deleted_at: null, envelope: body.p_envelope as Record<string, unknown>, request_digest: String(body.p_request_digest) };
-      rows.set(row.id, row); return json(row);
+      if (old) return old.deleted_at ? json({}, 410) : old.request_digest === digest && old.replaces_id === body.p_replaces_id ? json(opened(old)) : json({}, 409);
+      const row: Row = { id: String(body.p_id), workspace_id: WORKSPACE, replaces_id: body.p_replaces_id as string | null, created_at: '2026-09-09T13:00:00Z', deleted_at: null, envelope: { version: 1, nonce: 'n', ciphertext: 'sealed', tag: 't' }, request_digest: digest, payload };
+      rows.set(row.id, row); return json(opened(row));
+    }
+    if (address.endsWith('ppomi_agent_memory_rewrap')) {
+      const old = rows.get(String(body.p_id));
+      if (!old || old.deleted_at) return json({}, old ? 410 : 404);
+      old.payload = body.p_payload as Record<string, unknown>;
+      old.envelope = { version: 1, nonce: 'rewrapped', ciphertext: 'at-rest', tag: 't' };
+      return json(opened(old));
     }
     if (address.endsWith('ppomi_agent_memory_delete')) {
       const old = rows.get(String(body.p_id));
       if (!old) return json({}, 404);
       let ancestor: Row | undefined = old;
-      while (ancestor) { ancestor.deleted_at = '2026-09-09T14:00:00Z'; ancestor.envelope = {}; ancestor = ancestor.replaces_id ? rows.get(ancestor.replaces_id) : undefined; }
+      while (ancestor) { ancestor.deleted_at = '2026-09-09T14:00:00Z'; ancestor.envelope = {}; ancestor.payload = undefined; ancestor = ancestor.replaces_id ? rows.get(ancestor.replaces_id) : undefined; }
       return json({ deleted: true });
     }
     throw new Error('Unexpected endpoint');
@@ -115,10 +133,15 @@ test('a Google-account device names itself in a header that reaches the shared s
   assert.equal(f.calls.at(-1)?.device ?? null, null);   // legacy devices send no header and none is invented
 });
 
-test('unapproved devices may list memories; model paths still check approval', async () => {
+test('unapproved devices may list, save and delete memories; model paths still check approval', async () => {
   const pending = createHandler({ env: environment(), fetch: (async (url: string | URL | Request) => {
     if (String(url).endsWith('ppomi_context')) return Response.json({ workspace: { id: WORKSPACE }, device: { id: DEVICE, approved: false } });
     if (String(url).endsWith('ppomi_agent_memory_list')) return Response.json([]);
+    if (String(url).endsWith('ppomi_agent_memory_save')) {
+      return Response.json({ id: ID, workspace_id: WORKSPACE, replaces_id: null, created_at: '2026-09-09T13:00:00Z', deleted_at: null,
+        payload: { id: ID, kind: 'preference', text: '답변은 한국어로 간결하게 받는 것을 선호한다.', source: 'user_reported', confidence: 0.9, replacesId: null, selection: 'automatic' } });
+    }
+    if (String(url).endsWith('ppomi_agent_memory_delete')) return Response.json({ deleted: true });
     throw new Error('Unexpected endpoint ' + String(url));
   }) as typeof fetch });
   for (const path of ['/v1/session', '/v1/responses']) {
@@ -127,6 +150,8 @@ test('unapproved devices may list memories; model paths still check approval', a
     assert.equal(((await denied.json()) as { error: { code: string } }).error.code, 'device_unapproved');
   }
   assert.equal((await pending(request('/v1/memories/list', {}, { 'X-Ppomi-Device': DEVICE }))).status, 200);
+  assert.equal((await pending(request('/v1/memories/save', memory(), { 'X-Ppomi-Device': DEVICE }))).status, 200);
+  assert.equal((await pending(request('/v1/memories/delete', { id: ID }, { 'X-Ppomi-Device': DEVICE }))).status, 200);
   const f = fixture();
   assert.equal((await f.handle(request('/v1/memories/list', {}, { 'X-Ppomi-Device': DEVICE }))).status, 200);
 });
@@ -191,27 +216,30 @@ test('session rejects transcript/history input and exposes no provider errors', 
   assert.equal((await failure.text()).includes('sensitive-upstream-value'), false);
 });
 
-test('memory is authenticated ciphertext in DB and carries epistemic source without promotion', async () => {
+test('memory write/list round-trip on membership; stored envelope is not plaintext', async () => {
   const f = fixture(), input = memory({ source: 'ai_inferred', confidence: 0.3 });
   const response = await f.handle(request('/v1/memories/save', input));
   assert.equal(response.status, 200);
   const { record } = await response.json();
   assert.equal(record.source, 'ai_inferred'); assert.equal(record.confidence, 0.3); assert.equal(record.selection, 'automatic');
   assert.equal(record.text, input.text);
-  assert.equal(JSON.stringify([...f.rows.values()]).includes(input.text), false);
+  const save = f.calls.find(call => call.url.endsWith('ppomi_agent_memory_save'))!;
+  assert.equal(save.body.p_envelope, undefined);
+  assert.equal((save.body.p_payload as { text: string }).text, input.text);
+  assert.equal(JSON.stringify([...f.rows.values()].map(row => row.envelope)).includes(input.text), false);
   const listed = await (await f.handle(request('/v1/memories/list'))).json();
   assert.deepEqual(listed.records, [record]);
   for (const call of f.calls) assert.equal(call.auth, 'Bearer test.device.signature');
 });
 
-test('same ID/content retry returns original record despite fresh nonces; changed input conflicts', async () => {
+test('same ID/content retry returns original record; changed input conflicts', async () => {
   const f = fixture();
   const first = await (await f.handle(request('/v1/memories/save', memory()))).json();
   const second = await (await f.handle(request('/v1/memories/save', memory()))).json();
   assert.deepEqual(second, first); assert.equal(f.rows.size, 1);
   const saves = f.calls.filter(call => call.url.endsWith('ppomi_agent_memory_save'));
-  assert.equal(saves[0]!.body.p_request_digest, saves[1]!.body.p_request_digest);
-  assert.notDeepEqual(saves[0]!.body.p_envelope, saves[1]!.body.p_envelope);
+  assert.deepEqual(saves[0]!.body.p_payload, saves[1]!.body.p_payload);
+  assert.equal(saves[0]!.body.p_envelope, undefined);
   assert.equal((await f.handle(request('/v1/memories/save', memory({ text: '다른 내용' })))).status, 409);
 });
 
@@ -229,12 +257,13 @@ test('replacement retains old ciphertext and deletion tombstones never resurrect
   assert.equal((await f.handle(request('/v1/memories/delete', { id: NEXT }))).status, 200);
 });
 
-test('ciphertext tamper and workspace binding fail closed with safe errors', async () => {
+test('opened-row tamper and workspace binding fail closed with safe errors', async () => {
   const f = fixture();
   await f.handle(request('/v1/memories/save', memory()));
   const row = f.rows.get(ID)!;
-  row.envelope.tag = 'AAAAAAAAAAAAAAAAAAAAAA';
+  row.payload = { ...row.payload, id: NEXT };
   assert.equal((await f.handle(request('/v1/memories/list'))).status, 502);
+  row.payload = { id: ID, kind: 'preference', text: '답변은 한국어로 간결하게 받는 것을 선호한다.', source: 'user_reported', confidence: 0.9, replacesId: null, selection: 'automatic' };
   row.workspace_id = 'eeeeeeee-1111-4111-8111-111111111111';
   const failure = await f.handle(request('/v1/memories/list'));
   assert.equal(failure.status, 502); assert.equal((await failure.text()).includes(memory().text), false);
@@ -250,56 +279,44 @@ test('known secrets, raw transcripts, unknown fields, invalid sources/confidence
   assert.equal(f.rows.size, 0);
 });
 
-test('list accepts RPC-opened at-rest payloads without the Vercel memory key', async () => {
-  const env = { ...environment(), PPOMI_AGENT_MEMORY_KEY: undefined };
-  const handle = createHandler({
-    env,
-    fetch: (async (url: string | URL | Request) => {
-      if (String(url).endsWith('ppomi_context')) return Response.json({ workspace: { id: WORKSPACE }, device: { id: DEVICE } });
-      if (String(url).endsWith('ppomi_agent_memory_list')) {
-        return Response.json([{
-          id: ID, workspace_id: WORKSPACE, replaces_id: null, created_at: '2026-09-09T13:00:00Z', deleted_at: null,
-          payload: { id: ID, kind: 'preference', text: '답변은 한국어로 간결하게 받는 것을 선호한다.', source: 'user_reported', confidence: 0.9, replacesId: null, selection: 'automatic' },
-        }]);
-      }
-      throw new Error('Unexpected endpoint');
-    }) as typeof fetch,
-  });
-  const listed = await (await handle(request('/v1/memories/list'))).json();
-  assert.equal(listed.records[0].text, '답변은 한국어로 간결하게 받는 것을 선호한다.');
-  assert.equal(listed.records[0].selection, 'automatic');
-  assert.equal((await handle(request('/v1/memories/save', memory()))).status, 503, 'writes still require the Vercel key');
-});
-
-test('list decrypts a mix of RPC-opened payloads and legacy GCM envelopes', async () => {
+test('save and list work without the Vercel memory key', async () => {
   const f = fixture();
-  const saved = await (await f.handle(request('/v1/memories/save', memory()))).json();
-  const opened = {
-    id: NEXT, workspace_id: WORKSPACE, replaces_id: null, created_at: '2026-09-09T14:00:00Z', deleted_at: null,
-    payload: { id: NEXT, kind: 'fact', text: '서버 헬퍼로 연 기록이다.', source: 'tool_observed', confidence: 1, replacesId: null, selection: 'automatic' },
-  };
-  const handle = createHandler({
-    env: f.env,
-    fetch: (async (url: string | URL | Request, init?: RequestInit) => {
-      if (String(url).endsWith('ppomi_context')) return Response.json({ workspace: { id: WORKSPACE }, device: { id: DEVICE } });
-      if (String(url).endsWith('ppomi_agent_memory_list')) return Response.json([opened, ...f.rows.values()]);
-      return f.handle(new Request(String(url), init));
-    }) as typeof fetch,
-  });
-  const listed = await (await handle(request('/v1/memories/list'))).json();
-  assert.equal(listed.records.length, 2);
-  assert.equal(listed.records[0].text, '서버 헬퍼로 연 기록이다.');
-  assert.equal(listed.records[1].text, saved.record.text);
+  f.env.PPOMI_AGENT_MEMORY_KEY = undefined;
+  const saved = await f.handle(request('/v1/memories/save', memory()));
+  assert.equal(saved.status, 200);
+  const listed = await (await f.handle(request('/v1/memories/list'))).json();
+  assert.equal(listed.records[0].text, memory().text);
+  assert.equal(listed.records[0].selection, 'automatic');
 });
 
-test('misconfigured admin key and missing memory key fail closed without exposing environment', async () => {
+test('list decrypts leftover GCM and asks the shared server to rewrap it', async () => {
+  const f = fixture();
+  const key = Buffer.from(f.env.PPOMI_AGENT_MEMORY_KEY!, 'base64');
+  const payload = { id: NEXT, kind: 'fact', text: '옛 GCM 기록이다.', source: 'tool_observed', confidence: 1, replacesId: null, selection: 'automatic' };
+  const binding = Buffer.from(JSON.stringify(['ppomi-agent-memory', 1, WORKSPACE, NEXT, null]));
+  const nonce = Buffer.alloc(12), cipher = createCipheriv('aes-256-gcm', key, nonce);
+  cipher.setAAD(binding);
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(payload), 'utf8'), cipher.final()]);
+  const gcm = {
+    id: NEXT, workspace_id: WORKSPACE, replaces_id: null, created_at: '2026-09-09T14:00:00Z', deleted_at: null,
+    envelope: { version: 1, nonce: nonce.toString('base64url'), ciphertext: encrypted.toString('base64url'), tag: cipher.getAuthTag().toString('base64url') },
+    request_digest: 'c'.repeat(64),
+  };
+  f.rows.set(NEXT, gcm);
+  const listed = await (await f.handle(request('/v1/memories/list'))).json();
+  assert.equal(listed.records[0].text, '옛 GCM 기록이다.');
+  assert.equal(f.calls.some(call => call.url.endsWith('ppomi_agent_memory_rewrap')), true);
+  assert.equal(f.rows.get(NEXT)!.payload?.text, '옛 GCM 기록이다.');
+});
+
+test('misconfigured admin key fails closed; voice still needs the leftover memory key', async () => {
   const f = fixture();
   f.env.SUPABASE_ANON_KEY = 'sb_secret_do_not_expose_this_value';
   const response = await f.handle(request('/v1/session'));
   assert.equal(response.status, 503); assert.equal((await response.text()).includes('sb_secret'), false);
   const g = fixture(); g.env.PPOMI_AGENT_MEMORY_KEY = '';
-  assert.equal((await g.handle(request('/v1/memories/save', memory()))).status, 503);
-  assert.equal(g.rows.size, 0);
+  assert.equal((await g.handle(request('/v1/memories/save', memory()))).status, 200);
+  assert.equal((await g.handle(request('/v1/session'))).status, 503);
 });
 
 test('server implementation has no transcript persistence, raw logging, or filesystem writes', async () => {
