@@ -43,6 +43,7 @@ test('잠김 HTML: 원문 없고 접힘, 칩만. 열림: 원문 + open', () => {
   assert.doesNotMatch(locked, /probe-not-a-real-token/);
   assert.doesNotMatch(locked, /009876543210/);
   assert.doesNotMatch(locked, /<details open/);
+  assert.match(locked, /<ul>/);
   assert.match(locked, /••••/);
   assert.match(opened, />열림</);
   assert.match(opened, /잠그기/);
