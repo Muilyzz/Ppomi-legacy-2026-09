@@ -1,8 +1,7 @@
-import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { publicUrl } from "../../../ppomi-body/src/index.ts";
-import { probeNpki } from "../../src/index.ts";
+import { probeNpki, type NpkiProbe } from "../../src/index.ts";
+import { CLOSE_EDGE_ENV, openInEdge } from "./kb-cert-edge.ts";
 import {
   describeHandoffs,
   dryRunKbStarBizWinCertPage,
@@ -29,42 +28,28 @@ function edgePath(): string | undefined {
   return candidates.find(candidate => existsSync(candidate));
 }
 
-function writeNpki(): void {
-  const probe = probeNpki();
-  if (probe.status === "skip") {
-    process.stdout.write("  npki     SKIP (not Windows — verify %USERPROFILE%\\AppData\\LocalLow\\NPKI after issue)\n");
-    return;
+/** Count + newest mtime only. Never a path, a filename, or a DN. */
+function describeNpki(probe: NpkiProbe): string {
+  switch (probe.status) {
+    case "skip":
+      return "SKIP (not Windows — verify %USERPROFILE%\\AppData\\LocalLow\\NPKI after issue)";
+    case "missing":
+      return "missing — verify AppData\\LocalLow\\NPKI manually after the person finishes";
+    case "refused":
+      return "refused — PPOMI_NPKI_ROOT must be an absolute directory under %USERPROFILE% (not the profile itself, not a link)";
+    case "ok": {
+      const newest = probe.newestMtimeMs === null ? "-" : new Date(probe.newestMtimeMs).toISOString();
+      return `files=${probe.fileCount} newest=${newest} root=${probe.root}${probe.truncated ? " (truncated)" : ""}`;
+    }
+    default: {
+      const exhaustive: never = probe.status;
+      return String(exhaustive);
+    }
   }
-  if (probe.status === "missing") {
-    process.stdout.write("  npki     missing — verify AppData\\LocalLow\\NPKI manually after the person finishes\n");
-    return;
-  }
-  if (probe.status === "refused") {
-    process.stdout.write("  npki     refused — PPOMI_NPKI_ROOT must be an absolute directory under %USERPROFILE% (not the profile itself, not a link)\n");
-    return;
-  }
-  const newest = probe.newestMtimeMs === null ? "-" : new Date(probe.newestMtimeMs).toISOString();
-  process.stdout.write(`  npki     files=${probe.fileCount} newest=${newest} root=${probe.root}${probe.truncated ? " (truncated)" : ""}\n`);
 }
 
-async function openIssueInEdge(url: string): Promise<"ok" | "skip"> {
-  const edge = edgePath();
-  if (edge === undefined) {
-    process.stdout.write("  live     SKIP — Edge missing (set PPOMI_EDGE)\n");
-    return "skip";
-  }
-  const child = spawn(edge, ["--no-first-run", "--no-default-browser-check", "--new-window", url], {
-    stdio: "ignore",
-    detached: true,
-  });
-  child.unref();
-  process.stdout.write(`  live     opened Edge ${publicUrl(url)}\n`);
-  if (child.pid !== undefined && process.env.PPOMI_KB_CERT_KEEP_EDGE !== "1") {
-    await new Promise(done => setTimeout(done, 4_000));
-    spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
-    process.stdout.write("  live     closed Edge (set PPOMI_KB_CERT_KEEP_EDGE=1 to leave it for the person)\n");
-  }
-  return "ok";
+function writeNpki(): void {
+  process.stdout.write(`  npki     ${describeNpki(probeNpki())}\n`);
 }
 
 async function main(): Promise<void> {
@@ -102,11 +87,22 @@ async function main(): Promise<void> {
     writeNpki();
     return;
   }
-
-  const opened = await openIssueInEdge(issueUrl(document));
-  if (opened === "ok") {
-    process.stdout.write("  live     STOP — remaining steps are human (OTP, passwords, UAC, final confirm)\n");
+  const edge = edgePath();
+  if (edge === undefined) {
+    process.stdout.write("  live     SKIP — Edge missing (set PPOMI_EDGE)\n");
+    writeNpki();
+    return;
   }
+
+  const opened = await openInEdge({
+    edge,
+    url: issueUrl(document),
+    closeEdge: process.env[CLOSE_EDGE_ENV] === "1",
+  });
+  for (const line of opened.lines) {
+    process.stdout.write(`  live     ${line}\n`);
+  }
+  process.stdout.write("  live     STOP — remaining steps are human (OTP, passwords, UAC, final confirm)\n");
   writeNpki();
 }
 
