@@ -77,7 +77,7 @@ Reply JSON (also `structuredContent` on MCP / executor):
 { "name": "ui_tap", "arguments": { "x": 100, "y": 92 } }
 ```
 
-Use `nodeId` **or** `x,y`, not both. Coordinates are screen points in the same space as `bounds`. AX Press is tried first; the fallback is a click at the node center. Payment/purchase labels and password nodes are refused (`protected_action`). After a tap, read again.
+Use `nodeId` **or** `x,y`, not both. Coordinates are screen points in the same space as `bounds`. Web content (`AXWebArea` / `AXLink`) clicks the live AX frame center — Chrome often reports AXPress success with no effect. Browser chrome (tabs/toolbar) still uses AXPress, then a click if Press fails. The window is re-raised and the point must sit in a live frame (not a Stage Manager thumbnail). Payment/purchase labels and password nodes are refused (`protected_action`). After a tap, read again.
 
 ### `ui_type`
 
@@ -86,7 +86,7 @@ Use `nodeId` **or** `x,y`, not both. Coordinates are screen points in the same s
 { "name": "ui_type", "arguments": { "text": "hello" } }
 ```
 
-`text` is required (max 4096). `nodeId` optional: omit to type into the focused field. AX Value is preferred; otherwise Unicode key events. No clipboard. Password fields and control characters are refused.
+`text` is required (max 4096). `nodeId` optional: omit to type into the focused field. AX Value is preferred; otherwise Unicode key events in 16-unit chunks after a short focus wait. No clipboard. Password fields and control characters are refused. Contract errors start with `오류: stale_screen` / `오류: protected_action` (not enum case names).
 
 Needs macOS Accessibility (손쉬운 사용) for live calls. Record-focus (`기록 집중`) blocks these tools like `browser_open`.
 

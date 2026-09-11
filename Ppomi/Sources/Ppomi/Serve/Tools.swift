@@ -937,7 +937,11 @@ final class Tools {
                 return (r.steps.map { "\($0.fp.glyph) \($0.fp.target) \($0.ok ? "✓" : "✗")" } + [why, Self.screenText(r.lastWords)]).joined(separator: "\n")
             default: return "unknown tool \(name)"
             }
-        } catch { runtimeRecorder.emit(.failed); return "오류: \(error)" }
+        } catch {
+            runtimeRecorder.emit(.failed)
+            let detail = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+            return "오류: \(detail)"
+        }
     }
 }
 

@@ -60,9 +60,10 @@ enum MacUI {
         }
     }
 
-    enum Failure: LocalizedError, Equatable {
+    /// `"오류: \(error)"` must print these strings, not the enum case names (`staleScreen`).
+    enum Failure: LocalizedError, Equatable, CustomStringConvertible {
         case accessibility, appNotFound, staleScreen, protectedAction, invalidRequest(String)
-        var errorDescription: String? {
+        var description: String {
             switch self {
             case .accessibility:
                 return "손쉬운 사용 권한이 필요합니다. 뽀미 설정 창(시작하기)에서 손쉬운 사용을 켜 주세요."
@@ -76,6 +77,7 @@ enum MacUI {
                 return "invalid_request. \(detail)"
             }
         }
+        var errorDescription: String? { description }
     }
 
     protocol Session: AnyObject {
@@ -135,6 +137,32 @@ enum MacUI {
         }
         return number.doubleValue
     }
+
+    /// Stage Manager thumbnails are smaller than a real browser window.
+    static let liveWindowMin: CGFloat = 200
+    static let hidChunkSize = 16
+
+    static func isPassword(role: String, subrole: String) -> Bool {
+        role == "AXSecureTextField" || subrole == (kAXSecureTextFieldSubrole as String)
+    }
+
+    /// Chrome page links/buttons sit under `AXWebArea`. AXPress often no-ops there; click the AX frame center.
+    static func clicksWebContent(role: String, rolesTowardRoot: [String]) -> Bool {
+        role == "AXLink" || rolesTowardRoot.contains { $0 == "AXWebArea" }
+    }
+
+    static func hidUTF16Chunks(_ text: String, size: Int = hidChunkSize) -> [[UInt16]] {
+        let units = Array(text.utf16)
+        let step = max(1, size)
+        guard !units.isEmpty else { return [] }
+        var out: [[UInt16]] = []
+        var index = 0
+        while index < units.count {
+            out.append(Array(units[index..<min(index + step, units.count)]))
+            index += step
+        }
+        return out
+    }
 }
 
 /// Process-local AX session. One snapshot; IDs die after tap/type or 15 seconds.
@@ -143,7 +171,7 @@ final class LiveMacUI: MacUI.Session {
         let snapshot: MacUI.Snapshot
         let at: Date
         let pid: pid_t
-        let window: CGRect
+        let windowElement: AXUIElement
         let elements: [String: AXUIElement]
     }
 
@@ -156,7 +184,7 @@ final class LiveMacUI: MacUI.Session {
         let target = try Self.resolve(wanted)
         let application = AXUIElementCreateApplication(target.pid)
         AXUIElementSetAttributeValue(application, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
-        guard let window = Self.primaryWindow(in: application), let frame = Self.frame(window) else {
+        guard let window = Self.primaryWindow(in: application) else {
             throw MacUI.Failure.appNotFound
         }
         AXUIElementPerformAction(window, kAXRaiseAction as CFString)
@@ -170,14 +198,14 @@ final class LiveMacUI: MacUI.Session {
             if Self.attr(element, "AXHidden") as? Bool == true { return }
             let roleRaw = Self.attr(element, kAXRoleAttribute) as? String ?? ""
             let subrole = Self.attr(element, kAXSubroleAttribute) as? String ?? ""
-            let password = roleRaw == (kAXSecureTextFieldRole as String) || subrole == "AXSecureTextField"
+            let password = MacUI.isPassword(role: roleRaw, subrole: subrole)
             let title = Self.limit(Self.attr(element, kAXTitleAttribute) as? String)
             let description = Self.limit(Self.attr(element, kAXDescriptionAttribute) as? String)
             var value = ""
             if !password { value = Self.limit(Self.stringValue(element)) }
             let enabled = Self.attr(element, kAXEnabledAttribute) as? Bool ?? true
             let rect = Self.frame(element) ?? .zero
-            let actions = (Self.attr(element, kAXActionsAttribute) as? [String]) ?? []
+            let actions = Self.actions(element)
             let press = actions.contains(kAXPressAction as String) || Self.clickableRole(roleRaw)
             var settable = DarwinBoolean(false)
             let canSet = AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &settable) == .success && settable.boolValue
@@ -203,7 +231,9 @@ final class LiveMacUI: MacUI.Session {
         walk(window, parent: nil, depth: 0)
         let snapshot = MacUI.Snapshot(snapshotId: String(snapshotId), packageName: target.bundle, appLabel: target.label,
                                       nodes: nodes, truncated: truncated)
-        lock.lock(); stored = Stored(snapshot: snapshot, at: Date(), pid: target.pid, window: frame, elements: elements); lock.unlock()
+        lock.lock()
+        stored = Stored(snapshot: snapshot, at: Date(), pid: target.pid, windowElement: window, elements: elements)
+        lock.unlock()
         return snapshot
     }
 
@@ -215,20 +245,27 @@ final class LiveMacUI: MacUI.Session {
                   let element = current.elements[nodeId] else { throw MacUI.Failure.staleScreen }
             if node.password || Tools.isPayWord(node.text) || !node.enabled { throw MacUI.Failure.protectedAction }
             if !node.clickable { throw MacUI.Failure.protectedAction }
+            let liveWindow = try raiseLive(current)
+            guard let live = Self.frame(element), live.width >= 2, live.height >= 2 else { throw MacUI.Failure.staleScreen }
+            let center = CGPoint(x: live.midX, y: live.midY)
+            guard liveWindow.insetBy(dx: -8, dy: -8).contains(center) else { throw MacUI.Failure.staleScreen }
             invalidate()
-            if AXUIElementPerformAction(element, kAXPressAction as CFString) != .success {
-                Self.click(CGPoint(x: (node.bounds.left + node.bounds.right) / 2,
-                                   y: (node.bounds.top + node.bounds.bottom) / 2))
+            let role = Self.attr(element, kAXRoleAttribute as String) as? String ?? ""
+            if MacUI.clicksWebContent(role: role, rolesTowardRoot: Self.ancestorRoles(element)) {
+                Self.click(center)
+            } else if AXUIElementPerformAction(element, kAXPressAction as CFString) != .success {
+                Self.click(center)
             }
             return MacUI.ActionResult(invoked: true)
         }
         guard let x, let y else { throw MacUI.Failure.invalidRequest("x,y") }
         let hit = current.snapshot.nodes.last { $0.bounds.contains(x, y) }
         if let hit, hit.password || Tools.isPayWord(hit.text) { throw MacUI.Failure.protectedAction }
-        let padded = current.window.insetBy(dx: -8, dy: -8)
-        guard padded.contains(CGPoint(x: x, y: y)) else { throw MacUI.Failure.staleScreen }
+        let point = CGPoint(x: x, y: y)
+        let liveWindow = try raiseLive(current)
+        guard liveWindow.insetBy(dx: -8, dy: -8).contains(point) else { throw MacUI.Failure.staleScreen }
         invalidate()
-        Self.click(CGPoint(x: x, y: y))
+        Self.click(point)
         return MacUI.ActionResult(invoked: true)
     }
 
@@ -242,23 +279,22 @@ final class LiveMacUI: MacUI.Session {
                   let found = current.elements[nodeId] else { throw MacUI.Failure.staleScreen }
             if node.password || !node.editable || !node.enabled { throw MacUI.Failure.protectedAction }
             element = found
-            AXUIElementSetAttributeValue(application, kAXFocusedUIElementAttribute as CFString, element)
         } else if let focused = Self.attr(application, kAXFocusedUIElementAttribute as String),
                   CFGetTypeID(focused) == AXUIElementGetTypeID() {
             element = (focused as! AXUIElement)
-            let role = Self.attr(element, kAXRoleAttribute) as? String ?? ""
-            let subrole = Self.attr(element, kAXSubroleAttribute) as? String ?? ""
-            if role == (kAXSecureTextFieldRole as String) || subrole == "AXSecureTextField" {
-                throw MacUI.Failure.protectedAction
-            }
+            let role = Self.attr(element, kAXRoleAttribute as String) as? String ?? ""
+            let subrole = Self.attr(element, kAXSubroleAttribute as String) as? String ?? ""
+            if MacUI.isPassword(role: role, subrole: subrole) { throw MacUI.Failure.protectedAction }
         } else { throw MacUI.Failure.staleScreen }
+        _ = try raiseLive(current)
+        Self.focus(element, in: application)
         invalidate()
         var settable = DarwinBoolean(false)
         if AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &settable) == .success, settable.boolValue,
            AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, text as CFString) == .success {
             return MacUI.ActionResult(typed: true)
         }
-        AXUIElementSetAttributeValue(application, kAXFocusedUIElementAttribute as CFString, element)
+        Self.focus(element, in: application)
         Self.typeUnicode(text)
         return MacUI.ActionResult(typed: true)
     }
@@ -294,6 +330,27 @@ final class LiveMacUI: MacUI.Session {
         return AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success ? value : nil
     }
 
+    fileprivate static func actions(_ element: AXUIElement) -> [String] {
+        var names: CFArray?
+        guard AXUIElementCopyActionNames(element, &names) == .success, let names else { return [] }
+        return (names as? [String]) ?? []
+    }
+
+    fileprivate static func ancestorRoles(_ element: AXUIElement) -> [String] {
+        var roles: [String] = []
+        var current: AXUIElement? = element
+        for _ in 0..<32 {
+            guard let el = current else { break }
+            roles.append(attr(el, kAXRoleAttribute as String) as? String ?? "")
+            guard let parent = attr(el, kAXParentAttribute as String),
+                  CFGetTypeID(parent) == AXUIElementGetTypeID() else { break }
+            let next = parent as! AXUIElement
+            if CFEqual(next, el) { break }
+            current = next
+        }
+        return roles
+    }
+
     fileprivate static func frame(_ element: AXUIElement) -> CGRect? {
         var origin = CGPoint.zero, size = CGSize.zero
         guard let pos = attr(element, kAXPositionAttribute as String), let sz = attr(element, kAXSizeAttribute as String),
@@ -301,10 +358,16 @@ final class LiveMacUI: MacUI.Session {
         return CGRect(origin: origin, size: size)
     }
 
+    fileprivate static func isLiveWindow(_ element: AXUIElement) -> Bool {
+        guard let rect = frame(element) else { return false }
+        return rect.width >= MacUI.liveWindowMin && rect.height >= MacUI.liveWindowMin
+    }
+
     fileprivate static func primaryWindow(in application: AXUIElement) -> AXUIElement? {
         for name in [kAXFocusedWindowAttribute, kAXMainWindowAttribute] as [String] {
             if let value = attr(application, name), CFGetTypeID(value) == AXUIElementGetTypeID() {
-                return (value as! AXUIElement)
+                let window = value as! AXUIElement
+                if isLiveWindow(window) { return window }
             }
         }
         let windows = (attr(application, kAXWindowsAttribute as String) as? [AXUIElement]) ?? []
@@ -312,7 +375,33 @@ final class LiveMacUI: MacUI.Session {
             guard let rect = frame(window) else { return 0 }
             return max(0, rect.width) * max(0, rect.height)
         }
-        return windows.max { area($0) < area($1) }
+        return windows.filter(isLiveWindow).max { area($0) < area($1) }
+    }
+
+    private func raiseLive(_ stored: Stored) throws -> CGRect {
+        let application = AXUIElementCreateApplication(stored.pid)
+        AXUIElementSetAttributeValue(application, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
+        if let running = NSRunningApplication(processIdentifier: stored.pid), !running.isActive {
+            running.activate(options: [.activateIgnoringOtherApps])
+        }
+        AXUIElementPerformAction(stored.windowElement, kAXRaiseAction as CFString)
+        guard let live = Self.frame(stored.windowElement),
+              live.width >= MacUI.liveWindowMin, live.height >= MacUI.liveWindowMin else {
+            throw MacUI.Failure.staleScreen
+        }
+        return live
+    }
+
+    fileprivate static func focus(_ element: AXUIElement, in application: AXUIElement) {
+        AXUIElementSetAttributeValue(application, kAXFocusedUIElementAttribute as CFString, element)
+        let deadline = Date().addingTimeInterval(0.35)
+        while Date() < deadline {
+            if let focused = attr(application, kAXFocusedUIElementAttribute as String),
+               CFGetTypeID(focused) == AXUIElementGetTypeID(), CFEqual(focused, element) {
+                return
+            }
+            usleep(15_000)
+        }
     }
 
     fileprivate static func stringValue(_ element: AXUIElement) -> String {
@@ -355,14 +444,17 @@ final class LiveMacUI: MacUI.Session {
     }
 
     fileprivate static func typeUnicode(_ text: String) {
-        let utf16 = Array(text.utf16)
-        utf16.withUnsafeBufferPointer { buffer in
-            guard let base = buffer.baseAddress else { return }
-            for keyDown in [true, false] {
-                guard let event = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: keyDown) else { continue }
-                event.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: base)
-                event.post(tap: .cghidEventTap)
+        let chunks = MacUI.hidUTF16Chunks(text)
+        for (index, chunk) in chunks.enumerated() {
+            chunk.withUnsafeBufferPointer { buffer in
+                guard let base = buffer.baseAddress else { return }
+                for keyDown in [true, false] {
+                    guard let event = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: keyDown) else { continue }
+                    event.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: base)
+                    event.post(tap: .cghidEventTap)
+                }
             }
+            if index + 1 < chunks.count { usleep(8_000) }
         }
     }
 }

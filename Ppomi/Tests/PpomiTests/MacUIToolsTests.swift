@@ -137,7 +137,7 @@ final class MacUIToolsTests: XCTestCase {
         let tap = tools.execute("ui_tap", ["nodeId": link])
         XCTAssertTrue(tap.contains("\"invoked\":true"), tap)
         XCTAssertEqual(fixture.taps.map(\.nodeId), [link])
-        XCTAssertTrue(tools.execute("ui_tap", ["nodeId": link]).contains("stale_screen"))
+        assertContract(tools.execute("ui_tap", ["nodeId": link]), code: "stale_screen")
         _ = tools.execute("screen_read", [:])
         let typed = tools.execute("ui_type", ["nodeId": "fixture-2:2", "text": "hello"])
         XCTAssertTrue(typed.contains("\"typed\":true"), typed)
@@ -153,9 +153,28 @@ final class MacUIToolsTests: XCTestCase {
         let byPoint = tools.execute("ui_tap", ["x": 40.0, "y": 90.0])
         XCTAssertTrue(byPoint.contains("\"invoked\":true"), byPoint)
         _ = tools.execute("screen_read", [:])
-        XCTAssertTrue(tools.execute("ui_tap", ["nodeId": "fixture-2:3"]).contains("protected_action"))
-        XCTAssertTrue(tools.execute("ui_type", ["nodeId": "fixture-2:4", "text": "secret"]).contains("protected_action"))
-        XCTAssertTrue(tools.execute("ui_tap", ["x": 9_999.0, "y": 9_999.0]).contains("stale_screen"))
+        assertContract(tools.execute("ui_tap", ["nodeId": "fixture-2:3"]), code: "protected_action")
+        assertContract(tools.execute("ui_type", ["nodeId": "fixture-2:4", "text": "secret"]), code: "protected_action")
+        assertContract(tools.execute("ui_tap", ["x": 9_999.0, "y": 9_999.0]), code: "stale_screen")
+    }
+
+    func testErrorInterpolationExposesContractCodesNotEnumCases() {
+        XCTAssertTrue("\(MacUI.Failure.staleScreen)".hasPrefix("stale_screen"))
+        XCTAssertTrue("\(MacUI.Failure.protectedAction)".hasPrefix("protected_action"))
+        XCTAssertFalse("\(MacUI.Failure.staleScreen)".contains("staleScreen"))
+        XCTAssertFalse("\(MacUI.Failure.protectedAction)".contains("protectedAction"))
+        XCTAssertTrue("오류: \(MacUI.Failure.staleScreen)".hasPrefix("오류: stale_screen"))
+        XCTAssertTrue("오류: \(MacUI.Failure.protectedAction)".hasPrefix("오류: protected_action"))
+        XCTAssertEqual(MacUI.Failure.staleScreen.localizedDescription, MacUI.Failure.staleScreen.description)
+        XCTAssertTrue(MacUI.isPassword(role: "AXTextField", subrole: "AXSecureTextField"))
+        XCTAssertTrue(MacUI.isPassword(role: "AXSecureTextField", subrole: ""))
+        XCTAssertFalse(MacUI.isPassword(role: "AXTextField", subrole: ""))
+        XCTAssertTrue(MacUI.clicksWebContent(role: "AXLink", rolesTowardRoot: ["AXLink", "AXGroup", "AXWindow"]))
+        XCTAssertTrue(MacUI.clicksWebContent(role: "AXButton", rolesTowardRoot: ["AXButton", "AXWebArea", "AXWindow"]))
+        XCTAssertFalse(MacUI.clicksWebContent(role: "AXButton", rolesTowardRoot: ["AXButton", "AXToolbar", "AXWindow"]))
+        XCTAssertEqual(MacUI.hidUTF16Chunks("hello", size: 2).map { String(utf16CodeUnits: $0, count: $0.count) },
+                       ["he", "ll", "o"])
+        XCTAssertEqual(MacUI.hidUTF16Chunks("", size: 16), [])
     }
 
     @MainActor
@@ -200,5 +219,11 @@ final class MacUIToolsTests: XCTestCase {
         await withCheckedContinuation { continuation in
             executor.receive(["id": UUID().uuidString, "method": method, "args": args]) { continuation.resume(returning: $0) }
         }
+    }
+
+    private func assertContract(_ message: String, code: String, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(message.hasPrefix("오류: \(code)"), "\(message)", file: file, line: line)
+        XCTAssertFalse(message.contains("staleScreen"), message, file: file, line: line)
+        XCTAssertFalse(message.contains("protectedAction"), message, file: file, line: line)
     }
 }
