@@ -26,6 +26,8 @@ export interface PlaywrightLocatorHandle {
  * `PlaywrightPageTools` over a real Playwright `Page`.
  * Does not launch a browser. Device-local Chromium is opened by the live script.
  * Not `OsAdapter` and not a Vercel / cloud browser client.
+ * Do not `waitFor` a locator that only appears after a native modal; hand off to OS first.
+ * See `../playbook-runtime/docs/adapter-selection.md`.
  */
 export class LivePlaywrightPage implements PlaywrightPageTools {
   private readonly page: PlaywrightPageHandle;

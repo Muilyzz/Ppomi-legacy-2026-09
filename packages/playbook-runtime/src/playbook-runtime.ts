@@ -10,6 +10,9 @@ import type {
 
 /**
  * Runs declared steps against one OS adapter.
+ * Authors: native windows, system dialogs, cert UI, non-DOM chrome.
+ * In-page DOM / forms / waits use `PagePlaybookRuntime` + `BrowserPageAdapter`.
+ * See `docs/adapter-selection.md`. Do not wait in Playwright for a native modal.
  * Permission and screen/target preconditions are fail-closed: the run stops
  * and later steps are not sent to the adapter.
  * There is no device-approval or Mac-approver input.

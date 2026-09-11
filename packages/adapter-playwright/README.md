@@ -6,16 +6,20 @@ This is not `OsAdapter`, not a second playbook-runtime package, and not a generi
 
 ## When to use Playwright vs an OS adapter
 
-Hybrid agent automation. Pick the port from the surface, not from the app name.
+Hybrid agent automation. Pick the port from the **surface**, not the app name. Canonical rules live with the two runners: [`playbook-runtime` adapter selection](../playbook-runtime/docs/adapter-selection.md).
 
-| Surface | Port | Package |
-| --- | --- | --- |
-| Web page DOM (URL, locators, forms, in-page buttons) | `BrowserPageAdapter` | **this package** |
-| OS / native chrome, cert/security dialogs, UIA or Accessibility trees | `OsAdapter` (`readScreen` / `focus` / `click` / `type`) | `adapter-windows`, `adapter-macos` |
+| Surface | Runner | Port | Package |
+| --- | --- | --- | --- |
+| In-page web DOM, forms, locator waits | `PagePlaybookRuntime` | `BrowserPageAdapter` | **this package** |
+| Native windows, system dialogs, cert UI, non-DOM chrome | `PlaybookRuntime` | `OsAdapter` (`readScreen` / `focus` / `click` / `type`) | `adapter-windows` (UIA), `adapter-macos` (AX) |
 
 Do **not** replace the OS adapters with Playwright. A Korean certificate window, a native file picker, or a browser OS dialog is still UIA/AX. An in-page "Next" button is Playwright.
 
-`PlaybookRuntime` drives `OsAdapter`. `PagePlaybookRuntime` drives `BrowserPageAdapter`. Same permissions, stop, and evidence. Different step shape (`target` vs `locator` / `url`).
+`PlaybookRuntime` drives `OsAdapter`. `PagePlaybookRuntime` drives `BrowserPageAdapter`. Same permissions, stop, and evidence. Different step shape (`target` vs `locator` / `url`). Do not raise a single multi-platform library as the playbook contract.
+
+**Hybrid handoff:** in-page request → watch for the native window (`OsAdapter.readScreen`) → OS adapter steps → back to this package for the page result. Do not leave Playwright blocked in `waitFor` on a locator that only appears after a native modal is dismissed. The modal is not in the DOM; Playwright cannot close it. Do not treat that timeout as "the native step never ran" and retry a signing step.
+
+Permanent playbook contracts are locators / URL (this package) and accessibility text `target` (OS). Do **not** store click coordinates, pixel boxes, or session node IDs as selectors. Vision, OCR, and VLM are fallbacks when the DOM or accessibility tree is missing — not the default control path.
 
 ## Device-local execution
 
@@ -41,7 +45,6 @@ Runs on the user's machine (or a device-local VM). This is **not** a Vercel / cl
 - `playbook-kr-cert` content
 - Replacing `adapter-windows` / `adapter-macos`
 - Device-approval / Mac-approver / hub login
-- OS vs Playwright playbook selection rules (later slice)
 - Package titles `core`, `common`, `engine`, `util`, `shared`, `adapter`, `runtime`, or `browser-util`
 
 ```ts

@@ -15,6 +15,7 @@ export interface PagePlaybookStep {
   readonly require?: PageStepRequirement;
 }
 
+/** In-page playbook for `PagePlaybookRuntime`. OS chrome uses `Playbook` + `PlaybookRuntime`. */
 export interface PagePlaybook {
   readonly id: string;
   readonly steps: readonly PagePlaybookStep[];

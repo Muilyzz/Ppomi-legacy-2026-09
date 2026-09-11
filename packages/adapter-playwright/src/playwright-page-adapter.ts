@@ -7,6 +7,8 @@ import { PlaywrightPageError } from "./playwright-page-tools.ts";
  * Sync fixture tools only — it does not await `LivePlaywrightPage`.
  * Does not launch a browser itself and has no device-approval input.
  * Not `OsAdapter` — native/cert dialogs stay on `adapter-windows` / `adapter-macos`.
+ * Authors pick `PagePlaybookRuntime` here; `PlaybookRuntime` is the OS runner.
+ * See `../playbook-runtime/docs/adapter-selection.md`.
  */
 export class PlaywrightPageAdapter implements BrowserPageAdapter {
   private readonly tools: PlaywrightPageTools;

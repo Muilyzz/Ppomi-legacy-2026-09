@@ -1,4 +1,4 @@
-/** In-page web port. `adapter-playwright` implements this. Not `OsAdapter`. No device-approval input. */
+/** In-page web port (`PagePlaybookRuntime`, `adapter-playwright`). Not `OsAdapter`. See `docs/adapter-selection.md`. No device-approval input. */
 export interface PageSnapshot {
   readonly url: string;
   readonly title: string;
