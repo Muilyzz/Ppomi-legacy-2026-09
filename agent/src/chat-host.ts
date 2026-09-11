@@ -1,5 +1,6 @@
-import type { Bootstrap, NativeBridge } from "./bridge";
+import { NativeBridgeError, type Bootstrap, type NativeBridge } from "./bridge";
 import { BootstrapReadiness } from "./update-readiness";
+import type { TranscriptEvent, TranscriptSync, TranscriptTurn } from "./transcripts";
 
 export type ChatHostEvents = {
   stop(): void;
@@ -13,6 +14,7 @@ export type ChatHostEvents = {
 export type ChatHost = {
   readonly bridge: NativeBridge;
   readonly readiness: BootstrapReadiness;
+  readonly transcripts?: TranscriptSync;
   applyBootstrap(boot: Bootstrap): void;
   subscribe(events: ChatHostEvents): () => void;
 };
@@ -24,9 +26,51 @@ type NativeChatWindow = {
   ppomiIncomingCall?: (reason: string) => void;
   ppomiToolProgress?: (event: { tool?: unknown; kind?: unknown; method?: unknown }) => void;
   ppomiNotice?: (text: string) => void;
+  ppomiTranscriptTurn?: (event: TranscriptEvent) => void;
   addEventListener(type: "pagehide" | "focus", listener: () => void): void;
   removeEventListener(type: "pagehide" | "focus", listener: () => void): void;
 };
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function nativeTurns(value: unknown): TranscriptTurn[] {
+  if (!isPlainObject(value) || !Array.isArray(value.turns)) return [];
+  return value.turns.filter((turn): turn is TranscriptTurn => {
+    if (!isPlainObject(turn) || typeof turn.id !== "string" || (turn.role !== "user" && turn.role !== "assistant")) return false;
+    return Array.isArray(turn.parts);
+  });
+}
+
+/** Native page asks the Swift host to encrypt and upload; decrypted turns come back as data, never keys. */
+function unsupported(error: unknown) {
+  return error instanceof NativeBridgeError && (error.code === "invalid_request" || error.code === "native_unavailable" || error.code === "server_unconfigured");
+}
+
+export function createBridgeTranscripts(bridge: NativeBridge, window: NativeChatWindow): TranscriptSync {
+  return Object.freeze({
+    async load() {
+      try {
+        const result = await bridge.call("transcriptOpen", {});
+        const turns = nativeTurns(result);
+        return turns.length || isPlainObject(result) ? { turns } : null;
+      } catch (error) {
+        if (unsupported(error)) return null;
+        throw error;
+      }
+    },
+    async append(turn: TranscriptTurn) {
+      try { await bridge.call("transcriptAppend", { turn }); }
+      catch (error) { if (!unsupported(error)) throw error; }
+    },
+    subscribe(listener: (event: TranscriptEvent) => void) {
+      const hook = (event: TranscriptEvent) => listener(event);
+      window.ppomiTranscriptTurn = hook;
+      return () => { if (window.ppomiTranscriptTurn === hook) delete window.ppomiTranscriptTurn; };
+    },
+  });
+}
 
 export type ChatHostDocument = {
   readonly visibilityState: string;
@@ -82,5 +126,5 @@ export function createNativeChatHost({ bridge, window, document }: {
     };
   }
 
-  return Object.freeze({ bridge, readiness, applyBootstrap, subscribe });
+  return Object.freeze({ bridge, readiness, transcripts: createBridgeTranscripts(bridge, window), applyBootstrap, subscribe });
 }

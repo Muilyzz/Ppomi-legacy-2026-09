@@ -16,7 +16,7 @@ export type { WebHostSource, WebHostState, WebAccount } from "./web-host";
 
 /** Mounts the shared workbench into the page. Returns the unmount function. */
 export function mountWebWorkbench(root: HTMLElement, host: WebWorkbenchHost): () => void {
-  const chatHost = createWebChatHost({ source: host.source, window, document });
+  const chatHost = createWebChatHost({ source: host.source, transcripts: host.transcripts, window, document });
   const frame: ChatFrame = (state, render) => <WebPanel {...state} host={host}>{render}</WebPanel>;
   const reactRoot = createRoot(root);
   reactRoot.render(<ChatPanel host={chatHost} frame={frame} />);

@@ -60,6 +60,47 @@ enum SharedRecordCrypto {
     static func hash(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
 }
 
+/// Conversation turns reuse the workspace record key. AAD binds workspace, key, transcript and turn IDs.
+enum SharedTranscriptCrypto {
+    static let version = "ppomi-transcript-v1"
+    static let maxPlaintext = 32 * 1024
+    static func seal(_ data: Data, configuration c: SharedRecordKey, transcriptID: String, turnID: String) throws -> [String: Any] {
+        guard (1...maxPlaintext).contains(data.count) else { throw SharedRecordError.invalid }
+        guard let combined = try AES.GCM.seal(data, using: SymmetricKey(data: c.key), authenticating: aad(c, transcriptID, turnID)).combined,
+              combined.count > 28 else { throw SharedRecordError.invalid }
+        let nonce = combined.prefix(12), tag = combined.suffix(16), ciphertext = combined.dropFirst(12).dropLast(16)
+        return ["version": 1, "nonce": Data(nonce).base64URL, "ciphertext": Data(ciphertext).base64URL, "tag": Data(tag).base64URL]
+    }
+    static func open(_ envelope: [String: Any], configuration c: SharedRecordKey, transcriptID: String, turnID: String) throws -> Data {
+        guard envelope["version"] as? Int == 1 || (envelope["version"] as? NSNumber)?.intValue == 1,
+              let nonce = Data(base64URL: envelope["nonce"] as? String ?? ""), nonce.count == 12,
+              let tag = Data(base64URL: envelope["tag"] as? String ?? ""), tag.count == 16,
+              let ciphertext = Data(base64URL: envelope["ciphertext"] as? String ?? ""), (1...maxPlaintext).contains(ciphertext.count)
+        else { throw SharedRecordError.invalid }
+        do {
+            let opened = try AES.GCM.open(AES.GCM.SealedBox(nonce: AES.GCM.Nonce(data: nonce), ciphertext: ciphertext, tag: tag),
+                                          using: SymmetricKey(data: c.key), authenticating: aad(c, transcriptID, turnID))
+            guard (1...maxPlaintext).contains(opened.count) else { throw SharedRecordError.invalid }
+            return opened
+        } catch { throw SharedRecordError.invalid }
+    }
+    private static func aad(_ c: SharedRecordKey, _ transcriptID: String, _ turnID: String) -> Data {
+        Data("\(version)|\(c.workspaceID)|\(c.keyID)|\(transcriptID)|\(turnID)".utf8)
+    }
+}
+
+private extension Data {
+    var base64URL: String {
+        base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "="))
+    }
+    init?(base64URL text: String) {
+        var value = text.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        value += String(repeating: "=", count: (4 - value.count % 4) % 4)
+        self.init(base64Encoded: value)
+    }
+}
+
 /// 기기 간 키 전달: 받는 기기의 X25519 공개키로 기록 키를 감싼다(임시 키쌍 → ECDH → HKDF-SHA256 → AES-GCM). 서버는 감싼 사본만 본다.
 /// 형식 ppomi-wrap-v1 = 임시 공개키 32바이트 + AES-GCM combined(nonce 12 · 키 32 · 태그 16) = 92바이트.
 enum KeyWrap {

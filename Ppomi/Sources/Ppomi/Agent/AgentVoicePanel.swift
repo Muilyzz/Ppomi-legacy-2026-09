@@ -236,7 +236,8 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
         }
         // The embedded UI retains its visibility and trusted-method boundary after extraction.
         let methods: Set<String> = ["bootstrap", "sessionState", "heard", "declineCall", "setEndpoint", "request", "executeTool",
-                                    "bankProfileRequest", "bankProfileSubmit", "bankProfileCancel"]
+                                    "bankProfileRequest", "bankProfileSubmit", "bankProfileCancel",
+                                    "transcriptOpen", "transcriptAppend"]
         guard methods.contains(method),
               !(method == "sessionState" && args["active"] as? Bool == true &&
                 (!isVisible || FamilyUpdateRuntime.shared.hasStartupFailure || (FamilyUpdateRuntime.shared.isTrial && !updateReady))),

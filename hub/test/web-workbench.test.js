@@ -26,7 +26,7 @@ test('the content security policy admits exactly the two servers the browser tal
   const directives = Object.fromEntries(home.split(';').map(part => part.trim()).filter(Boolean).map(part => { const [name, ...values] = part.split(/\s+/); return [name, values]; }));
   assert.deepEqual(directives['script-src'], ["'self'"]);
   assert.deepEqual(directives['style-src'], ["'self'"]);
-  assert.deepEqual(directives['connect-src'], ["'self'", 'https://nafutfqfbbmknzmyspus.supabase.co', AGENT_ENDPOINT]);
+  assert.deepEqual(directives['connect-src'], ["'self'", 'https://nafutfqfbbmknzmyspus.supabase.co', 'wss://nafutfqfbbmknzmyspus.supabase.co', AGENT_ENDPOINT]);
   assert.deepEqual(directives['frame-src'], ["'self'"], 'record frames stay same-origin sandboxed documents');
   assert.match(AGENT_ENDPOINT, /^https:\/\/[a-z0-9.-]+$/, 'a bare https origin; the token travels in a header, never in the URL');
 });
@@ -41,10 +41,11 @@ test('the agent endpoint is the one the Mac and Android apps default to', async 
 test('the service worker caches the workbench bundle as a public file and nothing authenticated', async () => {
   const worker = await read('../service-worker.js');
   const paths = [...worker.matchAll(/'(\/[^']*)'/g)].map(match => match[1]);
-  for (const path of ['/', '/web/workbench/app.js', '/web/workbench/app.css', '/web/home.js', '/web/vendor/tokens.css']) assert.ok(paths.includes(path), `${path} is cached`);
+  for (const path of ['/', '/web/workbench/app.js', '/web/workbench/app.css', '/web/home.js', '/web/vendor/tokens.css',
+    '/web/transcript-session.js', '/web/transcript-realtime.js']) assert.ok(paths.includes(path), `${path} is cached`);
   assert.equal(paths.some(path => path.startsWith('/api/') || path.includes('supabase')), false);
   assert.match(worker, /request\.headers\.has\('Authorization'\)/, 'authenticated requests bypass the cache');
-  assert.match(worker, /ppomi-public-home-20260911-8/, 'the cache version moved with the new static files');
+  assert.match(worker, /ppomi-public-home-20260911-9/, 'the cache version moved with the new static files');
 });
 
 test('the committed bundle exposes the mount function, points at the shared font and carries no credential', async () => {

@@ -30,7 +30,7 @@ export function createRecordRPC({ auth, check: checkAccount, getDeviceID, signal
       if (!response.ok) throw new RecordError(response.status === 401 ? 'authentication' : response.status === 403 ? 'permission' : 'connection');
       const reader = response.body?.getReader();
       let text = '', size = 0;
-      const max = name === 'ppomi_record_blob_get' ? 600_000 : 128_000;
+      const max = name === 'ppomi_record_blob_get' || name === 'ppomi_transcript_turns' ? 600_000 : 128_000;
       const decoder = new TextDecoder('utf-8', { fatal: true });
       if (!reader) throw new RecordError('invalid');
       try {

@@ -4,6 +4,7 @@ import type { UIMessage } from "ai";
 import { toolLabel } from "./tool-label";
 import type { Bootstrap } from "./bridge";
 import type { ChatHost } from "./chat-host";
+import { completedTurns, mergeTranscriptMessages } from "./transcripts";
 import { VoiceController, type VoiceState, TextController, type TextState, type ChatMessage, type ToolProgress } from "./voice";
 import { type InputCard } from "./questions";
 import { QuestionCard } from "./question-cards";
@@ -90,6 +91,7 @@ export function ChatPanel({ host, frame }: { host: ChatHost; frame?: ChatFrame }
   const answeredBootstrapCall = useRef<string | null>(null);
   const textStateRef = useRef<TextState>("idle");
   const chatRef = useRef<UseChatHelpers<UIMessage> | null>(null);   // the state callback below is created once; it clears the chat through this ref
+  const persistedTurns = useRef(new Set<string>());
   const textController = useRef<TextController | null>(null);
   const trackTools = (progress: ToolProgress) => setTools((old) => {
     const index = old.findIndex((item) => item.id === progress.id);
@@ -103,7 +105,6 @@ export function ChatPanel({ host, frame }: { host: ChatHost; frame?: ChatFrame }
       if (next === "idle") {
         actionEpoch.current += 1;
         setTools([]); setSending(false); setSettling(true);
-        chatRef.current?.setMessages([]);
         queueMicrotask(() => { void textController.current?.whenStopped().finally(() => setSettling(false)); });
       }
     },
@@ -114,6 +115,10 @@ export function ChatPanel({ host, frame }: { host: ChatHost; frame?: ChatFrame }
     if (textStateRef.current !== "idle") setError(error.message || "응답 실패");   // a session that already ended reports nothing
   } });
   chatRef.current = chat;
+  const applyTurns = (turns: Parameters<typeof mergeTranscriptMessages>[1]) => {
+    for (const turn of turns) persistedTurns.current.add(turn.id);
+    chatRef.current?.setMessages(current => mergeTranscriptMessages(current, turns));
+  };
   const controller = useRef<VoiceController | null>(null);
   if (!controller.current)
     controller.current = new VoiceController(
@@ -228,9 +233,12 @@ export function ChatPanel({ host, frame }: { host: ChatHost; frame?: ChatFrame }
     const unsubscribe = host.subscribe({
       refresh: () => {
         void bridge.call<Bootstrap>("bootstrap").then(boot => { if (active) apply(boot); }).catch(() => {});
+        void host.transcripts?.load().then(result => {
+          if (active && result?.turns.length) applyTurns(result.turns);
+        }).catch(() => {});
       },
       answerCall: reason => { void startCall(typeof reason === "string" ? reason : undefined); },
-      stop: () => { void stopCurrent(); },
+      stop: () => { persistedTurns.current.clear(); chatRef.current?.setMessages([]); void stopCurrent(); },
       // 빈 용건은 해결됨. 통화 중이면 이미 말하고 있으니 수신 띠를 더 띄우지 않는다.
       incomingCall: reason => {
         if (inCallRef.current) return;
@@ -259,6 +267,33 @@ export function ChatPanel({ host, frame }: { host: ChatHost; frame?: ChatFrame }
       void stopCurrent();
     };
   }, []);
+  useEffect(() => {
+    const sync = host.transcripts;
+    if (!sync || !boot?.configured) return;
+    let active = true;
+    void sync.load().then(result => {
+      if (active && result?.turns.length) applyTurns(result.turns);
+    }).catch(() => {});
+    const unsubscribe = sync.subscribe(event => {
+      if (!active) return;
+      if (event.type === "deleted") {
+        persistedTurns.current.clear();
+        chatRef.current?.setMessages([]);
+        return;
+      }
+      if (event.type === "turn") applyTurns([event.turn]);
+    });
+    return () => { active = false; unsubscribe(); };
+  }, [boot?.configured, host.transcripts]);
+  useEffect(() => {
+    const sync = host.transcripts;
+    if (!sync || chat.status !== "ready") return;
+    for (const turn of completedTurns(chat.messages, true)) {
+      if (persistedTurns.current.has(turn.id)) continue;
+      persistedTurns.current.add(turn.id);
+      void sync.append(turn).catch(() => { persistedTurns.current.delete(turn.id); });
+    }
+  }, [chat.messages, chat.status, host.transcripts]);
   // 벨소리: 걸려온 동안 두 음(440·480Hz)을 1초 울리고 2초 쉰다. 파일 없이 Web Audio. 30초 뒤엔 그친다(띠는 남는다).
   useEffect(() => {
     if (incoming === null || bootRef.current?.platform === "android") return;   // Android rings through the OS call UI

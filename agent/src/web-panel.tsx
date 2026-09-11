@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, 
 import { UserRound, X } from "lucide-react";
 import type { Bootstrap } from "./bridge";
 import type { WebHostSource } from "./web-host";
+import type { TranscriptSync } from "./transcripts";
 import { RecordsHeader } from "./ui/workbench";
 import type { ShellFrameSlots } from "./ui/shell";
 
@@ -31,7 +32,7 @@ export type WebRecords = {
   /** Where the browser-only renderer mounts its sandboxed frames. Returns the detach function. */
   attach(container: HTMLElement): () => void;
 };
-export type WebWorkbenchHost = { readonly source: WebHostSource; readonly records: WebRecords };
+export type WebWorkbenchHost = { readonly source: WebHostSource; readonly records: WebRecords; readonly transcripts?: TranscriptSync };
 
 const failureTexts: Record<string, string> = {
   storage: "브라우저 저장 공간을 사용할 수 없어요. Safari 설정을 확인한 뒤 다시 열어 주세요.",

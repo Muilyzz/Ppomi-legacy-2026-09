@@ -108,6 +108,8 @@ test("web bridge refuses what the browser cannot do before touching the network"
   await rejects(bridge.call("request", { path: "/v1/session", body: [] }), "invalid_request");
   await rejects(bridge.call("request", { path: "/v1/session", body: {}, extra: 1 }), "invalid_request");
   await rejects(bridge.call("executeTool", { name: "screen_read", args: {} }), "native_unavailable");
+  await rejects(bridge.call("transcriptOpen", {}), "native_unavailable");
+  await rejects(bridge.call("transcriptAppend", { turn: { id: DEVICE, role: "user", parts: [] } }), "native_unavailable");
   await rejects(bridge.call("sessionState", { active: true, mode: "voice" }), "native_unavailable");
   await rejects(bridge.call("sessionState", { active: "yes" }), "invalid_request");
   await rejects(bridge.call("setEndpoint", { endpoint: "https://x.example" }), "invalid_request");

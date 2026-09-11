@@ -228,6 +228,12 @@ final class AgentExecutor {
                             default: return try bankProfileRequests.cancel(args)
                             }
                         }
+                    case "transcriptOpen":
+                        guard args.isEmpty else { throw AgentNativeError.invalidRequest }
+                        return try SharedTranscriptStore.shared.open()
+                    case "transcriptAppend":
+                        guard Set(args.keys) == ["turn"], let turn = args["turn"] as? [String: Any] else { throw AgentNativeError.invalidRequest }
+                        return try SharedTranscriptStore.shared.append(turn)
                     case "request":
                         guard Set(args.keys) == ["path", "body"], let path = args["path"] as? String,
                               let payload = args["body"] as? [String: Any] else { throw AgentNativeError.invalidRequest }

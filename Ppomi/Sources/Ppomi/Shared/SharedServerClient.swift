@@ -70,7 +70,10 @@ final class SharedServerClient: @unchecked Sendable {
 
     /// `legacy`: 구글 세션이 있어도 옛 기기 계정으로(첫 로그인 때 기기를 넘기는 한 번).
     func rpc(_ method: String, _ arguments: [String: Any], legacy: Bool = false) throws -> Any {
-        guard SharedTools.rpcNames.contains(method) || SharedRecordVault.rpcNames.contains(method) || GoogleAccount.rpcNames.contains(method) else { throw SharedServerError.invalidArgument("RPC") }
+        guard SharedTools.rpcNames.contains(method) || SharedRecordVault.rpcNames.contains(method)
+                || SharedTranscriptStore.rpcNames.contains(method) || GoogleAccount.rpcNames.contains(method) else {
+            throw SharedServerError.invalidArgument("RPC")
+        }
         lock.lock(); defer { lock.unlock() }
         let credentials = try authenticate(legacy: legacy)
         return try requestRPC(method, arguments: arguments, credentials: credentials)

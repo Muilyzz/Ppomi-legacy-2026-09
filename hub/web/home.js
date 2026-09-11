@@ -1,6 +1,8 @@
 import { createAuth } from './auth.js';
 import { createRecordClient, createDeviceStore } from './records.js';
 import { createRecordSession } from './record-session.js';
+import { createTranscriptClient } from './transcript-client.js';
+import { createTranscriptSession } from './transcript-session.js';
 import { renderRecords, clearRecords } from './record-views.js';
 import { timelineProjection } from './timeline-projection.js';
 import { AGENT_ENDPOINT } from './config.js';
@@ -31,6 +33,7 @@ const listeners = new Set();
 let auth, busy = false, restoreQueued = false, container = null, waiters = [];
 let hostState = Object.freeze({account: null, deviceID: null, notice: '로그인 상태를 확인하고 있습니다.', noticeIsError: false});
 let recordState = Object.freeze({status: 'idle', busy: false, selected: 'ledger', connection: null, record: null, error: null});
+let transcriptState = Object.freeze({status: 'idle', transcript: null, turns: Object.freeze([]), error: null});
 
 function notify() { for (const listener of listeners) { try { listener(); } catch { /* A view cannot break the browser layers. */ } } }
 function setHost(patch) { hostState = Object.freeze({...hostState, ...patch}); notify(); }
@@ -68,11 +71,18 @@ const recordSession = createRecordSession({
   visible: !document.hidden,
   setTimeout, clearTimeout,
 });
+const transcriptSession = createTranscriptSession({
+  createClient: user => createTranscriptClient({auth, user, deviceStore}),
+  onTurns: state => { transcriptState = state; notify(); },
+});
 async function restore() {
   if (busy) return;
-  busy = true; recordSession.stop(); showUser(null); showStatus('로그인 상태를 확인하고 있습니다.');
-  try { const session = await auth.loadSession(); showUser(session?.user ?? null); showStatus(); if (session) recordSession.start(session.user); }
-  catch (error) { recordSession.stop(); showUser(null); if (error?.code !== 'cancelled') showStatus(errors[error?.code] || errors.authentication, true); }
+  busy = true; recordSession.stop(); transcriptSession.stop(); showUser(null); showStatus('로그인 상태를 확인하고 있습니다.');
+  try {
+    const session = await auth.loadSession(); showUser(session?.user ?? null); showStatus();
+    if (session) { recordSession.start(session.user); transcriptSession.start(session.user); }
+  }
+  catch (error) { recordSession.stop(); transcriptSession.stop(); showUser(null); if (error?.code !== 'cancelled') showStatus(errors[error?.code] || errors.authentication, true); }
   finally { busy = false; if (restoreQueued) { restoreQueued = false; queueMicrotask(restore); } }
 }
 const host = Object.freeze({
@@ -107,24 +117,34 @@ const host = Object.freeze({
       return () => { if (container === element) container = null; };
     },
   }),
+  transcripts: Object.freeze({
+    async load() {
+      await transcriptSession.refresh();
+      const state = transcriptSession.getState();
+      return state.status === 'ready' ? { turns: state.turns } : null;
+    },
+    append: turn => transcriptSession.append(turn),
+    subscribe: listener => transcriptSession.watch(listener),
+  }),
 });
 document.addEventListener('visibilitychange', () => recordSession.setVisible(!document.hidden));
-window.addEventListener('pagehide', () => { recordSession.stop(); showUser(null); });
+window.addEventListener('pagehide', () => { recordSession.stop(); transcriptSession.stop(); showUser(null); });
 let firstRestore = Promise.resolve();
 try {
   auth = createAuth({
     clearSecrets: async ({previousUserId}) => {
-      showUser(null); await recordSession.clearPrivate(previousUserId);
+      showUser(null);
+      await Promise.all([recordSession.clearPrivate(previousUserId), transcriptSession.clearPrivate(previousUserId)]);
     },
     onChange: event => {
-      if (event.type === 'signed-out') { recordSession.stop(); showUser(null); showStatus(); }
+      if (event.type === 'signed-out') { recordSession.stop(); transcriptSession.stop(); showUser(null); showStatus(); }
       else if (event.type === 'session-changed') { if (busy) restoreQueued = true; else queueMicrotask(restore); }
     },
   });
   window.addEventListener('pageshow', event => { if (event.persisted) { busy = false; restore(); } });
   window.addEventListener('online', restore);
   firstRestore = restore();
-} catch { recordSession.stop(); showUser(null); showStatus(errors.storage, true); }
+} catch { recordSession.stop(); transcriptSession.stop(); showUser(null); showStatus(errors.storage, true); }
 // The first sign-in check is usually one request; mounting after it spares a returning account the sign-in banner flash.
 // A slow network never holds the screen for long, and the pending restore simply refreshes the mounted workbench later.
 function mount() {

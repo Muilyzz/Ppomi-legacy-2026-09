@@ -66,8 +66,11 @@ export async function verifyDevice(device, userID, crypto = globalThis.crypto) {
   finally { left?.fill(0); right?.fill(0); }
 }
 
-export async function unwrapRecordKey({ wrapped, workspaceID, keyID, device }, crypto = globalThis.crypto) {
+export async function unwrapRecordKey({ wrapped, workspaceID, keyID, device, usages = ['decrypt'] }, crypto = globalThis.crypto) {
   requireUUID(workspaceID); requireUUID(keyID);
+  if (!Array.isArray(usages) || usages.length < 1 || usages.length > 2
+    || usages.some(use => use !== 'decrypt' && use !== 'encrypt')
+    || new Set(usages).size !== usages.length) throw new RecordError('invalid');
   const blob = unbase64(wrapped, 92);
   if (blob.length !== 92) throw new RecordError('invalid');
   let shared, rawKey;
@@ -81,7 +84,7 @@ export async function unwrapRecordKey({ wrapped, workspaceID, keyID, device }, c
     rawKey = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: blob.subarray(32, 44), tagLength: 128,
       additionalData: join(encoder.encode(`ppomi-wrap-v1|${workspaceID}|${keyID}|`), device.publicKey) }, symmetric, blob.subarray(44)));
     if (rawKey.length !== 32) throw new RecordError('invalid');
-    return await crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['decrypt']);
+    return await crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, usages);
   } catch { throw new RecordError('invalid'); }
   finally { shared?.fill(0); rawKey?.fill(0); }
 }

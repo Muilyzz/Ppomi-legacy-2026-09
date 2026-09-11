@@ -2,6 +2,7 @@
 // 있고, 기기 도구(executeTool)·통화·가족 업데이트는 없다. 토큰은 request 한 번에만 쓰고 React 상태로 올라가지 않는다.
 import { NativeBridge, NativeBridgeError, type Bootstrap } from "./bridge";
 import { applyBootstrapAppearance, type ChatHost, type ChatHostDocument, type ChatHostEvents } from "./chat-host";
+import type { TranscriptSync } from "./transcripts";
 import { BootstrapReadiness } from "./update-readiness";
 
 export type WebAccount = { readonly id: string; readonly name: string | null; readonly email: string | null };
@@ -131,7 +132,10 @@ export function createWebBridge(source: WebHostSource, options: { fetch?: typeof
         if (args.mode !== undefined && args.mode !== "text") throw new NativeBridgeError("native_unavailable");
         return { active: args.active };
       case "request": return relay(args);
-      case "executeTool": throw new NativeBridgeError("native_unavailable");
+      case "executeTool":
+      case "transcriptOpen":
+      case "transcriptAppend":
+        throw new NativeBridgeError("native_unavailable");
       case "declineCall": return { declined: true };
       case "heard": return {};
       default: throw new NativeBridgeError("invalid_request");
@@ -152,8 +156,9 @@ export function createWebBridge(source: WebHostSource, options: { fetch?: typeof
 }
 
 /** One browser document owns its bridge/readiness. Account changes end the conversation and refresh the bootstrap, like native hosts. */
-export function createWebChatHost({ source, window, document, fetch }: {
+export function createWebChatHost({ source, transcripts, window, document, fetch }: {
   source: WebHostSource;
+  transcripts?: TranscriptSync;
   window: WebChatWindow;
   document: ChatHostDocument;
   fetch?: typeof globalThis.fetch;
@@ -182,5 +187,8 @@ export function createWebChatHost({ source, window, document, fetch }: {
     };
   }
 
-  return Object.freeze({ bridge, readiness, applyBootstrap: (b: Bootstrap) => applyBootstrapAppearance(document, b), subscribe });
+  return Object.freeze({
+    bridge, readiness, transcripts,
+    applyBootstrap: (b: Bootstrap) => applyBootstrapAppearance(document, b), subscribe,
+  });
 }
