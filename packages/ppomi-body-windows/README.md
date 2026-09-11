@@ -92,4 +92,6 @@ tools.close();
 npm --prefix packages/ppomi-body-windows install   # dev-only: typescript + @types/node
 npm --prefix packages/ppomi-body-windows test       # fixture + fake-executor bridge tests; live smoke skips off Windows
 npm --prefix packages/ppomi-body-windows run typecheck
+# 1-step example (fixture Runtime; live UIA skips off Windows)
+node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts
 ```
