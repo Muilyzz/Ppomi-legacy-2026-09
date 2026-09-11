@@ -19,3 +19,7 @@
 .executor-approval p { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .executor-error { display: flex; justify-content: space-between; align-items: center; gap: .5rem; color: var(--bad); }
 .executor-hint { margin: 0; opacity: .7; font-size: .9em; }
+.executor-account-state { display: grid; gap: .625rem; }
+.executor-account-state p { margin: 0; }
+.executor-account-title { font-weight: 600; }
+.executor-account-state[data-state="pending-approval"] .executor-account-title { color: var(--accent-fg); }
