@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { ClerkProvider } from '@clerk/nextjs';
 import { AppShell } from '@/components/app-shell';
-import { isClerkConfigured } from '@/lib/clerk-env';
+import { CLERK_ACCOUNT_REDIRECT, isClerkConfigured } from '@/lib/clerk-env';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -27,7 +27,20 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="ko">
       <body>
         {isClerkConfigured()
-          ? <ClerkProvider appearance={appearance}>{body}</ClerkProvider>
+          ? (
+            <ClerkProvider
+              appearance={appearance}
+              signInUrl="/sign-in"
+              signUpUrl="/sign-up"
+              afterSignOutUrl="/"
+              signInFallbackRedirectUrl={CLERK_ACCOUNT_REDIRECT}
+              signUpFallbackRedirectUrl={CLERK_ACCOUNT_REDIRECT}
+              signInForceRedirectUrl={CLERK_ACCOUNT_REDIRECT}
+              signUpForceRedirectUrl={CLERK_ACCOUNT_REDIRECT}
+            >
+              {body}
+            </ClerkProvider>
+          )
           : body}
       </body>
     </html>

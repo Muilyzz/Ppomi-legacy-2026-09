@@ -6,7 +6,7 @@ import { isClerkConfigured } from '@/lib/clerk-env';
 
 export default async function AccountPage() {
   if (!isClerkConfigured()) return <SetupPanel />;
-  const session = await auth();
-  if (!session.userId) redirect('/sign-in');
-  return <AccountPanel userId={session.userId} />;
+  const { userId } = await auth.protect();
+  if (!userId) redirect('/sign-in');
+  return <AccountPanel userId={userId} />;
 }

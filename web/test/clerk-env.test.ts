@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  CLERK_ACCOUNT_REDIRECT,
   CLERK_DEFAULT_ROUTES,
   CLERK_REQUIRED_KEYS,
   SECRETS_THE_OPERATOR_MUST_ADD,
@@ -50,4 +51,8 @@ test('embedded routes stay on this Next app', () => {
   assert.equal(CLERK_DEFAULT_ROUTES.NEXT_PUBLIC_CLERK_SIGN_IN_URL, '/sign-in');
   assert.equal(CLERK_DEFAULT_ROUTES.NEXT_PUBLIC_CLERK_SIGN_UP_URL, '/sign-up');
   assert.equal(CLERK_DEFAULT_ROUTES.NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL, '/account');
+});
+
+test('post-auth redirect is /account in code, not only deprecated AFTER_* env', () => {
+  assert.equal(CLERK_ACCOUNT_REDIRECT, '/account');
 });

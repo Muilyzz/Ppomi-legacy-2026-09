@@ -11,7 +11,7 @@ export function AccountPanel({ userId }: { userId: string }) {
         <p className="meta">Clerk <code>sub</code> — RLS는 이 값을 {RLS_CLERK_SUB_SQL} 와 비교합니다.</p>
         <p><code>{userId}</code></p>
         <div className="chrome">
-          <UserButton afterSignOutUrl="/" />
+          <UserButton />
           <a href="/account/profile">프로필 · 연결 계정</a>
         </div>
       </div>

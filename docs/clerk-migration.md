@@ -74,8 +74,8 @@ npm run dev
 | `CLERK_SECRET_KEY` | 예 | 같은 화면 → Secret key `sk_test_…` / `sk_live_…`. 서버만. |
 | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | 경로 | `/sign-in` |
 | `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | 경로 | `/sign-up` |
-| `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL` | 경로 | `/account` |
-| `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL` | 경로 | `/account` |
+| `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL` | 경로 (deprecated fallback) | `/account` — `SignIn`/`ClerkProvider` use `forceRedirectUrl` |
+| `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL` | 경로 (deprecated fallback) | `/account` — same |
 | `NEXT_PUBLIC_CLERK_AFTER_SIGN_OUT_URL` | 경로 | `/` |
 | `CLERK_WEBHOOK_SECRET` | 슬라이스 2+ | Webhook signing secret `whsec_…`. 지금 핸들러 없음. |
 | `NEXT_PUBLIC_SUPABASE_URL` | 선택 | 기존 프로젝트 `https://nafutfqfbbmknzmyspus.supabase.co` |
