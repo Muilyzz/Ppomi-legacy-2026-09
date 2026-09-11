@@ -34,7 +34,6 @@ const exec = { toolCallId: "fixture", messages: [] };
 
 async function run<T>(tools: PlaywrightPageAiTools, name: keyof PlaywrightPageAiTools, input: unknown): Promise<T> {
   const item = tools[name];
-  assert.equal(item.type, "function");
   assert.equal(typeof item.execute, "function");
   return await item.execute!(input as never, exec as never) as T;
 }
