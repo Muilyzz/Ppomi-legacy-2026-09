@@ -39,9 +39,26 @@ Runs on the user's machine (or a device-local VM). This is **not** a Vercel / cl
 
 `PlaywrightPageAdapter` stays a sync `BrowserPageAdapter` for fixtures and `PagePlaybookRuntime`. Live callers `await` `LivePlaywrightPage` (Playwright's `Page` is async).
 
+## Local AI SDK tools
+
+`createPlaywrightPageAiTools(page)` wraps the same five operations as Vercel AI SDK `tool()` entries (`inputSchema` + `execute`, same helper as `agent/src/chat.ts`). Pass the set to `ToolLoopAgent` / `generateText` **on this machine**. `execute` calls `PlaywrightPageTools` (fixture or live Playwright). It does not open a Vercel / cloud browser.
+
+These tools are in-page DOM only. Native windows, cert UI, and system dialogs stay on `OsAdapter` (`readScreen` / `focus` / `click` / `type`). Do not merge those names into this set.
+
+```ts
+import { ToolLoopAgent } from "ai";
+import { LivePlaywrightPage, createPlaywrightPageAiTools } from "adapter-playwright";
+
+// `page` is a device-local Playwright Page. Not a Vercel / cloud browser.
+const tools = createPlaywrightPageAiTools(new LivePlaywrightPage(page));
+const agent = new ToolLoopAgent({ model, tools });
+```
+
+`OsAdapter` tools (`readScreen` / `focus` / `click` / `type`) are a separate set. Do not fold them into this object.
+
 ## Out of scope
 
-- AI SDK tool wrapping
+- Agent session / hub login wiring
 - `playbook-kr-cert` content
 - Replacing `adapter-windows` / `adapter-macos`
 - Device-approval / Mac-approver / hub login

@@ -3,6 +3,7 @@ import type { PageSnapshot } from "../../playbook-runtime/src/index.ts";
 /**
  * Playwright page methods this adapter may call.
  * Fixture tools are sync. Live `page.goto` / locators return promises.
+ * Local AI SDK tools (`createPlaywrightPageAiTools`) wrap these methods.
  * Not an OS / UIA / Accessibility surface and not a device-approval gate.
  */
 export type PlaywrightPageToolName = "goto" | "click" | "fill" | "waitFor" | "readPage";

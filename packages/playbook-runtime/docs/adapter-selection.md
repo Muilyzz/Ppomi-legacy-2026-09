@@ -65,9 +65,15 @@ Vision, OCR, and VLM (`screen_inspect`) are **fallbacks** when the DOM or access
 - Implementing Playwright as `OsAdapter`, or replacing UIA/AX with Playwright
 - Elevating one multi-platform automation library as the playbook contract
 
+## Local AI SDK tools (in-page only)
+
+`adapter-playwright` exposes the page operations as local Vercel AI SDK tools (`createPlaywrightPageAiTools`: `goto` / `click` / `fill` / `waitFor` / `readPage`). Agents pass that tool set to `ToolLoopAgent` / `generateText` on this machine. The tools call Playwright here. They are not a Vercel / cloud browser.
+
+These tools are in-page DOM only. Native windows, cert UI, and system dialogs stay on `OsAdapter` (`readScreen` / `focus` / `click` / `type`). Do not add those OS operations to the Playwright tool set.
+
 ## Out of scope here
 
-- AI SDK tool wrapping
+- Agent session / hub login wiring
 - `playbook-kr-cert` content
 - Live Mac/Windows UIA changes
 - Vercel / cloud browser

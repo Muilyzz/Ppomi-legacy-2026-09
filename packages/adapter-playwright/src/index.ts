@@ -12,6 +12,12 @@ export {
   type PlaywrightPageHandle,
 } from "./playwright-live-page.ts";
 export {
+  createPlaywrightPageAiTools,
+  playwrightPageAiToolNames,
+  type PlaywrightPageAiToolName,
+  type PlaywrightPageAiTools,
+} from "./playwright-page-ai-tools.ts";
+export {
   PlaywrightPageError,
   type PlaywrightPageNode,
   type PlaywrightPageToolName,

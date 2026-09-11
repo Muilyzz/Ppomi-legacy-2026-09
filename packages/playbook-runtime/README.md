@@ -18,7 +18,7 @@ This package is `playbook-runtime` only. It ships `OsAdapter` + `DummyAdapter` a
 
 `OsAdapter` is native chrome: `readScreen` / `focus` / `click` / `type`. `BrowserPageAdapter` is the in-page port: `readPage` / `goto` / `click` / `fill` / `waitFor`. Do not implement Playwright as `OsAdapter`. Do not grow a second `playbook-runtime` package. `PagePlaybookRuntime` in this package runs page steps.
 
-A later `adapter-windows` package should wrap the existing `executors/windows` tools (`screen_read`, `ui_tap`, `ui_type`, `app_open`). `adapter-macos` maps the same OS port onto Mac native names. `adapter-playwright` implements `BrowserPageAdapter` only.
+A later `adapter-windows` package should wrap the existing `executors/windows` tools (`screen_read`, `ui_tap`, `ui_type`, `app_open`). `adapter-macos` maps the same OS port onto Mac native names. `adapter-playwright` implements `BrowserPageAdapter` and exposes those page operations as local Vercel AI SDK tools (`createPlaywrightPageAiTools`). Native / cert UI stays on `OsAdapter`.
 
 ## Playwright vs OS adapter
 
