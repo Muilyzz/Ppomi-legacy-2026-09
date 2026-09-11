@@ -41,7 +41,7 @@ const approvalTools = [
   "setControlApps",
 ];
 
-test("smoke: playbook-runtime drives Windows executor tools through adapter-windows", () => {
+test("smoke: playbook-runtime drives Windows executor tools through driver-windows", () => {
   const tools = new FixtureWindowsExecutorTools(window);
   const runtime = new PlaybookRuntime(
     new WindowsAdapter(tools),
