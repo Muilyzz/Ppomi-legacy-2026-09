@@ -67,15 +67,23 @@ export function probeWindowsLive(): LiveProbe {
     timeout: 130_000,
   });
   const text = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
-  const passed = /# pass [1-9]/.test(text);
-  const skipped = /# skipped [1-9]/.test(text) || /# SKIP/.test(text);
-  if (result.status === 0 && skipped && !passed) {
+  const outcome = liveReporterOutcome(result.status, text);
+  if (outcome === "skip") {
     return { status: "skip", lines: [...lines, "probe     SKIP — live UIA test skipped", compact(text)] };
   }
-  if (result.status === 0 && passed) {
+  if (outcome === "ok") {
     return { status: "ok", lines: [...lines, "probe     Edge UIA read→type→tap via ppomi-executor"] };
   }
   return { status: "fail", lines: [...lines, "probe     FAIL — live UIA did not complete", compact(text)] };
+}
+
+/** Node's spec reporter may print `# pass 1` or `ℹ pass 1`. Exit 0 + a pass/skip count is what matters. */
+export function liveReporterOutcome(status: number | null, text: string): LiveProbeStatus {
+  const passed = /pass\s+[1-9]/.test(text);
+  const skipped = /skipped\s+[1-9]/.test(text) || /\bSKIP\b/.test(text);
+  if (status === 0 && skipped && !passed) return "skip";
+  if (status === 0 && passed) return "ok";
+  return "fail";
 }
 
 export function writeLiveProbe(probe: LiveProbe): void {
