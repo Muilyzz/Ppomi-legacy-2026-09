@@ -1,3 +1,4 @@
+import type { PathSurface } from "../../ppomi-path/src/schema.ts";
 import type { ActionEffect, GrantDecision, PathGrant, SessionIdentity } from "./grant.ts";
 import type { PathDefinition, PathSummary } from "./path.ts";
 
@@ -51,15 +52,24 @@ export interface AccountSession {
   ): GrantDecision | Promise<GrantDecision>;
 }
 
-/** App-logged-in machines. Clerk says who; this says where. Account-only is not a fleet. */
+/**
+ * App-logged-in machines. Clerk says who; this says where. Account-only is not a fleet.
+ * Every id is opaque (the product's device id / auth subject / org id, `isOpaqueId`):
+ * never an email, hostname, display name or a 사업자등록번호-shaped number.
+ */
 export const DEVICE_OS = ["macos", "windows", "android", "ios"] as const;
 export type DeviceOs = (typeof DEVICE_OS)[number];
+
+/** Body surfaces a device can serve: the `ppomi-path` surface ids, no aliases. */
+export type FleetSurface = PathSurface;
 
 export interface FleetDevice {
   readonly id: string;
   readonly os: DeviceOs;
-  readonly online: boolean;
-  readonly lastSeen: string;
+  /** Capabilities a device declared at attach, limited by `ALLOWED_SERVES[os]`. */
+  readonly serves: readonly FleetSurface[];
+  /** Epoch milliseconds on the registry clock. `online` is derived from it, never stored. */
+  readonly lastSeen: number;
   readonly ownerId: string;
   readonly orgId?: string;
 }
@@ -70,21 +80,58 @@ export interface DeviceSessionAttach {
   readonly os: DeviceOs;
   readonly ownerId: string;
   readonly orgId?: string;
-  /** Test clock. Production callers omit this; attach stamps now. */
+  /** Omitted → `DEFAULT_SERVES[os]`. */
+  readonly serves?: readonly FleetSurface[];
+  /** ISO 8601 as the device reports it; parsed, never ahead of the registry clock. Omitted → now. */
   readonly lastSeen?: string;
 }
 
+export type AttachRefusal =
+  | "invalid_device_id"
+  | "invalid_owner_id"
+  | "invalid_org_id"
+  | "invalid_os"
+  | "invalid_surface"
+  | "invalid_last_seen"
+  | "owner_mismatch"
+  | "os_mismatch";
+
+export type AttachResult =
+  | { readonly ok: true; readonly device: FleetDevice }
+  | { readonly ok: false; readonly code: AttachRefusal; readonly detail: string };
+
+export type DetachRefusal = "invalid_device_id" | "invalid_owner_id" | "invalid_org_id" | "not_found";
+
+export type DetachResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly code: DetachRefusal; readonly detail: string };
+
+/** Personal scope is `orgId` undefined and lists personal devices only; an org scope lists that org only. */
 export interface DeviceListScope {
   readonly ownerId: string;
   readonly orgId?: string;
 }
 
+/** Epoch milliseconds. Injected so presence is testable and never read from the device. */
+export interface FleetClock {
+  now(): number;
+}
+
+/** A device is online while `now - lastSeen <= staleAfterMs`. */
+export interface FleetPresence {
+  readonly clock: FleetClock;
+  readonly staleAfterMs: number;
+}
+
 /**
- * Device registry port. In-memory fake for tests; a later store implements the same upsert.
+ * Device registry port. In-memory fake for tests; a durable store keeps the same refusals:
+ * an id already attached to another owner/org or OS is never re-owned by attach.
  * Do not put tokens, passwords, or keys on this port.
  */
 export interface DeviceRegistry {
-  attach(input: DeviceSessionAttach): FleetDevice | Promise<FleetDevice>;
+  readonly presence: FleetPresence;
+  attach(input: DeviceSessionAttach): AttachResult | Promise<AttachResult>;
+  detach(deviceId: string, scope: DeviceListScope): DetachResult | Promise<DetachResult>;
   list(scope: DeviceListScope): readonly FleetDevice[] | Promise<readonly FleetDevice[]>;
 }
 
