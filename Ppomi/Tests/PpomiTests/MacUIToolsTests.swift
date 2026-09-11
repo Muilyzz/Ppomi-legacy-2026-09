@@ -158,6 +158,27 @@ final class MacUIToolsTests: XCTestCase {
         assertContract(tools.execute("ui_tap", ["x": 9_999.0, "y": 9_999.0]), code: "stale_screen")
     }
 
+    /// A Stage Manager thumbnail (~140×185) or a moved window must not pass for the frame the nodeIds were measured in,
+    /// and a point under another app's window (front-to-back CG order) is not ours to click.
+    func testOnStageFrameMatchAndCovererUseCGWindowOrder() {
+        let read = CGRect(x: 218, y: 33, width: 1510, height: 1084)
+        XCTAssertTrue(MacUI.framesMatch(read, CGRect(x: 219, y: 34, width: 1509, height: 1083)))
+        XCTAssertFalse(MacUI.framesMatch(read, CGRect(x: 26, y: 776, width: 141, height: 185)))
+        XCTAssertFalse(MacUI.framesMatch(read, CGRect(x: 240, y: 33, width: 1510, height: 1084)))
+        func window(_ pid: pid_t, _ name: String, _ rect: CGRect, layer: Int = 0) -> [String: Any] {
+            [kCGWindowOwnerPID as String: pid, kCGWindowOwnerName as String: name, kCGWindowLayer as String: layer,
+             kCGWindowBounds as String: ["X": rect.minX, "Y": rect.minY, "Width": rect.width, "Height": rect.height]]
+        }
+        let chrome = window(88, "Google Chrome", read)
+        let terminal = window(45, "Terminal", CGRect(x: 100, y: 100, width: 900, height: 700))
+        let menuBar = window(1, "Window Server", CGRect(x: 0, y: 0, width: 3000, height: 40), layer: 25)
+        let point = CGPoint(x: 302, y: 467)
+        XCTAssertNil(MacUI.coverer(of: point, targetPID: 88, ownPID: 7, windows: [menuBar, chrome, terminal]))
+        XCTAssertEqual(MacUI.coverer(of: point, targetPID: 88, ownPID: 7, windows: [terminal, chrome]), "Terminal")
+        XCTAssertNil(MacUI.coverer(of: point, targetPID: 88, ownPID: 45, windows: [terminal, chrome]), "our own overlay never counts")
+        XCTAssertNil(MacUI.coverer(of: CGPoint(x: 2000, y: 900), targetPID: 88, ownPID: 7, windows: [terminal, chrome]), "no window there")
+    }
+
     func testErrorInterpolationExposesContractCodesNotEnumCases() {
         XCTAssertTrue("\(MacUI.Failure.staleScreen)".hasPrefix("stale_screen"))
         XCTAssertTrue("\(MacUI.Failure.protectedAction)".hasPrefix("protected_action"))

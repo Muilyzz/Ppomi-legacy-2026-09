@@ -141,6 +141,32 @@ enum MacUI {
     /// Stage Manager thumbnails are smaller than a real browser window.
     static let liveWindowMin: CGFloat = 200
     static let hidChunkSize = 16
+    /// How long a raise may take to land on stage before the snapshot is declared stale.
+    static let stageWait: TimeInterval = 1.2
+    static let frameTolerance: CGFloat = 2
+
+    /// Same window at the same place: the tolerance covers WindowServer rounding, not a moved or thumbnailed window.
+    static func framesMatch(_ a: CGRect, _ b: CGRect) -> Bool {
+        abs(a.minX - b.minX) <= frameTolerance && abs(a.minY - b.minY) <= frameTolerance &&
+            abs(a.width - b.width) <= frameTolerance && abs(a.height - b.height) <= frameTolerance
+    }
+
+    static func bounds(of window: [String: Any]) -> CGRect? {
+        guard let b = window[kCGWindowBounds as String] as? [String: CGFloat],
+              let x = b["X"], let y = b["Y"], let width = b["Width"], let height = b["Height"] else { return nil }
+        return CGRect(x: x, y: y, width: width, height: height)
+    }
+
+    /// Owner name of the frontmost layer-0 window containing `point` when it is not the target's; nil when the target owns
+    /// it. `windows` is CGWindowListCopyWindowInfo output, front to back, so the first hit is what a click there reaches.
+    static func coverer(of point: CGPoint, targetPID: pid_t, ownPID: pid_t, windows: [[String: Any]]) -> String? {
+        for window in windows {
+            guard (window[kCGWindowLayer as String] as? Int) == 0, let pid = window[kCGWindowOwnerPID as String] as? pid_t, pid != ownPID,
+                  let rect = bounds(of: window), rect.contains(point) else { continue }
+            return pid == targetPID ? nil : ((window[kCGWindowOwnerName as String] as? String) ?? "another window")
+        }
+        return nil
+    }
 
     static func isPassword(role: String, subrole: String) -> Bool {
         role == "AXSecureTextField" || subrole == (kAXSecureTextFieldSubrole as String)
@@ -252,8 +278,10 @@ final class LiveMacUI: MacUI.Session {
             invalidate()
             let role = Self.attr(element, kAXRoleAttribute as String) as? String ?? ""
             if MacUI.clicksWebContent(role: role, rolesTowardRoot: Self.ancestorRoles(element)) {
+                try Self.requireUncovered(center, targetPID: current.pid)
                 Self.click(center)
             } else if AXUIElementPerformAction(element, kAXPressAction as CFString) != .success {
+                try Self.requireUncovered(center, targetPID: current.pid)
                 Self.click(center)
             }
             return MacUI.ActionResult(invoked: true)
@@ -264,6 +292,7 @@ final class LiveMacUI: MacUI.Session {
         let point = CGPoint(x: x, y: y)
         let liveWindow = try raiseLive(current)
         guard liveWindow.insetBy(dx: -8, dy: -8).contains(point) else { throw MacUI.Failure.staleScreen }
+        try Self.requireUncovered(point, targetPID: current.pid)
         invalidate()
         Self.click(point)
         return MacUI.ActionResult(invoked: true)
@@ -378,6 +407,9 @@ final class LiveMacUI: MacUI.Session {
         return windows.filter(isLiveWindow).max { area($0) < area($1) }
     }
 
+    /// Raise the read window and wait until WindowServer actually draws it at its AX frame. AX keeps reporting the full
+    /// frame while Stage Manager shows a ~140×185 thumbnail (measured 2026-09-11), so the AX size alone lets a click go
+    /// to whatever app is in front; the on-screen CG window must match before the hand moves.
     private func raiseLive(_ stored: Stored) throws -> CGRect {
         let application = AXUIElementCreateApplication(stored.pid)
         AXUIElementSetAttributeValue(application, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
@@ -385,11 +417,33 @@ final class LiveMacUI: MacUI.Session {
             running.activate(options: [.activateIgnoringOtherApps])
         }
         AXUIElementPerformAction(stored.windowElement, kAXRaiseAction as CFString)
-        guard let live = Self.frame(stored.windowElement),
-              live.width >= MacUI.liveWindowMin, live.height >= MacUI.liveWindowMin else {
+        let deadline = Date().addingTimeInterval(MacUI.stageWait)
+        repeat {
+            if let live = Self.frame(stored.windowElement),
+               live.width >= MacUI.liveWindowMin, live.height >= MacUI.liveWindowMin,
+               Self.onScreenBounds(pid: stored.pid, matching: live) != nil { return live }
+            usleep(50_000)
+        } while Date() < deadline
+        throw MacUI.Failure.staleScreen
+    }
+
+    /// The point must belong to the target app: a floating panel or another app's window over it would take the click.
+    fileprivate static func requireUncovered(_ point: CGPoint, targetPID: pid_t) throws {
+        if MacUI.coverer(of: point, targetPID: targetPID, ownPID: ProcessInfo.processInfo.processIdentifier, windows: cgWindows()) != nil {
             throw MacUI.Failure.staleScreen
         }
-        return live
+    }
+
+    fileprivate static func cgWindows() -> [[String: Any]] {
+        (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]) ?? []
+    }
+
+    /// The on-screen layer-0 CG window of `pid` drawn at `frame` (±tolerance); nil while it is a thumbnail or off stage.
+    fileprivate static func onScreenBounds(pid: pid_t, matching frame: CGRect) -> CGRect? {
+        for window in cgWindows() where (window[kCGWindowOwnerPID as String] as? pid_t) == pid && (window[kCGWindowLayer as String] as? Int) == 0 {
+            if let rect = MacUI.bounds(of: window), MacUI.framesMatch(rect, frame) { return rect }
+        }
+        return nil
     }
 
     fileprivate static func focus(_ element: AXUIElement, in application: AXUIElement) {
@@ -436,11 +490,18 @@ final class LiveMacUI: MacUI.Session {
         return value.count <= MacUI.textLimit ? value : String(value.prefix(MacUI.textLimit))
     }
 
+    /// A real single click: move first (hover/focus rings; apps that ignore a click whose cursor never arrived), then
+    /// down/up with click count 1 (a count of 0 is dropped by some controls). Same shape as phone.swift's tap.
     fileprivate static func click(_ point: CGPoint) {
-        func post(_ type: CGEventType) {
-            CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+        let source = CGEventSource(stateID: .combinedSessionState)
+        func post(_ type: CGEventType, count: Int64? = nil) {
+            let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: .left)
+            if let count { event?.setIntegerValueField(.mouseEventClickState, value: count) }
+            event?.post(tap: .cghidEventTap)
         }
-        post(.leftMouseDown); usleep(20_000); post(.leftMouseUp)
+        post(.mouseMoved); usleep(60_000)
+        post(.leftMouseDown, count: 1); usleep(40_000)
+        post(.leftMouseUp, count: 1)
     }
 
     fileprivate static func typeUnicode(_ text: String) {
