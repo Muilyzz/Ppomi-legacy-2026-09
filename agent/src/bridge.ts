@@ -140,6 +140,10 @@ const nativeFailures = {
     message: "Google 로그인을 완료하지 못했습니다.",
     recovery: "사용자가 계정 창에서 다시 로그인해야 합니다. 모델이 로그인이나 기기 승인을 대신할 수 없습니다.",
   },
+  sign_in_timeout: {
+    message: "로그인 시간이 지났어요. 다시 시도해 주세요.",
+    recovery: "브라우저 로그인이 제한 시간 안에 끝나지 않았습니다. 사용자가 계정 창에서 다시 로그인해야 합니다.",
+  },
   server_rejected: {
     message: "서버 거부",
     recovery: "앱 서버가 요청을 처리하지 못했습니다. 잠시 후 한 번만 다시 시도하세요.",

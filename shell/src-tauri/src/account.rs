@@ -23,6 +23,12 @@ pub fn complete_frame(id: String, callback: String) -> Request {
 #[derive(Default)]
 pub struct SignInCallback(Mutex<Option<oneshot::Sender<String>>>);
 
+/// What a deep link meant for the sign-in. `Unclaimed` is a `ppomi://auth` URL nobody waits for any more (the wait ended
+/// before the person finished in the browser): the caller still hands it to the executor, whose PKCE verifier outlives the
+/// wait, instead of dropping it in silence.
+#[derive(Debug, PartialEq)]
+pub enum Delivery { NotACallback, Completed, Unclaimed(String) }
+
 impl SignInCallback {
     pub fn arm(&self) -> oneshot::Receiver<String> {
         let (sender, receiver) = oneshot::channel();
@@ -34,13 +40,13 @@ impl SignInCallback {
         self.0.lock().unwrap().take();
     }
 
-    /// Every deep link the OS delivers passes through here. Only a `ppomi://auth` URL completes a waiting sign-in;
-    /// anything else, or a callback nobody waits for, is dropped without effect.
-    pub fn deliver(&self, urls: &[Url]) -> bool {
-        let Some(url) = urls.iter().find(|url| is_callback(url)) else { return false };
+    /// Every deep link the OS delivers passes through here. Only a `ppomi://auth` URL matters; it completes the waiting
+    /// sign-in or comes back as `Unclaimed`. Anything else has no effect.
+    pub fn deliver(&self, urls: &[Url]) -> Delivery {
+        let Some(url) = urls.iter().find(|url| is_callback(url)) else { return Delivery::NotACallback };
         match self.0.lock().unwrap().take() {
-            Some(sender) => sender.send(url.to_string()).is_ok(),
-            None => false,
+            Some(sender) => match sender.send(url.to_string()) { Ok(()) => Delivery::Completed, Err(callback) => Delivery::Unclaimed(callback) },
+            None => Delivery::Unclaimed(url.to_string()),
         }
     }
 }
@@ -93,15 +99,36 @@ mod tests {
     fn callback_completes_exactly_one_waiting_sign_in() {
         let callbacks = SignInCallback::default();
         let stray = Url::parse("ppomi://auth?code=stray").unwrap();
-        assert!(!callbacks.deliver(&[stray.clone()]), "nobody waiting: dropped");
+        assert_eq!(callbacks.deliver(&[stray.clone()]), Delivery::Unclaimed("ppomi://auth?code=stray".into()), "nobody waiting: handed back, not dropped");
         let mut receiver = callbacks.arm();
-        assert!(!callbacks.deliver(&[Url::parse("ppomi://other?code=x").unwrap(), Url::parse("https://auth?code=x").unwrap()]));
+        assert_eq!(callbacks.deliver(&[Url::parse("ppomi://other?code=x").unwrap(), Url::parse("https://auth?code=x").unwrap()]), Delivery::NotACallback);
         assert!(receiver.try_recv().is_err(), "foreign URLs do not complete the sign-in");
-        assert!(callbacks.deliver(&[Url::parse("ppomi://auth?code=synthetic-code-1234").unwrap()]));
+        assert_eq!(callbacks.deliver(&[Url::parse("ppomi://auth?code=synthetic-code-1234").unwrap()]), Delivery::Completed);
         assert_eq!(receiver.try_recv().unwrap(), "ppomi://auth?code=synthetic-code-1234");
-        assert!(!callbacks.deliver(&[stray]), "a second callback has no waiter");
+        assert_eq!(callbacks.deliver(&[stray.clone()]), Delivery::Unclaimed("ppomi://auth?code=stray".into()), "a second callback has no waiter");
         let receiver = callbacks.arm();
         callbacks.disarm();
         assert!(receiver.blocking_recv().is_err(), "disarming fails the waiter instead of leaving it hanging");
+        let receiver = callbacks.arm();
+        drop(receiver);
+        assert_eq!(callbacks.deliver(&[stray]), Delivery::Unclaimed("ppomi://auth?code=stray".into()), "a waiter that gave up does not swallow the callback");
+    }
+
+    #[test]
+    fn gotrue_callback_shapes_reach_the_executor_verbatim() {
+        // What GoTrue sends to redirect_to=ppomi://auth: the PKCE code in the query, an error repeated in query and fragment,
+        // or an implicit-flow fragment. The executor judges each of them; the shell only carries the URL unchanged.
+        let callbacks = SignInCallback::default();
+        for shape in [
+            "ppomi://auth?code=0f2d5c1e-9a7b-4c3d-8e2f-1a2b3c4d5e6f",
+            "ppomi://auth/?code=0f2d5c1e-9a7b-4c3d-8e2f-1a2b3c4d5e6f",
+            "ppomi://auth?error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired&sb=",
+            "ppomi://auth#access_token=synthetic-access&refresh_token=synthetic-refresh&token_type=bearer",
+        ] {
+            let mut receiver = callbacks.arm();
+            assert_eq!(callbacks.deliver(&[Url::parse(shape).unwrap()]), Delivery::Completed, "{shape}");
+            assert_eq!(receiver.try_recv().unwrap(), shape);
+            assert_eq!(callbacks.deliver(&[Url::parse(shape).unwrap()]), Delivery::Unclaimed(shape.into()), "late: {shape}");
+        }
     }
 }
