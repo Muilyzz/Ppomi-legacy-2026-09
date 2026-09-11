@@ -118,6 +118,30 @@ test("step permissions are ui.read and ui.control only; a run has no device-appr
   assert.doesNotMatch(JSON.stringify(result), /approv/i);
 });
 
+test("clicking a payment label is fail-closed and does not mutate", () => {
+  const adapter = new DummyAdapter({
+    title: "Demo App",
+    texts: ["Demo App", "결제하기"],
+    focused: null,
+  });
+  const runtime = new PlaybookRuntime(
+    adapter,
+    new FixedPermissionGate(["ui.read", "ui.control"]),
+  );
+  const result = runtime.run({
+    id: "fixture-pay",
+    steps: [
+      { id: "pay", kind: "click", target: "결제하기" },
+      { id: "open-next", kind: "click", target: "Next" },
+    ],
+  });
+
+  assert.equal(result.status, "stopped");
+  assert.equal(result.stopReason, "protected_action");
+  assert.equal(result.evidence[0]?.note, "protected target: 결제하기");
+  assert.deepEqual(adapter.calls, [{ kind: "read" }]);
+});
+
 test("missing target stops without a mutation", () => {
   const adapter = new DummyAdapter(screen);
   const runtime = new PlaybookRuntime(

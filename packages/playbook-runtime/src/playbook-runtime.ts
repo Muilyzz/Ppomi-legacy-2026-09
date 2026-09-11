@@ -7,11 +7,13 @@ import type {
   StepEvidence,
   StepOutcome,
 } from "./playbook.ts";
+import { protectedTargetReason } from "./protected-target.ts";
 
 /**
  * Runs declared steps against one OS adapter.
  * Permission and screen/target preconditions are fail-closed: the run stops
  * and later steps are not sent to the adapter.
+ * Submit/payment-like click and type targets are fail-closed.
  * There is no device-approval or Mac-approver input.
  */
 export class PlaybookRuntime {
@@ -37,6 +39,14 @@ export class PlaybookRuntime {
       if (why !== null) {
         evidence.push(record(step, "precondition_failed", screen.texts, why));
         return stop(evidence, "precondition_failed");
+      }
+
+      if ((step.kind === "click" || step.kind === "type") && step.target !== undefined) {
+        const blocked = protectedTargetReason(step.target);
+        if (blocked !== null) {
+          evidence.push(record(step, "protected_action", screen.texts, blocked));
+          return stop(evidence, "protected_action");
+        }
       }
 
       apply(this.adapter, step);
