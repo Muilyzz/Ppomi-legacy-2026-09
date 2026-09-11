@@ -23,11 +23,13 @@ No Clerk / hub / payment / submit.
 
 ## KB스타기업뱅킹 공동인증서 (`kb-star-biz-win-cert@0.1.0`)
 
-Page `goto` dry-run + human handoffs. Live opens Edge on the official issue URL, then stops. NPKI probe reports file count / newest mtime only.
+Page `goto` dry-run + human handoffs. Live opens one new Edge window on the official issue URL in the person's profile, then stops — nothing is clicked, typed, or closed. NPKI probe reports file count / newest mtime / `root=default|override` only.
 
 ```sh
 node --experimental-strip-types packages/ppomi-body-windows/example/src/kb-star-biz-win-cert.ts
 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/kb-star-biz-win-cert.ts
+# VM smoke only: isolated temp profile, closed again after tasklist confirms our own msedge.exe pid
+PPOMI_BODY_LIVE=1 PPOMI_KB_CERT_CLOSE_EDGE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/kb-star-biz-win-cert.ts
 ```
 
-URLs and NPKI verify: [`catalogs/paths/kb-star-biz-win-cert/README.md`](../../../catalogs/paths/kb-star-biz-win-cert/README.md). Executor install follows [PR #48](https://github.com/Muilyzz/Ppomi/pull/48) (`node scripts/build-windows-executor.mjs --download`). This path does not tap UAC or type secrets.
+URLs, the close rule and NPKI verify: [`catalogs/paths/kb-star-biz-win-cert/README.md`](../../../catalogs/paths/kb-star-biz-win-cert/README.md). This example does not use `ppomi-executor`, does not tap UAC, and does not type secrets. The KB glue lives in `example/src/kb-cert-path.ts` / `kb-cert-edge.ts`; the package `src/` only carries the generic `pagePlaybookFromPath` and the NPKI probe.

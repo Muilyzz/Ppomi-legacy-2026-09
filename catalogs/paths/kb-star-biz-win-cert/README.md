@@ -23,9 +23,11 @@ Menu (before login, if the direct URL is blocked): **인증센터(기업) → �
 
 | Surface | What |
 | --- | --- |
-| `PageSurface` / Playwright (`ppomi-body-playwright` when present; fixture: `DummyPageAdapter`) | `goto` cert center and issue URL |
-| `ppomi-body-windows` UIA | native exe / Delfino / UAC dialogs — **observe only, then human** |
+| `PageSurface` / Playwright (`ppomi-body-playwright` is not on `main` yet; fixture: `DummyPageAdapter`) | `goto` cert center and issue URL |
+| `ppomi-body-windows` UIA | native exe / Delfino / UAC dialogs — **observe only, then human**. Not used by this path's example today. |
 | Person | every `human` step |
+
+The page IDs `C100996` / `C019623` are KB menu codes recorded when this path was written (PR #56, 2026-09-11); no test verifies them against the live site. They are **fragile**: if either URL 404s or bounces to a different page, re-verify through the menu path above before editing the catalog, and bump the path version.
 
 ## Dry / fixture (any OS)
 
@@ -37,21 +39,18 @@ node --experimental-strip-types packages/ppomi-body-windows/example/src/kb-star-
 
 Dry-run drives the two `goto` steps through `Runtime` + `PageSurface` + `DummyPageAdapter`, then prints human handoffs. It never types secrets.
 
-## Live on a Windows VM (PR #48 executor pattern)
+## Live on a Windows VM
 
-Issuance is not completed in CI. Live only opens Edge on the issue URL, then hands off.
+Issuance is not completed in CI. Live opens **one new Edge window on the issue URL in the person's own profile, then stops**. Nothing is clicked, typed, or closed; the person continues from there. No `ppomi-executor` is needed or used by this example.
 
 ```bat
-node scripts\build-windows-executor.mjs --download
-:: ARM64 Parallels:
-node scripts\build-windows-executor.mjs --download --rid win-arm64
-
-set PPOMI_EXECUTOR=%CD%\shell\src-tauri\resources\executor\ppomi-executor.exe
 set PPOMI_BODY_LIVE=1
 node --experimental-strip-types packages/ppomi-body-windows/example/src/kb-star-biz-win-cert.ts
 ```
 
-Off-Windows live skips (exit 0). Without `PPOMI_BODY_LIVE=1` the script dry-runs. The executor is for optional UIA observation of OS dialogs; this path does not tap UAC or type into Delfino.
+Off-Windows live skips (exit 0). Without `PPOMI_BODY_LIVE=1` the script dry-runs. `PPOMI_EDGE` overrides the `msedge.exe` location.
+
+Open-and-close smoke (VMs only): `set PPOMI_KB_CERT_CLOSE_EDGE=1` opens the URL in a fresh `--user-data-dir` under `%TEMP%` and closes **that instance only**, after `tasklist /FI "PID eq <pid>"` confirms the PID is still alive and is `msedge.exe`. The person's Edge profile is never touched, there is no timer, and when the check fails the isolated window is simply left open.
 
 ## After issue: NPKI probe (no secrets)
 
@@ -59,11 +58,13 @@ Conventional store (not certmgr unless a later path proves otherwise):
 
 `%USERPROFILE%\AppData\LocalLow\NPKI`
 
-The probe reports **file count** and **newest mtime** only. It does not print filenames, folder DNs, passwords, OTP, or account numbers.
+The probe reports **file count**, **newest mtime** and `root=default|override` only. It does not print paths, filenames, folder DNs, passwords, OTP, or account numbers. It never follows links, descends at most 3 levels (`<CA>\USER\<DN folder>`) and stops after 2048 entries (`truncated`).
 
 ```sh
 node --experimental-strip-types packages/ppomi-body-windows/example/src/kb-star-biz-win-cert.ts --probe-npki
 ```
+
+`PPOMI_NPKI_ROOT` may point at another store, but only an absolute directory strictly under `%USERPROFILE%` (not the profile itself, not a link); anything else is reported as `refused`.
 
 If the folder is missing: verify manually in Explorer after the person finishes issuance. A missing folder is not a failed issuance by itself.
 
