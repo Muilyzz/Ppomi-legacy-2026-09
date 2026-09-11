@@ -1,0 +1,25 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .: {}
+
+  packages/adapter-macos: {}
+
+  packages/adapter-macos/example: {}
+
+  packages/adapter-windows: {}
+
+  packages/adapter-windows/example: {}
+
+  packages/ppomi-brain: {}
+
+  packages/ppomi-brain/example: {}
+
+  packages/ppomi-path: {}
+
+  packages/ppomi-path/example: {}

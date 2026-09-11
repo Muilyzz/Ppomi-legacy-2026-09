@@ -143,6 +143,8 @@ swift run Ppomi            # 콘솔
 swift run Ppomi --mcp      # MCP 서버(stdio)
 ```
 
+패키지별 실기기 스모크는 허브가 아니라 `packages/<pkg>/example/` 미니앱입니다. 유닛테스트는 목을 쓰고, example만 실 OS·환경변수를 만집니다. [컨벤션과 실행 명령](docs/package-examples.md).
+
 ## 라이선스
 
 [MIT](LICENSE). 발자국 허브 서비스(`hub/`)는 이 저장소의 앱과 별개로 운영됩니다.

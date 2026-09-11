@@ -1,0 +1,15 @@
+{
+  "name": "ppomi-workspace",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "example:path": "pnpm --filter ppomi-path-example start",
+    "example:brain": "pnpm --filter ppomi-brain-example start",
+    "example:body-macos": "pnpm --filter adapter-macos-example start",
+    "example:body-windows": "pnpm --filter adapter-windows-example start",
+    "example": "pnpm run example:path && pnpm run example:brain && pnpm run example:body-macos && pnpm run example:body-windows"
+  }
+}

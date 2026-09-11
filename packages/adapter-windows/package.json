@@ -1,0 +1,13 @@
+{
+  "name": "adapter-windows",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Current name for the Windows body driver (future ppomi-body-windows). Live UIA lives on driver-windows (PR #15). This tip ships the example only.",
+  "scripts": {
+    "example": "npm --prefix example start"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

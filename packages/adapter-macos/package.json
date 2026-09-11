@@ -1,0 +1,13 @@
+{
+  "name": "adapter-macos",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Current name for the macOS body driver (future ppomi-body-macos / driver-macos). This tip ships the example only.",
+  "scripts": {
+    "example": "npm --prefix example start"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

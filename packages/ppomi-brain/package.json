@@ -1,0 +1,14 @@
+{
+  "name": "ppomi-brain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Future ppomi-brain library (MZZ-41). This tip ships only the example.",
+  "scripts": {
+    "example": "npm --prefix example start",
+    "test": "npm --prefix example test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "adapter-windows-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Windows Edge / ppomi-executor smoke. Skips off Windows.",
+  "scripts": {
+    "start": "node --experimental-strip-types src/main.ts",
+    "example": "node --experimental-strip-types src/main.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

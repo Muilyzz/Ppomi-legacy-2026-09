@@ -1,0 +1,14 @@
+{
+  "name": "adapter-macos-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "macOS AX / Safari-or-Chrome smoke for adapter-macos. Skips off macOS.",
+  "scripts": {
+    "start": "node --experimental-strip-types src/main.ts",
+    "example": "node --experimental-strip-types src/main.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

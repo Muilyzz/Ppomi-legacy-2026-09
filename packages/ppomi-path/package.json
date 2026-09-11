@@ -1,0 +1,14 @@
+{
+  "name": "ppomi-path",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Future ppomi-path library (MZZ-40). This tip ships only the example CLI.",
+  "scripts": {
+    "example": "npm --prefix example start",
+    "test": "npm --prefix example test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
