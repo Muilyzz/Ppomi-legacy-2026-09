@@ -5,8 +5,8 @@ import {
   parseStepResult,
   parseStepResultsJson,
   StepResultError,
-  type StepAdapter,
   type StepAttempt,
+  type StepDriver,
   type StepResult,
   type StepResultStatus,
 } from "../src/index.ts";
@@ -14,7 +14,7 @@ import {
 const pageOk: StepResult = {
   stepId: "open-next",
   playbookId: "fixture-page-happy",
-  adapter: "page",
+  driver: "page",
   action: "click",
   status: "ok",
   attempt: "executed",
@@ -30,7 +30,7 @@ const pageOk: StepResult = {
 const osTimeout: StepResult = {
   stepId: "wait-cert",
   playbookId: "fixture-hybrid",
-  adapter: "os-windows",
+  driver: "os-windows",
   action: "read",
   status: "retryable",
   attempt: "timeout",
@@ -42,7 +42,7 @@ const osTimeout: StepResult = {
 const notExecuted: StepResult = {
   stepId: "sign",
   playbookId: "fixture-hybrid",
-  adapter: "os-windows",
+  driver: "os-windows",
   action: "click",
   status: "failed",
   attempt: "not_executed",
@@ -58,7 +58,7 @@ const run: readonly StepResult[] = [
   {
     stepId: "open-form",
     playbookId: "fixture-page-happy",
-    adapter: "page",
+    driver: "page",
     action: "goto",
     status: "ok",
     attempt: "executed",
@@ -69,7 +69,7 @@ const run: readonly StepResult[] = [
   {
     stepId: "confirm",
     playbookId: "fixture-macos",
-    adapter: "os-macos",
+    driver: "os-macos",
     action: "focus",
     status: "needs_human",
     attempt: "executed",
@@ -81,7 +81,7 @@ const run: readonly StepResult[] = [
   {
     stepId: "tap-next",
     playbookId: "fixture-phone",
-    adapter: "phone",
+    driver: "phone",
     action: "click",
     status: "ambiguous",
     attempt: "executed",
@@ -92,7 +92,7 @@ const run: readonly StepResult[] = [
   {
     stepId: "fill-name",
     playbookId: "fixture-page-happy",
-    adapter: "page",
+    driver: "page",
     action: "fill",
     status: "protected",
     attempt: "not_executed",
@@ -109,7 +109,8 @@ test("dumpStepResults writes a JSON array and parseStepResultsJson round-trips",
   assert.equal(json.startsWith("["), true);
   assert.equal(parsed.length, run.length);
   assert.deepEqual(parsed, run);
-  assert.match(json, /"adapter": "page"/);
+  assert.match(json, /"driver": "page"/);
+  assert.doesNotMatch(json, /"adapter"/);
   assert.match(json, /"screenshotBefore": "runs\/fixture\/open-next.before.png"/);
   assert.doesNotMatch(json, /"x":/);
   assert.doesNotMatch(json, /approv/i);
@@ -153,8 +154,8 @@ test("target rejects coordinates and session geometry", () => {
   );
 });
 
-test("every adapter, status, and attempt value is accepted", () => {
-  const adapters: StepAdapter[] = ["page", "os-windows", "os-macos", "phone"];
+test("every driver, status, and attempt value is accepted", () => {
+  const drivers: StepDriver[] = ["page", "os-windows", "os-macos", "os-android", "phone"];
   const statuses: StepResultStatus[] = [
     "ok",
     "retryable",
@@ -165,8 +166,8 @@ test("every adapter, status, and attempt value is accepted", () => {
   ];
   const attempts: StepAttempt[] = ["executed", "timeout", "not_executed"];
 
-  for (const adapter of adapters) {
-    parseStepResult({ ...pageOk, adapter });
+  for (const driver of drivers) {
+    parseStepResult({ ...pageOk, driver });
   }
   for (const status of statuses) {
     parseStepResult({ ...osTimeout, status });
@@ -178,11 +179,21 @@ test("every adapter, status, and attempt value is accepted", () => {
 
 test("missing required fields, bad enums, and invalid JSON fail closed", () => {
   assert.throws(() => parseStepResult({ ...pageOk, stepId: "" }), StepResultError);
-  assert.throws(() => parseStepResult({ ...pageOk, adapter: "playwright" }), StepResultError);
+  assert.throws(() => parseStepResult({ ...pageOk, driver: "playwright" }), StepResultError);
   assert.throws(() => parseStepResult({ ...pageOk, status: "permission_denied" }), StepResultError);
   assert.throws(() => parseStepResult({ ...pageOk, attempt: "skipped" }), StepResultError);
   assert.throws(() => parseStepResult({ ...pageOk, timingMs: -1 }), StepResultError);
   assert.throws(() => parseStepResult({ ...pageOk, target: "#next" }), StepResultError);
   assert.throws(() => parseStepResultsJson("{"), StepResultError);
   assert.throws(() => parseStepResultsJson("{}"), StepResultError);
+});
+
+test("adapter is accepted as a deprecated input alias and normalized to driver; the mirror is never serialized", () => {
+  const { driver: _driver, ...withoutDriver } = pageOk;
+  const parsed = parseStepResult({ ...withoutDriver, adapter: "os-android" });
+  assert.equal(parsed.driver, "os-android");
+  assert.equal(parsed.adapter, "os-android");
+  assert.deepEqual(Object.keys(parsed).includes("adapter"), false);
+  assert.doesNotMatch(dumpStepResults([parsed]), /"adapter"/);
+  assert.throws(() => parseStepResult({ ...withoutDriver }), StepResultError);
 });

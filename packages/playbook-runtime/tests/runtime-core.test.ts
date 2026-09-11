@@ -14,7 +14,7 @@ import {
   parseStepResultsJson,
   publicUrl,
   requiredPermissions,
-  type OsAdapter,
+  type OsUiDriver,
   type PageSnapshot,
   type RuntimeOptions,
   type ScreenSnapshot,
@@ -36,7 +36,7 @@ const page: PageSnapshot = {
 const all = new FixedPermissionGate(["ui.read", "ui.control"]);
 const readOnly = new FixedPermissionGate(["ui.read"]);
 
-class CodedFailureAdapter implements OsAdapter {
+class CodedFailureAdapter implements OsUiDriver {
   readonly kind = "os-windows" as const;
   readonly calls: string[] = [];
   private readonly inner = new DummyAdapter(screen);
@@ -69,7 +69,7 @@ class CodedFailureAdapter implements OsAdapter {
 }
 
 /** A promise-returning adapter, as a real UIA/AX bridge or Playwright page would be. */
-class AsyncDummyAdapter implements OsAdapter {
+class AsyncDummyAdapter implements OsUiDriver {
   readonly kind = "os-macos" as const;
   readonly inner = new DummyAdapter(screen, "os-macos");
   async readScreen(): Promise<ScreenSnapshot> {
@@ -115,7 +115,7 @@ test("playbook data cannot downgrade a mutation to ui.read on either surface", (
   });
   assert.equal(osResult.stopReason, "permission_denied");
   assert.equal(osResult.evidence[0]?.note, "missing permission ui.control");
-  assert.deepEqual(osResult.stepResults.map(row => [row.status, row.attempt]), [["protected", "not_executed"]]);
+  assert.deepEqual(osResult.stepResults.map(row => [row.status, row.attempt, row.code]), [["failed", "not_executed", "permission_denied"]]);
   assert.deepEqual(os.calls, []);
 
   const web = new DummyPageAdapter(page);
@@ -259,7 +259,7 @@ test("require.wait polls the surface until the precondition holds, then acts (sy
     steps: [{ id: "open-next", kind: "click", target: "Next", effect: "navigate", require: { wait: 1000 } }],
   });
   assert.equal(asyncResult.status, "completed");
-  assert.equal(asyncResult.stepResults[0]?.adapter, "os-macos");
+  assert.equal(asyncResult.stepResults[0]?.driver, "os-macos");
 });
 
 test("require.wait gives up at the deadline as a retryable timeout with no mutation", () => {
@@ -309,7 +309,7 @@ test("results bound observed texts, keep urls to origin+pathname, never carry ty
   assert.equal(publicUrl("not a url"), "(invalid url)");
 });
 
-test("goto refuses non-HTTP(S), credentialed, relative and undeclared-origin urls as protected, without calling the adapter", () => {
+test("goto refuses non-HTTP(S), credentialed, relative and undeclared-origin urls without calling the driver", () => {
   assert.equal(navigationRefusal("javascript:alert(1)"), "goto scheme javascript: is refused");
   assert.equal(navigationRefusal("file:///etc/passwd"), "goto scheme file: is refused");
   assert.equal(navigationRefusal("https://user:pw@evil.test/"), "goto url carries credentials");
@@ -325,11 +325,11 @@ test("goto refuses non-HTTP(S), credentialed, relative and undeclared-origin url
     steps: [{ id: "leave", kind: "goto", url: "https://evil.test/", effect: "navigate" }],
   });
   assert.equal(result.stopReason, "precondition_failed");
-  assert.deepEqual(result.stepResults.map(row => [row.status, row.attempt]), [["protected", "not_executed"]]);
+  assert.deepEqual(result.stepResults.map(row => [row.status, row.attempt, row.code]), [["failed", "not_executed", "navigation_refused"]]);
   assert.equal(adapter.calls.some(call => call.kind === "goto"), false);
 });
 
-test("a redirect off the declared origins fails the next step as protected", () => {
+test("a redirect off the declared origins fails the next step", () => {
   const adapter = new DummyPageAdapter({ ...page, url: "https://shop.test/start" });
   const original = adapter.goto.bind(adapter);
   adapter.goto = (url: string) => {
@@ -344,9 +344,9 @@ test("a redirect off the declared origins fails the next step as protected", () 
       { id: "fill", kind: "fill", locator: "#name", text: "fixture", effect: "input" },
     ],
   });
-  assert.deepEqual(result.stepResults.map(row => [row.stepId, row.status, row.attempt]), [
-    ["open", "ok", "executed"],
-    ["fill", "protected", "not_executed"],
+  assert.deepEqual(result.stepResults.map(row => [row.stepId, row.status, row.attempt, row.code]), [
+    ["open", "ok", "executed", undefined],
+    ["fill", "failed", "not_executed", "origin_not_declared"],
   ]);
   assert.equal(result.evidence[1]?.note, "page origin https://phish.test is not declared");
   assert.equal(adapter.calls.some(call => call.kind === "fill"), false);
@@ -373,10 +373,30 @@ test("Runtime with a PageSurface reports adapter page and one StepResult per dec
     ],
   });
   assert.equal(result.stopReason, "handoff");
-  assert.deepEqual(result.stepResults.map(row => [row.adapter, row.stepId, row.status, row.attempt]), [
+  assert.deepEqual(result.stepResults.map(row => [row.driver, row.stepId, row.status, row.attempt]), [
     ["page", "r", "ok", "executed"],
     ["page", "pay", "needs_human", "not_executed"],
     ["page", "never", "failed", "not_executed"],
   ]);
   assert.deepEqual(result.stepResults[1]?.target, { kind: "locator", locator: "#pay" });
+});
+
+test("bad playbook data and an unknown driver kind are invalid results up front, never throws", () => {
+  const adapter = new DummyAdapter(screen);
+  const runtime = new PlaybookRuntime(adapter, all);
+  const dup = runtime.run({ id: "dup", steps: [{ id: "a", kind: "read" }, { id: "a", kind: "read" }] });
+  assert.deepEqual([dup.status, dup.invalid?.code, dup.stepResults.length, adapter.calls.length], ["invalid", "duplicate_step_id", 0, 0]);
+  assert.equal(runtime.run({ id: "", steps: [] }).invalid?.code, "empty_playbook_id");
+  assert.equal(runtime.run({ id: "empty-step", steps: [{ id: "", kind: "read" }] }).invalid?.code, "empty_step_id");
+
+  class KindlessDriver implements OsUiDriver {
+    readScreen(): ScreenSnapshot { return screen; }
+    focus(): void { throw new Error("unused"); }
+    click(): void { throw new Error("unused"); }
+    type(): void { throw new Error("unused"); }
+  }
+  const unknown = new PlaybookRuntime(new KindlessDriver(), all).run({ id: "kindless", steps: [{ id: "r", kind: "read" }] });
+  assert.deepEqual([unknown.status, unknown.invalid?.code], ["invalid", "unknown_driver"]);
+  const withFallback = new PlaybookRuntime(new KindlessDriver(), all, { driver: "os-android" }).run({ id: "kindless", steps: [{ id: "r", kind: "read" }] });
+  assert.deepEqual([withFallback.status, withFallback.stepResults[0]?.driver], ["completed", "os-android"]);
 });

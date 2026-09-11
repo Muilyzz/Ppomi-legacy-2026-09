@@ -1,8 +1,9 @@
 import type { OsUiDriver, ScreenSnapshot } from "./drivers.ts";
 import { defaultPermission } from "./permissions.ts";
 import type { MaybePromise, PlaybookStep } from "./playbook.ts";
-import type { Resolution, RuntimeCode, StepClass, UiDriver } from "./runtime-core.ts";
-import type { StepAdapter, StepTarget } from "./step-result.ts";
+import type { RuntimeCode } from "./emit-step-result.ts";
+import type { Resolution, StepClass, UiDriver } from "./runtime-core.ts";
+import type { StepDriver, StepTarget } from "./step-result.ts";
 
 export type OsRef =
   | { readonly kind: "read" }
@@ -10,15 +11,15 @@ export type OsRef =
   | { readonly kind: "click"; readonly target: string }
   | { readonly kind: "type"; readonly target: string; readonly text: string };
 
-/** The OS screen as a runtime surface: screen-text targets over one `OsUiDriver`. */
+/** The OS screen as a `UiDriver`: screen-text targets over one `OsUiDriver` port. */
 export class OsSurface implements UiDriver<ScreenSnapshot, OsRef, PlaybookStep> {
   readonly surface = "os" as const;
-  readonly adapter: StepAdapter;
+  readonly driver: StepDriver | undefined;
   private readonly os: OsUiDriver;
 
-  constructor(adapter: OsUiDriver) {
-    this.os = adapter;
-    this.adapter = adapter.kind;
+  constructor(port: OsUiDriver) {
+    this.os = port;
+    this.driver = port.kind;
   }
 
   read(): MaybePromise<ScreenSnapshot> {

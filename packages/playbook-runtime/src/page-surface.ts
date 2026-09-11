@@ -2,7 +2,8 @@ import type { BrowserPageDriver, PageSnapshot } from "./drivers.ts";
 import type { PagePlaybookStep } from "./page-playbook.ts";
 import { defaultPagePermission } from "./permissions.ts";
 import type { MaybePromise } from "./playbook.ts";
-import type { Resolution, RuntimeCode, StepClass, UiDriver } from "./runtime-core.ts";
+import type { RuntimeCode } from "./emit-step-result.ts";
+import type { Resolution, StepClass, UiDriver } from "./runtime-core.ts";
 import type { StepTarget } from "./step-result.ts";
 
 export type PageRef =
@@ -12,15 +13,15 @@ export type PageRef =
   | { readonly kind: "fill"; readonly locator: string; readonly text: string }
   | { readonly kind: "waitFor"; readonly locator: string };
 
-/** A web page as a runtime surface: locator targets over one `BrowserPageDriver`. */
+/** A web page as a `UiDriver`: locator targets over one `BrowserPageDriver` port. */
 export class PageSurface implements UiDriver<PageSnapshot, PageRef, PagePlaybookStep> {
   readonly surface = "page" as const;
-  readonly adapter = "page" as const;
+  readonly driver = "page" as const;
   private readonly page: BrowserPageDriver;
   private readonly allowedOrigins: readonly string[] | undefined;
 
-  constructor(adapter: BrowserPageDriver, allowedOrigins?: readonly string[]) {
-    this.page = adapter;
+  constructor(port: BrowserPageDriver, allowedOrigins?: readonly string[]) {
+    this.page = port;
     this.allowedOrigins = allowedOrigins;
   }
 
@@ -36,7 +37,7 @@ export class PageSurface implements UiDriver<PageSnapshot, PageRef, PagePlaybook
   target(step: PagePlaybookStep): StepTarget {
     switch (step.kind) {
       case "goto":
-        return step.url !== undefined && step.url.length > 0 ? { kind: "url", url: step.url } : { kind: "none" };
+        return urlTarget(step.url);
       case "click":
       case "fill":
       case "waitFor":
@@ -158,6 +159,17 @@ export function publicUrl(url: string): string {
     return "(invalid url)";
   }
   return parsed.origin === "null" ? `${parsed.protocol}${parsed.pathname}` : `${parsed.origin}${parsed.pathname}`;
+}
+
+/** Declared destination as origin + pathname; an unparsable URL is reported as no target (the step is refused anyway). */
+function urlTarget(url: string | undefined): StepTarget {
+  if (url === undefined || url.length === 0) return { kind: "none" };
+  try {
+    const parsed = new URL(url);
+    return { kind: "url", url: `${parsed.origin}${parsed.pathname}` };
+  } catch {
+    return { kind: "none" };
+  }
 }
 
 function originOf(url: string): string {

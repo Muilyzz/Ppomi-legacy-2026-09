@@ -103,8 +103,10 @@ test("page permission denied stops before any adapter call", () => {
   assert.deepEqual(adapter.calls, []);
   assertStepResults(result.stepResults, [
     {
+      // Differs from #18: a plain permission stop is failed (code permission_denied);
+      // protected is reserved for the driver's protected-control refusal (protected_action).
       stepId: "open-next",
-      status: "protected",
+      status: "failed",
       attempt: "not_executed",
       summary: "missing permission ui.control",
       target: { kind: "locator", locator: "#next" },

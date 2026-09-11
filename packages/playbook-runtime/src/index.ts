@@ -4,14 +4,17 @@ export {
   navigationRefusal,
   publicUrl,
   type BrowserPageAdapter,
+  type BrowserPageDriver,
   type OsAdapter,
   type OsAdapterKind,
   type OsRef,
+  type OsUiDriver,
+  type OsUiDriverKind,
   type PageRef,
   type PageSnapshot,
   type ScreenSnapshot,
 } from "./drivers.ts";
-export { AdapterTimeoutError, isAdapterTimeout } from "./adapter-timeout.ts";
+export { AdapterTimeoutError, DriverTimeoutError, isAdapterTimeout, isDriverTimeout } from "./adapter-timeout.ts";
 export { DummyAdapter, type DummyCall } from "./dummy-adapter.ts";
 export { DummyPageAdapter, type DummyPageCall } from "./dummy-page-adapter.ts";
 export {
@@ -20,11 +23,12 @@ export {
   defaultPermission,
   type PermissionGate,
 } from "./permissions.ts";
+export { type RuntimeCode } from "./emit-step-result.ts";
 export {
   Runtime,
   requiredPermissions,
+  validatePlaybook,
   type Resolution,
-  type RuntimeCode,
   type RuntimeOptions,
   type RuntimePlaybook,
   type RuntimeStep,
@@ -39,6 +43,7 @@ export type {
   Playbook,
   PlaybookStep,
   PageStepKind,
+  RunInvalid,
   RunResult,
   RunStatus,
   StepEffect,
@@ -65,6 +70,7 @@ export type {
   StepAction,
   StepAdapter,
   StepAttempt,
+  StepDriver,
   StepObservation,
   StepResult,
   StepResultStatus,

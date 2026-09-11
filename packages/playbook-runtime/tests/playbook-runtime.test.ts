@@ -88,8 +88,10 @@ test("permission denied stops before any adapter call", () => {
   assert.deepEqual(adapter.calls, []);
   assertOsStepResults(result.stepResults, "os-windows", [
     {
+      // Differs from #18: a plain permission stop is failed (code permission_denied);
+      // protected is reserved for the driver's protected-control refusal (protected_action).
       stepId: "open-next",
-      status: "protected",
+      status: "failed",
       attempt: "not_executed",
       summary: "missing permission ui.control",
       target: { kind: "accessibility", name: "Next" },
@@ -214,10 +216,12 @@ test("OS click timeout is attempt timeout, later click is not_executed", () => {
   assert.equal(result.stopReason, "timeout");
   assert.equal(result.evidence[0]?.outcome, "timeout");
   assert.deepEqual(adapter.calls, [{ kind: "read" }, { kind: "click", target: "인증서" }]);
+  // Differs from #18: a timed-out click may already have applied, so the core reports
+  // needs_human instead of retryable (only reads / waitFor / focus / goto stay retryable).
   assertOsStepResults(result.stepResults, "os-windows", [
     {
       stepId: "wait-cert",
-      status: "retryable",
+      status: "needs_human",
       attempt: "timeout",
       summary: "click timed out waiting for 인증서",
       target: { kind: "accessibility", name: "인증서" },

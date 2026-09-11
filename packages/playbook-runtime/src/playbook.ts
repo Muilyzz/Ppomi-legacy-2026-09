@@ -28,7 +28,13 @@ export type StepOutcome =
   | "timeout"
   | "failed";
 
-export type RunStatus = "completed" | "stopped";
+/** `invalid`: the playbook data or driver configuration was rejected up front; nothing ran. */
+export type RunStatus = "completed" | "stopped" | "invalid";
+
+export interface RunInvalid {
+  readonly code: "empty_playbook_id" | "empty_step_id" | "duplicate_step_id" | "unknown_driver";
+  readonly detail: string;
+}
 
 export interface StepRequirement {
   /** Adds to the kind's default permission; it can never replace it. */
@@ -68,4 +74,6 @@ export interface RunResult {
   readonly evidence: readonly StepEvidence[];
   /** One `StepResult` per declared step, in playbook order; steps after a stop are `not_executed`. */
   readonly stepResults: readonly StepResult[];
+  /** Set only when `status` is `invalid`. */
+  readonly invalid?: RunInvalid;
 }

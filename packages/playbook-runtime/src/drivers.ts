@@ -8,9 +8,10 @@
  * them carries a device-approval input.
  */
 import type { MaybePromise } from "./playbook.ts";
+import type { StepDriver } from "./step-result.ts";
 
-/** Which OS family a driver controls; copied onto every `StepResult.adapter` (#17 keeps that field name). */
-export type OsUiDriverKind = "os-windows" | "os-macos" | "phone";
+/** Which OS family a driver controls; derived from the one `StepDriver` union and copied onto every `StepResult.driver`. */
+export type OsUiDriverKind = Exclude<StepDriver, "page">;
 
 /** Native / system-chrome snapshot: screen texts and the focused control's text. */
 export interface ScreenSnapshot {
@@ -19,9 +20,13 @@ export interface ScreenSnapshot {
   readonly focused: string | null;
 }
 
-/** Native / system-chrome driver port, bound to the runtime by `OsSurface`. Not in-page DOM. */
+/**
+ * Native / system-chrome driver port, bound to the runtime by `OsSurface`. Not in-page DOM.
+ * `kind` is optional so existing drivers compile; a run without a known kind
+ * (neither here nor `RuntimeOptions.driver`) returns an `invalid` result instead of running.
+ */
 export interface OsUiDriver {
-  readonly kind: OsUiDriverKind;
+  readonly kind?: OsUiDriverKind;
   readScreen(): MaybePromise<ScreenSnapshot>;
   focus(target: string): MaybePromise<void>;
   click(target: string): MaybePromise<void>;
