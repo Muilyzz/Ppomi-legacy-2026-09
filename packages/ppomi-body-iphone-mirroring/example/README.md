@@ -17,4 +17,4 @@ node --experimental-strip-types packages/ppomi-body-iphone-mirroring/example/src
 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-iphone-mirroring/example/src/main.ts
 ```
 
-The live probe is a `ui.read` only. The KB스타기업뱅킹 path (`catalogs/paths/kb-star-biz-iphone/0.1.0.json`) starts with a human login and never logs a full account number.
+The live probe is a `ui.read` only. The KB스타기업뱅킹 path (`catalogs/paths/kb-star-biz-iphone/0.1.0.json`) Homes only on cold start (`phone_key home`), then human login, and never logs a full account number.

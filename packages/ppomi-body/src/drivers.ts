@@ -31,6 +31,8 @@ export interface OsUiDriver {
   focus(target: string): MaybePromise<void>;
   click(target: string): MaybePromise<void>;
   type(target: string, text: string): MaybePromise<void>;
+  /** Hardware / gesture key (iPhone Mirroring `phone_key`). Optional: other OS ports omit it. */
+  key?(name: string): MaybePromise<void>;
 }
 
 /** In-page snapshot: url, title, visible texts and the locators present. */

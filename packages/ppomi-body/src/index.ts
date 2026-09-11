@@ -31,6 +31,7 @@ export {
   type LegacyOptions,
   type Resolution,
   type RuntimeOptions,
+  type RuntimeRunOptions,
   type RuntimePlaybook,
   type RuntimeStep,
   type StepClass,

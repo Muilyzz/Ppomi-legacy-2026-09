@@ -13,7 +13,7 @@ export type MaybePromise<T> = T | Promise<T>;
  */
 export type StepEffect = "navigate" | "input" | "commit";
 
-export type StepKind = "focus" | "click" | "type" | "read";
+export type StepKind = "focus" | "click" | "type" | "read" | "key";
 
 /** In-page steps for `BrowserPageAdapter`. Not OS screen-text `click` / `type`. */
 export type PageStepKind = "goto" | "click" | "fill" | "waitFor" | "read";
@@ -34,6 +34,7 @@ export interface RunInvalid {
     | "empty_playbook_id"
     | "empty_step_id"
     | "duplicate_step_id"
+    | "unknown_from_step"
     | "unknown_driver"
     | "wait_requires_run"
     | "legacy_not_allowed";

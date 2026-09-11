@@ -14,7 +14,7 @@ export type StepDriver = "page" | "os-windows" | "os-macos" | "os-android" | "ph
 /** @deprecated Renamed to `StepDriver` (#22 glossary). */
 export type StepAdapter = StepDriver;
 
-export type StepAction = "focus" | "click" | "type" | "read" | "goto" | "fill" | "waitFor";
+export type StepAction = "focus" | "click" | "type" | "read" | "key" | "goto" | "fill" | "waitFor";
 
 export type StepResultStatus =
   | "ok"
@@ -75,7 +75,7 @@ export class StepResultError extends Error {
 }
 
 const DRIVERS = ["page", "os-windows", "os-macos", "os-android", "phone"] as const;
-const ACTIONS = ["focus", "click", "type", "read", "goto", "fill", "waitFor"] as const;
+const ACTIONS = ["focus", "click", "type", "read", "key", "goto", "fill", "waitFor"] as const;
 const STATUSES = ["ok", "retryable", "ambiguous", "protected", "needs_human", "failed"] as const;
 const ATTEMPTS = ["executed", "timeout", "not_executed"] as const;
 /** The only keys a target may carry. Anything else (x/y, box, nodeId, rect, …) is rejected, not dropped. */

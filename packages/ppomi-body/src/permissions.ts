@@ -23,6 +23,7 @@ export function defaultPermission(kind: StepKind): Permission {
     case "focus":
     case "click":
     case "type":
+    case "key":
       return "ui.control";
     default: {
       const exhaustive: never = kind;
