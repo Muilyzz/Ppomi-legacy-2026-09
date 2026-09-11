@@ -110,6 +110,7 @@ const host = Object.freeze({
 });
 document.addEventListener('visibilitychange', () => recordSession.setVisible(!document.hidden));
 window.addEventListener('pagehide', () => { recordSession.stop(); showUser(null); });
+let firstRestore = Promise.resolve();
 try {
   auth = createAuth({
     clearSecrets: async ({previousUserId}) => {
@@ -122,9 +123,15 @@ try {
   });
   window.addEventListener('pageshow', event => { if (event.persisted) { busy = false; restore(); } });
   window.addEventListener('online', restore);
-  restore();
+  firstRestore = restore();
 } catch { recordSession.stop(); showUser(null); showStatus(errors.storage, true); }
-const workbench = globalThis.PpomiWebWorkbench;
-if (typeof workbench?.mountWebWorkbench === 'function') workbench.mountWebWorkbench(root, host);
-else root.textContent = '화면을 불러오지 못했어요. 새로고침한 뒤 다시 열어 주세요.';
+// The first sign-in check is usually one request; mounting after it spares a returning account the sign-in banner flash.
+// A slow network never holds the screen for long, and the pending restore simply refreshes the mounted workbench later.
+function mount() {
+  const workbench = globalThis.PpomiWebWorkbench;
+  if (typeof workbench?.mountWebWorkbench === 'function') workbench.mountWebWorkbench(root, host);
+  else root.textContent = '화면을 불러오지 못했어요. 새로고침한 뒤 다시 열어 주세요.';
+}
+let mountTimer;
+Promise.race([firstRestore, new Promise(resolve => { mountTimer = setTimeout(resolve, 4000); })]).then(() => { clearTimeout(mountTimer); mount(); });
 if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('/service-worker.js', {scope: '/', updateViaCache: 'none'}).catch(() => {});

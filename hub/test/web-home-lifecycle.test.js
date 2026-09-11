@@ -36,7 +36,7 @@ class Element extends Events {
   replaceChildren(...children) { this.children = children; }
 }
 
-function harness({ recordConnect, recordRead, clearKey, tokenResponse } = {}) {
+async function harness({ recordConnect, recordRead, clearKey, tokenResponse } = {}) {
   assert.match(html, /<main id="root"/, 'The production page mounts the workbench into #root');
   assert.match(html, /<script src="\/web\/workbench\/app\.js" defer><\/script>\s*<script type="module" src="\/web\/home\.js"><\/script>/,
     'The shared bundle is loaded before the glue that mounts it');
@@ -121,7 +121,9 @@ function harness({ recordConnect, recordRead, clearKey, tokenResponse } = {}) {
     timelineProjection: json => json,
   });
   vm.runInContext(source, context, { filename: 'hub/web/home.js' });
-  assert.equal(mounted, 1, 'The glue mounts the shared workbench exactly once');
+  assert.equal(mounted, 0, 'The workbench waits for the first sign-in check (bounded) so a returning account sees no sign-in flash');
+  await settleUntil(() => mounted === 1, 'The glue mounts the shared workbench once the first restore settled');
+  assert.equal([...timers.values()].some(timer => timer.delay === 4000), false, 'The mount deadline is cleared once restore settled');
   // The records pane mounts its frame container after React renders; attach it like the pane does.
   let detach = host.records.attach(content);
   return {
@@ -151,7 +153,7 @@ async function settleUntil(predicate, message) {
 }
 
 test('the host exposes only public account and connection state, and the device ID the agent server needs', async t => {
-  const h = harness();
+  const h = await harness();
   t.after(() => h.close());
   assert.equal(h.host.source.endpoint, 'https://agent.example');
   // Values come from another vm context: compare structure, not prototypes.
@@ -165,12 +167,12 @@ test('the host exposes only public account and connection state, and the device 
   assert.equal(JSON.stringify(state).includes('synthetic-access'), false, 'No token is ever part of host state');
   assert.equal(await h.host.source.getAccessToken(), `synthetic-access-${ALICE}`);
   assert.equal(h.records().connection.workspace.name, 'Alice workspace');
-  assert.equal(h.records().record.version, '1');
+  await settleUntil(() => h.records().record?.version === '1', 'The session publishes the displayed record after the frame rendered');
 });
 
 test('same-user token refresh keeps the current record view and does not delete its device key', async t => {
   const token = deferred(), started = deferred();
-  const h = harness({ tokenResponse: () => { started.resolve(); return token.promise; } });
+  const h = await harness({ tokenResponse: () => { started.resolve(); return token.promise; } });
   t.after(() => h.close());
   await settleUntil(() => h.frame(), 'Initial verified account renders records');
   const frame = h.frame(), client = h.clients[0];
@@ -189,7 +191,7 @@ test('same-user token refresh keeps the current record view and does not delete 
 
 test('external account replacement during auth refresh clears the last key owner before showing the next account', async t => {
   const token = deferred(), started = deferred(), cleanup = deferred();
-  const h = harness({ tokenResponse: () => { started.resolve(); return token.promise; }, clearKey: () => cleanup.promise });
+  const h = await harness({ tokenResponse: () => { started.resolve(); return token.promise; }, clearKey: () => cleanup.promise });
   t.after(() => h.close());
   await settleUntil(() => h.frame(), 'Initial account renders records');
   const oldFrame = h.frame();
@@ -222,7 +224,7 @@ test('external account replacement during auth refresh clears the last key owner
 
 test('late connection result from a disposed account cannot replace the current context or view', async t => {
   const oldConnect = deferred(), started = deferred();
-  const h = harness({ recordConnect: (client, connected) => {
+  const h = await harness({ recordConnect: (client, connected) => {
     if (client.user.id === ALICE) { started.resolve(); return oldConnect.promise; }
     return connected;
   } });
@@ -240,7 +242,7 @@ test('late connection result from a disposed account cannot replace the current 
 });
 
 test('unchanged visible poll preserves its iframe and tab changes request a full record', async t => {
-  const h = harness();
+  const h = await harness();
   t.after(() => h.close());
   await settleUntil(() => h.frame() && h.timers.size, 'Initial rendering completes and schedules polling');
   const frame = h.frame(), client = h.clients[0], count = h.renders.length;
@@ -260,7 +262,7 @@ test('unchanged visible poll preserves its iframe and tab changes request a full
 test('logout immediately removes private views and discards a late read including its plaintext buffer', async t => {
   const late = deferred(), started = deferred();
   let block = false;
-  const h = harness({ recordRead: (_client, _name, _options, full) => {
+  const h = await harness({ recordRead: (_client, _name, _options, full) => {
     if (block) { started.resolve(); return late.promise; }
     return full();
   } });
@@ -289,7 +291,7 @@ test('logout immediately removes private views and discards a late read includin
 });
 
 test('a record read that arrives before the pane mounted waits for the container instead of failing', async t => {
-  const h = harness();
+  const h = await harness();
   t.after(() => h.close());
   await settleUntil(() => h.frame(), 'Initial view is ready');
   const previous = h.frame(), renders = h.renders.length;
