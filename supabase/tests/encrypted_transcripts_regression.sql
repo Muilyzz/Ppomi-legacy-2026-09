@@ -76,7 +76,7 @@ returns jsonb language sql as $$
 $$;
 
 -- 32 zero bytes, canonical base64. Used when Vault is not available in this session.
-select set_config('app.ppomi_transcript_key', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=', true);
+select set_config('app.ppomi_at_rest_key', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=', true);
 
 set local role authenticated;
 select pg_temp.ppomi_as('96a00000-0000-4000-8000-000000000001', '96c00000-0000-4000-8000-000000000001');
@@ -231,12 +231,37 @@ select pg_temp.ppomi_expect_error(
     '42501', 'anonymous RPC denied');
 reset role;
 select pg_temp.ppomi_assert(
-    not has_function_privilege('authenticated', 'public.ppomi_transcript_master_key()', 'execute')
+    not has_function_privilege('authenticated', 'public.ppomi_at_rest_master_key()', 'execute')
+    and not has_function_privilege('authenticated', 'public.ppomi_transcript_master_key()', 'execute')
+    and not has_function_privilege('authenticated', 'public.ppomi_at_rest_seal(jsonb,text)', 'execute')
+    and not has_function_privilege('authenticated', 'public.ppomi_at_rest_open(jsonb,text)', 'execute')
     and not has_function_privilege('authenticated',
       'public.ppomi_transcript_seal(jsonb,uuid,uuid,uuid)', 'execute')
     and not has_function_privilege('authenticated',
       'public.ppomi_transcript_open_envelope(jsonb,uuid,uuid,uuid)', 'execute'),
     'clients cannot execute the key or seal helpers');
+-- Shared primitives (owner). Memories do not call these yet.
+select set_config('app.ppomi_at_rest_key', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=', true);
+select pg_temp.ppomi_assert(
+    public.ppomi_at_rest_open(
+        public.ppomi_at_rest_seal('{"k":1}'::jsonb, 'ppomi-test-aad-v1'),
+        'ppomi-test-aad-v1') = '{"k":1}'::jsonb,
+    'at-rest seal/open roundtrip');
+select pg_temp.ppomi_expect_error(
+    $q$select public.ppomi_at_rest_open(
+        public.ppomi_at_rest_seal('{"k":1}'::jsonb, 'ppomi-test-aad-v1'),
+        'ppomi-other-aad-v1')$q$,
+    '22023', 'at-rest open rejects AAD mismatch');
+select pg_temp.ppomi_assert(
+    (public.ppomi_at_rest_seal('{"k":1}'::jsonb, 'ppomi-test-aad-v1')::text not like '%"k":1%'),
+    'at-rest envelope does not contain the plaintext');
+select set_config('app.ppomi_at_rest_key', '', true);
+select set_config('app.ppomi_transcript_key', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=', true);
+select pg_temp.ppomi_assert(
+    public.ppomi_at_rest_open(
+        public.ppomi_at_rest_seal('{"alias":true}'::jsonb, 'ppomi-test-aad-v1'),
+        'ppomi-test-aad-v1') = '{"alias":true}'::jsonb,
+    'at-rest key falls back to app.ppomi_transcript_key');
 select pg_temp.ppomi_expect_error($q$delete from public.ppomi_transcripts$q$,
     '55000', 'transcript history immutable even for owner');
 select pg_temp.ppomi_expect_error($q$delete from public.ppomi_transcript_turns$q$,

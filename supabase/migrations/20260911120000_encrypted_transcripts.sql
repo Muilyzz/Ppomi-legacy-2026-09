@@ -2,11 +2,12 @@
 -- and from agent-server memories (ppomi_agent_memories).
 --
 -- Policy (MZZ-27): Auth + RLS membership, server-held AES at rest.
--- Clients send turn JSON to RPCs. RPCs seal with a Vault secret
--- (ppomi-transcript-key) before insert and open on read. Direct table
--- SELECT / Realtime see envelopes only. No client E2E, no wrapped-key
--- gate, no device-approval gate. Agent /v1/session and /v1/responses
--- stay ephemeral.
+-- Clients send turn JSON to RPCs. RPCs seal with the shared at-rest
+-- helper (Vault ppomi-at-rest-key, alias ppomi-transcript-key) before
+-- insert and open on read. Direct table SELECT / Realtime see envelopes
+-- only. No client E2E, no wrapped-key gate, no device-approval gate.
+-- Agent /v1/session and /v1/responses stay ephemeral. Memories still
+-- use PPOMI_AGENT_MEMORY_KEY; they do not call these helpers yet.
 
 create table public.ppomi_transcripts (
     workspace_id uuid not null references public.ppomi_workspaces(id),
@@ -96,26 +97,35 @@ begin
 end;
 $$;
 
--- Prefer Vault (same dump-protection path the project used for workspace
--- keys). Local/SQL tests may set app.ppomi_transcript_key to 32-byte base64.
-create function public.ppomi_transcript_master_key()
+-- Shared key reader for server-held envelopes. Transcripts use this now.
+-- Memories still encrypt in the agent (PPOMI_AGENT_MEMORY_KEY).
+-- Tests may set app.ppomi_at_rest_key; app.ppomi_transcript_key is an alias.
+create function public.ppomi_at_rest_master_key()
 returns bytea language plpgsql stable security definer set search_path = '' as $$
 declare v_text text;
 begin
     if to_regclass('vault.decrypted_secrets') is not null then
         select ds.decrypted_secret into v_text
           from vault.decrypted_secrets ds
-         where ds.name = 'ppomi-transcript-key'
+         where ds.name in ('ppomi-at-rest-key', 'ppomi-transcript-key')
+         order by case ds.name when 'ppomi-at-rest-key' then 0 else 1 end
          limit 1;
+    end if;
+    if v_text is null or btrim(v_text) = '' then
+        v_text := nullif(btrim(current_setting('app.ppomi_at_rest_key', true)), '');
     end if;
     if v_text is null or btrim(v_text) = '' then
         v_text := nullif(btrim(current_setting('app.ppomi_transcript_key', true)), '');
     end if;
     if v_text is null or v_text !~ '^[A-Za-z0-9+/]{43}=$' then
-        raise exception using errcode = 'P0002', message = 'Transcript key missing';
+        raise exception using errcode = 'P0002', message = 'At-rest key missing';
     end if;
     return decode(v_text, 'base64');
 end;
+$$;
+create function public.ppomi_transcript_master_key()
+returns bytea language sql stable security definer set search_path = '' as $$
+    select public.ppomi_at_rest_master_key();
 $$;
 
 create function public.ppomi_b64url(p_data bytea)
@@ -201,35 +211,30 @@ begin
 end;
 $$;
 
--- AES-256-CBC + HMAC-SHA256 (encrypt-then-MAC). pgcrypto has AES but not GCM;
--- AAD binds workspace/transcript/turn so a dumped envelope cannot be moved.
-create function public.ppomi_transcript_seal(
-    p_payload jsonb, p_workspace uuid, p_transcript uuid, p_turn uuid)
+-- AES-256-CBC + HMAC-SHA256 (encrypt-then-MAC). pgcrypto has AES but not GCM.
+-- Callers bind AAD so a dumped envelope cannot be moved across rows.
+create function public.ppomi_at_rest_seal(p_plain jsonb, p_aad text)
 returns jsonb language plpgsql volatile security definer set search_path = '' as $$
 declare
     v_key bytea;
     v_nonce bytea;
-    v_plain bytea;
     v_cipher bytea;
     v_aad bytea;
     v_mac_key bytea;
     v_tag bytea;
 begin
-    if p_workspace is null or p_transcript is null or p_turn is null
-       or not public.ppomi_transcript_payload_valid(p_payload, p_turn) then
-        raise exception using errcode = '22023', message = 'Invalid transcript payload';
+    if p_plain is null or jsonb_typeof(p_plain) <> 'object' or octet_length(p_plain::text) > 56000
+       or p_aad is null or char_length(p_aad) not between 8 and 400 then
+        raise exception using errcode = '22023', message = 'Invalid at-rest payload';
     end if;
-    v_key := public.ppomi_transcript_master_key();
+    v_key := public.ppomi_at_rest_master_key();
     if octet_length(v_key) <> 32 then
-        raise exception using errcode = 'P0002', message = 'Transcript key missing';
+        raise exception using errcode = 'P0002', message = 'At-rest key missing';
     end if;
     v_nonce := extensions.gen_random_bytes(16);
-    v_plain := convert_to(p_payload::text, 'UTF8');
-    v_cipher := extensions.encrypt_iv(v_plain, v_key, v_nonce, 'aes-cbc/pad:pkcs');
-    v_aad := convert_to(
-        'ppomi-transcript-v1|' || p_workspace::text || '|' || p_transcript::text || '|' || p_turn::text,
-        'UTF8');
-    v_mac_key := extensions.hmac(convert_to('ppomi-transcript-mac-v1', 'UTF8'), v_key, 'sha256');
+    v_cipher := extensions.encrypt_iv(convert_to(p_plain::text, 'UTF8'), v_key, v_nonce, 'aes-cbc/pad:pkcs');
+    v_aad := convert_to(p_aad, 'UTF8');
+    v_mac_key := extensions.hmac(convert_to('ppomi-at-rest-mac-v1', 'UTF8'), v_key, 'sha256');
     v_tag := extensions.hmac(v_nonce || v_cipher || v_aad, v_mac_key, 'sha256');
     return jsonb_build_object(
         'version', 1,
@@ -239,44 +244,66 @@ begin
 end;
 $$;
 
-create function public.ppomi_transcript_open_envelope(
-    p_envelope jsonb, p_workspace uuid, p_transcript uuid, p_turn uuid)
+create function public.ppomi_at_rest_open(p_envelope jsonb, p_aad text)
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
 declare
     v_key bytea;
     v_nonce bytea;
     v_cipher bytea;
     v_tag bytea;
-    v_aad bytea;
     v_mac_key bytea;
     v_expect bytea;
     v_plain bytea;
     v_payload jsonb;
 begin
-    if not public.ppomi_transcript_envelope_valid(p_envelope) then
-        raise exception using errcode = '22023', message = 'Invalid transcript envelope';
+    if not public.ppomi_transcript_envelope_valid(p_envelope)
+       or p_aad is null or char_length(p_aad) not between 8 and 400 then
+        raise exception using errcode = '22023', message = 'Invalid at-rest envelope';
     end if;
-    v_key := public.ppomi_transcript_master_key();
+    v_key := public.ppomi_at_rest_master_key();
     v_nonce := public.ppomi_unb64url(p_envelope->>'nonce');
     v_cipher := public.ppomi_unb64url(p_envelope->>'ciphertext');
     v_tag := public.ppomi_unb64url(p_envelope->>'tag');
     if octet_length(v_nonce) <> 16 or octet_length(v_tag) <> 32 then
-        raise exception using errcode = '22023', message = 'Invalid transcript envelope';
+        raise exception using errcode = '22023', message = 'Invalid at-rest envelope';
     end if;
-    v_aad := convert_to(
-        'ppomi-transcript-v1|' || p_workspace::text || '|' || p_transcript::text || '|' || p_turn::text,
-        'UTF8');
-    v_mac_key := extensions.hmac(convert_to('ppomi-transcript-mac-v1', 'UTF8'), v_key, 'sha256');
-    v_expect := extensions.hmac(v_nonce || v_cipher || v_aad, v_mac_key, 'sha256');
+    v_mac_key := extensions.hmac(convert_to('ppomi-at-rest-mac-v1', 'UTF8'), v_key, 'sha256');
+    v_expect := extensions.hmac(v_nonce || v_cipher || convert_to(p_aad, 'UTF8'), v_mac_key, 'sha256');
     if v_tag is distinct from v_expect then
-        raise exception using errcode = '22023', message = 'Invalid transcript envelope';
+        raise exception using errcode = '22023', message = 'Invalid at-rest envelope';
     end if;
     v_plain := extensions.decrypt_iv(v_cipher, v_key, v_nonce, 'aes-cbc/pad:pkcs');
     begin
         v_payload := convert_from(v_plain, 'UTF8')::jsonb;
     exception when others then
-        raise exception using errcode = '22023', message = 'Invalid transcript envelope';
+        raise exception using errcode = '22023', message = 'Invalid at-rest envelope';
     end;
+    return v_payload;
+end;
+$$;
+
+create function public.ppomi_transcript_seal(
+    p_payload jsonb, p_workspace uuid, p_transcript uuid, p_turn uuid)
+returns jsonb language plpgsql volatile security definer set search_path = '' as $$
+begin
+    if p_workspace is null or p_transcript is null or p_turn is null
+       or not public.ppomi_transcript_payload_valid(p_payload, p_turn) then
+        raise exception using errcode = '22023', message = 'Invalid transcript payload';
+    end if;
+    return public.ppomi_at_rest_seal(
+        p_payload,
+        'ppomi-transcript-v1|' || p_workspace::text || '|' || p_transcript::text || '|' || p_turn::text);
+end;
+$$;
+
+create function public.ppomi_transcript_open_envelope(
+    p_envelope jsonb, p_workspace uuid, p_transcript uuid, p_turn uuid)
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare v_payload jsonb;
+begin
+    v_payload := public.ppomi_at_rest_open(
+        p_envelope,
+        'ppomi-transcript-v1|' || p_workspace::text || '|' || p_transcript::text || '|' || p_turn::text);
     if not public.ppomi_transcript_payload_valid(v_payload, p_turn) then
         raise exception using errcode = '22023', message = 'Invalid transcript payload';
     end if;
@@ -504,14 +531,16 @@ create trigger ppomi_transcript_preserve
 do $$
 begin
     if to_regclass('vault.secrets') is not null
-       and not exists (select 1 from vault.secrets where name = 'ppomi-transcript-key') then
+       and not exists (
+            select 1 from vault.secrets
+             where name in ('ppomi-at-rest-key', 'ppomi-transcript-key')) then
         perform vault.create_secret(
             encode(extensions.gen_random_bytes(32), 'base64'),
-            'ppomi-transcript-key',
-            'Server AES-256 key for ppomi_transcript_turns. Rotate with vault.update_secret then re-encrypt envelopes.');
+            'ppomi-at-rest-key',
+            'Shared server AES-256 key. Transcripts use it now; memories still use PPOMI_AGENT_MEMORY_KEY. Rotate with vault.update_secret then re-encrypt envelopes.');
     end if;
 exception when others then
-    raise notice 'ppomi-transcript-key not created: %', sqlerrm;
+    raise notice 'ppomi-at-rest-key not created: %', sqlerrm;
 end $$;
 
 revoke all on table public.ppomi_transcripts, public.ppomi_transcript_turns from public, anon, authenticated;
@@ -519,11 +548,14 @@ grant select on table public.ppomi_transcripts, public.ppomi_transcript_turns to
 revoke all on function public.ppomi_is_workspace_member(uuid),
     public.ppomi_private_member_workspace(),
     public.ppomi_private_optional_device_id(uuid),
+    public.ppomi_at_rest_master_key(),
     public.ppomi_transcript_master_key(),
     public.ppomi_b64url(bytea),
     public.ppomi_unb64url(text),
     public.ppomi_transcript_envelope_valid(jsonb),
     public.ppomi_transcript_payload_valid(jsonb, uuid),
+    public.ppomi_at_rest_seal(jsonb, text),
+    public.ppomi_at_rest_open(jsonb, text),
     public.ppomi_transcript_seal(jsonb, uuid, uuid, uuid),
     public.ppomi_transcript_open_envelope(jsonb, uuid, uuid, uuid),
     public.ppomi_transcript_open(uuid),
@@ -568,5 +600,9 @@ comment on table public.ppomi_transcripts is
     'Conversation heads. Auth members may read and write via RPCs. Tombstone delete only.';
 comment on table public.ppomi_transcript_turns is
     'Append-only conversation turns. Envelope is server AES at rest; RPCs decrypt for members.';
+comment on function public.ppomi_at_rest_master_key() is
+    'Reads vault secret ppomi-at-rest-key (alias ppomi-transcript-key), or app.ppomi_at_rest_key for tests. Not granted to clients.';
+comment on function public.ppomi_at_rest_seal(jsonb, text) is
+    'AES-256-CBC + HMAC-SHA256 envelope. Transcript RPCs call this; memories do not yet.';
 comment on function public.ppomi_transcript_master_key() is
-    'Reads vault secret ppomi-transcript-key, or app.ppomi_transcript_key for tests. Not granted to clients.';
+    'Alias of ppomi_at_rest_master_key. Not granted to clients.';

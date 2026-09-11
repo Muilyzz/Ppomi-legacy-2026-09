@@ -121,13 +121,13 @@ dist/Ppomi.app/Contents/MacOS/Ppomi --verify-records
 
 ## 대화 transcript
 
-`20260911120000_encrypted_transcripts.sql`은 장부(`ppomi_record_*`)·에이전트 기억(`ppomi_agent_memories`)과 분리된 대화 테이블을 둔다. 정책은 [MZZ-27](https://linear.app/muilyzz/issue/MZZ-27)의 Auth + RLS와 **서버 보유 AES**다. 구성원이 turn JSON을 RPC로 보내면 서버가 Vault 비밀 `ppomi-transcript-key`로 AES-256-CBC+HMAC 봉투를 만들어 저장한다. 브라우저·Mac에 그 키를 두지 않는다. 클라이언트 E2E와 `ppomi_wrapped_keys`·기기 승인 게이트는 쓰지 않는다. 에이전트 `/v1/session`·`/v1/responses`는 요청마다 끝나며 원문을 저장하지 않는다. 에이전트 기억은 기존처럼 `PPOMI_AGENT_MEMORY_KEY`다.
+`20260911120000_encrypted_transcripts.sql`은 장부(`ppomi_record_*`)·에이전트 기억(`ppomi_agent_memories`)과 분리된 대화 테이블을 둔다. 정책은 [MZZ-27](https://linear.app/muilyzz/issue/MZZ-27)의 Auth + RLS와 **서버 보유 AES**다. 구성원이 turn JSON을 RPC로 보내면 서버가 공유 헬퍼(`ppomi_at_rest_seal` / `ppomi_at_rest_open`)로 AES-256-CBC+HMAC 봉투를 만들어 저장한다. 브라우저·Mac에 그 키를 두지 않는다. 클라이언트 E2E와 `ppomi_wrapped_keys`·기기 승인 게이트는 쓰지 않는다. 에이전트 `/v1/session`·`/v1/responses`는 요청마다 끝나며 원문을 저장하지 않는다.
 
 Realtime은 암호문 INSERT/UPDATE만 밀어 준다. 웹은 이를 신호로 `ppomi_transcript_turns`를 다시 불러 복호화된 turn을 합친다. Mac은 같은 RPC로 쓰고, 창이 다시 보일 때 `transcriptOpen`으로 합친다.
 
-키: 마이그레이션이 `vault.create_secret(..., 'ppomi-transcript-key')`를 만든다. 대시보드 Vault에서 조회·교체한다. 회전은 `vault.update_secret` 뒤 기존 봉투를 새 키로 다시 봉하는 별도 작업이 필요하다(이 마이그레이션은 재암호화 절차를 포함하지 않는다). SQL 검사는 Vault가 없을 때 `app.ppomi_transcript_key`(32바이트 base64)를 쓴다.
+키(MZZ-28 slice 1): Vault 비밀 `ppomi-at-rest-key`(별칭 `ppomi-transcript-key`). SQL 검사는 `app.ppomi_at_rest_key` 또는 `app.ppomi_transcript_key`(32바이트 base64). 회전은 `vault.update_secret` 뒤 기존 봉투를 다시 봉하는 별도 작업이다. **에이전트 기억은 아직 `PPOMI_AGENT_MEMORY_KEY`다.** 기억 RPC는 이 헬퍼를 쓰지 않는다.
 
-검증: [서버 회귀](../supabase/tests/encrypted_transcripts_regression.sql)는 RPC 복호화·직접 SELECT에 평문 없음·웹·대기 기기·헤더 없는 JWT 쓰기, 비구성원 거부, 작업 공간 격리, tombstone, 익명 거부를 롤백한다. 허브는 payload 검증과 Realtime join(신호)을 검사한다.
+검증: [서버 회귀](../supabase/tests/encrypted_transcripts_regression.sql)는 공유 seal/open 왕복·AAD 바인딩·별칭 GUC, RPC 복호화·직접 SELECT에 평문 없음·웹·대기 기기·헤더 없는 JWT 쓰기, 비구성원 거부, 작업 공간 격리, tombstone, 익명 거부를 롤백한다. 허브는 payload 검증과 Realtime join(신호)을 검사한다.
 
 1. 같은 Google 계정으로 웹 두 창, 또는 웹과 Mac을 연다. 채팅 기록에는 기기 승인·감싼 키가 필요 없다.
 2. 한쪽에서 텍스트 한 줄을 보내고 응답이 끝날 때까지 기다린다.
