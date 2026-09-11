@@ -1,16 +1,4 @@
 export {
-  KB_STAR_BIZ_WIN_CERT_ID,
-  KB_STAR_BIZ_WIN_CERT_VERSION,
-  describeKbCertHandoffs,
-  dryRunKbStarBizWinCertPage,
-  kbStarBizWinCertGrants,
-  kbStarBizWinCertHandoffs,
-  kbStarBizWinCertPagePlaybook,
-  loadKbStarBizWinCert,
-  pagePlaybookFromPath,
-  publicStepUrl,
-} from "./kb-star-biz-win-cert.ts";
-export {
   NPKI_MAX_DEPTH,
   NPKI_MAX_ENTRIES,
   defaultNpkiRoot,
@@ -21,6 +9,7 @@ export {
   type NpkiProbeStatus,
   type NpkiRootSource,
 } from "./npki-probe.ts";
+export { pagePlaybookFromPath } from "./path-page.ts";
 export { WindowsDriver } from "./windows-driver.ts";
 export {
   FixtureWindowsExecutorTools,

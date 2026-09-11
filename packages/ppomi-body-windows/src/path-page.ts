@@ -1,76 +1,22 @@
+import type { PagePlaybook, PagePlaybookStep, PageStepRequirement } from "../../ppomi-body/src/index.ts";
 import {
-  DummyPageAdapter,
-  FixedPermissionGate,
-  PageSurface,
-  Runtime,
-  publicUrl,
-  type PagePlaybook,
-  type PagePlaybookStep,
-  type PageStepRequirement,
-  type RunResult,
-} from "../../ppomi-body/src/index.ts";
-import {
-  grantsUsed,
-  handoffSteps,
-  isHandoffStep,
-  loadPath,
   pageStepsUntilHandoff,
   type PathDocument,
   type PathStep,
   type PathStepRequirement,
 } from "../../ppomi-path/src/index.ts";
 
-export const KB_STAR_BIZ_WIN_CERT_ID = "kb-star-biz-win-cert";
-export const KB_STAR_BIZ_WIN_CERT_VERSION = "0.1.0";
-
-export function loadKbStarBizWinCert(): PathDocument {
-  return loadPath(KB_STAR_BIZ_WIN_CERT_ID, { version: KB_STAR_BIZ_WIN_CERT_VERSION });
-}
-
+/**
+ * The page-automatable prefix of a path as a `PagePlaybook` for `PageSurface`.
+ * Generic over any catalog document; nothing here knows a bank or a URL.
+ * Follow-up: this mapper belongs in `ppomi-body` (owner of `PagePlaybook`), not an OS body.
+ */
 export function pagePlaybookFromPath(document: PathDocument): PagePlaybook {
   return {
     id: `${document.id}@${document.version}`,
     ...(document.allowedOrigins === undefined ? {} : { allowedOrigins: document.allowedOrigins }),
     steps: pageStepsUntilHandoff(document).map(toPageStep),
   };
-}
-
-export function kbStarBizWinCertPagePlaybook(): PagePlaybook {
-  return pagePlaybookFromPath(loadKbStarBizWinCert());
-}
-
-export function kbStarBizWinCertHandoffs(): readonly PathStep[] {
-  return handoffSteps(loadKbStarBizWinCert());
-}
-
-export function kbStarBizWinCertGrants(): readonly ("ui.read" | "ui.control")[] {
-  return grantsUsed(loadKbStarBizWinCert());
-}
-
-/** Fixture: DummyPageAdapter walks the goto prefix and stops before human steps. */
-export async function dryRunKbStarBizWinCertPage(): Promise<RunResult> {
-  const playbook = kbStarBizWinCertPagePlaybook();
-  const first = playbook.steps.find(step => step.kind === "goto" && step.url !== undefined);
-  const startUrl = first?.url !== undefined ? originOf(first.url) : "https://obank.kbstar.com/";
-  const page = new DummyPageAdapter({
-    url: startUrl,
-    title: "",
-    texts: [],
-    locators: [],
-  });
-  return new Runtime(
-    new PageSurface(page, playbook.allowedOrigins),
-    new FixedPermissionGate(["ui.read", "ui.control"]),
-  ).run(playbook);
-}
-
-export function describeKbCertHandoffs(steps: readonly PathStep[]): readonly string[] {
-  return steps.filter(isHandoffStep).map(step => `handoff   ${step.id}  ${step.title ?? step.kind}`);
-}
-
-export function publicStepUrl(url: string | undefined): string {
-  if (url === undefined) return "";
-  return publicUrl(url);
 }
 
 function toPageStep(step: PathStep): PagePlaybookStep {
@@ -132,12 +78,4 @@ function toPageRequire(require: PathStepRequirement | undefined): PageStepRequir
     ...(require.text !== undefined ? { texts: require.text } : {}),
     ...(require.locator !== undefined ? { locators: [require.locator] } : {}),
   };
-}
-
-function originOf(url: string): string {
-  try {
-    return new URL(url).origin + "/";
-  } catch {
-    return "https://obank.kbstar.com/";
-  }
 }

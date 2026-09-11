@@ -1,16 +1,17 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { publicUrl } from "../../../ppomi-body/src/index.ts";
+import { probeNpki } from "../../src/index.ts";
 import {
-  describeKbCertHandoffs,
+  describeHandoffs,
   dryRunKbStarBizWinCertPage,
+  issueUrl,
   kbStarBizWinCertGrants,
   kbStarBizWinCertHandoffs,
   kbStarBizWinCertPagePlaybook,
   loadKbStarBizWinCert,
-  probeNpki,
-  publicStepUrl,
-} from "../../src/index.ts";
+} from "./kb-cert-path.ts";
 
 const LIVE_COMMAND =
   "PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/kb-star-biz-win-cert.ts";
@@ -26,12 +27,6 @@ function edgePath(): string | undefined {
     process.env.ProgramFiles && join(process.env.ProgramFiles, "Microsoft", "Edge", "Application", "msedge.exe"),
   ].filter((candidate): candidate is string => typeof candidate === "string");
   return candidates.find(candidate => existsSync(candidate));
-}
-
-function issueUrl(): string {
-  const step = loadKbStarBizWinCert().steps.find(item => item.id === "goto-issue");
-  if (step?.url === undefined) throw new Error("kb-star-biz-win-cert goto-issue is missing url");
-  return step.url;
 }
 
 function writeNpki(): void {
@@ -63,7 +58,7 @@ async function openIssueInEdge(url: string): Promise<"ok" | "skip"> {
     detached: true,
   });
   child.unref();
-  process.stdout.write(`  live     opened Edge ${publicStepUrl(url)}\n`);
+  process.stdout.write(`  live     opened Edge ${publicUrl(url)}\n`);
   if (child.pid !== undefined && process.env.PPOMI_KB_CERT_KEEP_EDGE !== "1") {
     await new Promise(done => setTimeout(done, 4_000));
     spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
@@ -92,7 +87,7 @@ async function main(): Promise<void> {
     throw new Error(`page dry-run ${dry.status} ${dry.stopReason ?? dry.invalid?.code ?? ""}`);
   }
   process.stdout.write("  page     dry-run PASS (DummyPageAdapter)\n");
-  for (const line of describeKbCertHandoffs(kbStarBizWinCertHandoffs())) {
+  for (const line of describeHandoffs(kbStarBizWinCertHandoffs())) {
     process.stdout.write(`  ${line}\n`);
   }
 
@@ -108,7 +103,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const opened = await openIssueInEdge(issueUrl());
+  const opened = await openIssueInEdge(issueUrl(document));
   if (opened === "ok") {
     process.stdout.write("  live     STOP — remaining steps are human (OTP, passwords, UAC, final confirm)\n");
   }
