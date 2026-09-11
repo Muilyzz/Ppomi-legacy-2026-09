@@ -4,7 +4,8 @@ export type DummyCall =
   | { readonly kind: "read" }
   | { readonly kind: "focus"; readonly target: string }
   | { readonly kind: "click"; readonly target: string }
-  | { readonly kind: "type"; readonly target: string; readonly text: string };
+  | { readonly kind: "type"; readonly target: string; readonly text: string }
+  | { readonly kind: "key"; readonly name: string };
 
 /** In-memory adapter for unit tests. Not `ppomi-body-windows`. */
 export class DummyAdapter implements OsUiDriver {
@@ -42,6 +43,10 @@ export class DummyAdapter implements OsUiDriver {
     this.assertPresent(target, "type");
     this.calls.push({ kind: "type", target, text });
     this.screen = { ...this.screen, focused: target };
+  }
+
+  key(name: string): void {
+    this.calls.push({ kind: "key", name });
   }
 
   private assertPresent(target: string, action: "focus" | "click" | "type"): void {

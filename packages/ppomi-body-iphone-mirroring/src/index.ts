@@ -1,4 +1,4 @@
-export { IphoneMirroringAdapter, IphoneMirroringDriver } from "./iphone-mirroring-driver.ts";
+export { IPHONE_HOME_KEY, IphoneMirroringAdapter, IphoneMirroringDriver } from "./iphone-mirroring-driver.ts";
 export {
   FixtureIphoneMirroringTools,
   fixtureToolNames,

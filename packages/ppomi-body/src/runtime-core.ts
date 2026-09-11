@@ -91,6 +91,11 @@ export interface RuntimeOptions {
   readonly now?: () => number;
 }
 
+/** Per-run resume. Cold start omits this; continue-after-failure passes the failed/next step id. */
+export interface RuntimeRunOptions {
+  readonly fromStep?: string;
+}
+
 const DEFAULTS = {
   pollIntervalMs: 100,
   maxEvidenceTexts: 200,
@@ -159,10 +164,10 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
     this.now = options.now ?? (() => Date.now());
   }
 
-  /** Async driver loop: awaits every driver call. Use this for real drivers. Undeclared mutations always hand off. */
-  async run(playbook: RuntimePlaybook<Step>): Promise<RunResult> {
+  /** Async driver loop: awaits every driver call. Use this for real drivers. Undeclared mutations always hand off. `fromStep` resumes at that id; omit it for a cold start. */
+  async run(playbook: RuntimePlaybook<Step>, options?: RuntimeRunOptions): Promise<RunResult> {
     if (this.refusedLegacyOption) return invalidResult({ code: "legacy_not_allowed", detail: "legacy options belong to the deprecated wrappers, not Runtime" });
-    const loop = this.loop(playbook, undefined);
+    const loop = this.loop(playbook, undefined, options);
     let next = loop.next();
     while (!next.done) {
       const effect = next.value;
@@ -185,7 +190,7 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
    * (`wait_requires_run`); a driver that returns a Promise is a programming
    * error and throws `TypeError` — use `Runtime.run` for both.
    */
-  runSync(playbook: RuntimePlaybook<Step>, legacy?: LegacyOptions): RunResult {
+  runSync(playbook: RuntimePlaybook<Step>, legacy?: LegacyOptions, options?: RuntimeRunOptions): RunResult {
     if (this.refusedLegacyOption) return invalidResult({ code: "legacy_not_allowed", detail: "legacy options belong to the deprecated wrappers, not Runtime" }, legacy);
     if (playbook.steps.some(step => (step.require?.wait ?? 0) > 0)) {
       return invalidResult(
@@ -193,7 +198,7 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
         legacy,
       );
     }
-    const loop = this.loop(playbook, legacy);
+    const loop = this.loop(playbook, legacy, options);
     let next = loop.next();
     while (!next.done) {
       const effect = next.value;
@@ -229,16 +234,23 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
   }
 
   /** The single loop. Effects are yielded to a driver loop; adapter errors come back through `throw`. */
-  private *loop(playbook: RuntimePlaybook<Step>, legacy: LegacyOptions | undefined): Generator<Effect<Ref, Step>, RunResult, unknown> {
+  private *loop(
+    playbook: RuntimePlaybook<Step>,
+    legacy: LegacyOptions | undefined,
+    options: RuntimeRunOptions | undefined,
+  ): Generator<Effect<Ref, Step>, RunResult, unknown> {
     const driverName = this.driverName;
+    const from = startIndex(playbook, options?.fromStep);
     const invalid = validatePlaybook(playbook)
+      ?? (typeof from !== "number" ? from : null)
       ?? (driverName === undefined
         ? { code: "unknown_driver" as const, detail: "the driver declares no kind and RuntimeOptions.driver is not set" }
         : null);
-    if (invalid !== null || driverName === undefined) {
+    if (invalid !== null || driverName === undefined || typeof from !== "number") {
       return invalidResult(invalid ?? { code: "unknown_driver", detail: "" }, legacy);
     }
     const runUndeclared = legacy?.runUndeclaredMutations === true;
+    const steps = from === 0 ? playbook.steps : playbook.steps.slice(from);
 
     const evidence: StepEvidence[] = [];
     const stepResults: StepResult[] = [];
@@ -247,12 +259,12 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
       stopReason,
       evidence,
       stepResults: stepResults.concat(
-        notExecutedRest(playbook.id, driverName, playbook.steps, stoppedAt, step => this.driver.target(step)),
+        notExecutedRest(playbook.id, driverName, steps, stoppedAt, step => this.driver.target(step)),
       ),
       ...(runUndeclared ? { legacy: true as const } : {}),
     });
 
-    for (const [index, step] of playbook.steps.entries()) {
+    for (const [index, step] of steps.entries()) {
       const record = (texts: readonly string[], decision: Decision, timingMs: number): void => {
         evidence.push(this.evidenceRow(step, texts, decision));
         stepResults.push(stepResultRow({
@@ -324,6 +336,13 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
       note: decision.note.slice(0, this.maxNoteLength),
     };
   }
+}
+
+function startIndex(playbook: RuntimePlaybook<RuntimeStep>, fromStep: string | undefined): number | RunInvalid {
+  if (fromStep === undefined) return 0;
+  const index = playbook.steps.findIndex(step => step.id === fromStep);
+  if (index < 0) return { code: "unknown_from_step", detail: `fromStep not in playbook: ${fromStep}` };
+  return index;
 }
 
 function invalidResult(invalid: RunInvalid, legacy?: LegacyOptions): RunResult {

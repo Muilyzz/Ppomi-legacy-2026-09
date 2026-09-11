@@ -103,6 +103,34 @@ test("requiredPermissions always includes ui.read and the kind default; declared
   assert.deepEqual(requiredPermissions({ id: "b", kind: "click", require: { permission: "ui.read" } }, "ui.control"), ["ui.read", "ui.control"]);
   assert.deepEqual(requiredPermissions({ id: "c", kind: "read" }, "ui.read"), ["ui.read"]);
   assert.deepEqual(requiredPermissions({ id: "d", kind: "read", require: { permission: "ui.control" } }, "ui.read"), ["ui.read", "ui.control"]);
+  assert.deepEqual(requiredPermissions({ id: "e", kind: "key" }, "ui.control"), ["ui.read", "ui.control"]);
+});
+
+test("cold start runs from the first step; fromStep resumes and skips the prefix", async () => {
+  const playbook = {
+    id: "home-then-click",
+    steps: [
+      { id: "go-home", kind: "key" as const, target: "home", effect: "navigate" as const },
+      { id: "go", kind: "click" as const, target: "Next", effect: "navigate" as const },
+    ],
+  };
+  const cold = new DummyAdapter(screen);
+  const coldResult = await new Runtime(new OsSurface(cold), all).run(playbook);
+  assert.equal(coldResult.status, "completed");
+  assert.deepEqual(cold.calls.filter(call => call.kind === "key" || call.kind === "click"), [
+    { kind: "key", name: "home" },
+    { kind: "click", target: "Next" },
+  ]);
+
+  const resume = new DummyAdapter(screen);
+  const resumeResult = await new Runtime(new OsSurface(resume), all).run(playbook, { fromStep: "go" });
+  assert.equal(resumeResult.status, "completed");
+  assert.deepEqual(resumeResult.stepResults.map(row => row.stepId), ["go"]);
+  assert.equal(resume.calls.some(call => call.kind === "key"), false);
+  assert.deepEqual(resume.calls.filter(call => call.kind === "click"), [{ kind: "click", target: "Next" }]);
+
+  const missing = await new Runtime(new OsSurface(new DummyAdapter(screen)), all).run(playbook, { fromStep: "nope" });
+  assert.deepEqual([missing.status, missing.invalid?.code, missing.stepResults.length], ["invalid", "unknown_from_step", 0]);
 });
 
 test("playbook data cannot downgrade a mutation to ui.read on either surface", () => {

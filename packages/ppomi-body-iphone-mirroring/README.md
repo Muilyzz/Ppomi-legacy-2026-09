@@ -26,4 +26,4 @@ PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-iphone-mir
 
 Off-macOS, missing app, Accessibility denial, or no mirroring window **skips (exit 0)**. When the window is open and readable, the live probe **PASS**es a `ui.read` Runtime step. It does not tap Home/Switcher and does not open KB스타기업뱅킹.
 
-KB path `kb-star-biz-iphone@0.1.0`: human login → 계좌조회 → human account detail → masked read. No payment. Grant is `ui.read` plus the navigate click.
+KB path `kb-star-biz-iphone@0.1.0`: **cold start** (first tool-call / explicit restart) sends `phone_key home` (`phone key home` = ⌘1 → SpringBoard) so AX is a known baseline, then opens KB스타기업뱅킹 and continues. **Pause/resume** (continue-after-failure) passes `Runtime.run(playbook, { fromStep })` and does **not** Home — the phone is still on the failed screen. Login / Face ID / account-detail stay human. No payment. Grant is `ui.read` plus `ui.control` for Home, open, and the navigate click.

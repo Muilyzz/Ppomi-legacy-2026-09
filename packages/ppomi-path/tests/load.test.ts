@@ -45,8 +45,13 @@ test("loads kb-star-biz-iphone: human login, no payment, no account digits", () 
   assert.equal(document.surface, "iphone-mirroring");
   assert.deepEqual(
     document.steps.map(step => step.kind),
-    ["human", "click", "human", "read"],
+    ["key", "focus", "human", "click", "human", "read"],
   );
+  const goHome = document.steps.find(step => step.id === "go-home");
+  assert.equal(goHome?.target, "home");
+  assert.equal(goHome?.effect, "navigate");
+  assert.match(goHome?.title ?? "", /cold start|fromStep|pause\/resume/i);
+  assert.equal(document.steps.find(step => step.id === "open-kb")?.target, "KB스타기업뱅킹");
   assert.equal(document.steps.find(step => step.id === "open-accounts")?.effect, "navigate");
   assert.equal(document.steps.find(step => step.id === "read-account")?.require?.permission, "ui.read");
   assert.equal(document.steps.some(step => step.kind === "payment" || step.kind === "submit"), false);
@@ -81,6 +86,13 @@ test("validatePathDocument rejects bad schema, kinds, and payment without a targ
     () => validatePathDocument({
       ...valid,
       steps: [{ id: "pay", kind: "payment" }],
+    }),
+    error => error instanceof PathError && error.code === "step_target",
+  );
+  assert.throws(
+    () => validatePathDocument({
+      ...valid,
+      steps: [{ id: "go-home", kind: "key" }],
     }),
     error => error instanceof PathError && error.code === "step_target",
   );

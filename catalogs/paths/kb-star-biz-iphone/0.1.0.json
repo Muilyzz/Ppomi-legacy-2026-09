@@ -6,6 +6,19 @@
   "surface": "iphone-mirroring",
   "steps": [
     {
+      "id": "go-home",
+      "title": "cold start만: phone_key home (⌘1 → SpringBoard). pause/resume(fromStep)은 건너뜀",
+      "kind": "key",
+      "target": "home",
+      "effect": "navigate"
+    },
+    {
+      "id": "open-kb",
+      "title": "KB스타기업뱅킹 열기",
+      "kind": "focus",
+      "target": "KB스타기업뱅킹"
+    },
+    {
       "id": "human-login",
       "title": "KB스타기업뱅킹 로그인은 당사자",
       "kind": "human"
