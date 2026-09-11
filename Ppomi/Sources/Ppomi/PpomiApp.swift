@@ -20,13 +20,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state = Self.pendingState
         NSApp.setActivationPolicy(.regular)
         GoogleAccount.shared.startSharing()
-        // 손·눈 권한이 없어 폰 도구가 거부되면(state.setupNeeded) 그때 설정 › 시작하기를 연다 — 시작 때가 아니라 첫 도구 때.
+        // First miss: system prompt + chat CTA. Already denied: 설정 › 시작하기.
+        promptWatch = state?.$permissionPrompt.dropFirst().receive(on: RunLoop.main).sink { _ in
+            Permissions.requestSystemPrompts()
+            NotificationCenter.default.post(name: Permissions.promptNotification, object: nil, userInfo: ["kind": "prompt"])
+        }
         setupWatch = state?.$setupNeeded.dropFirst().receive(on: RunLoop.main).sink { _ in
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-            NSApp.activate()
+            NotificationCenter.default.post(name: Permissions.promptNotification, object: nil, userInfo: ["kind": "settings"])
+            Permissions.openSettings()
         }
     }
     private var setupWatch: AnyCancellable?
+    private var promptWatch: AnyCancellable?
     /// OS 텍스트 크기가 바뀌었으면(설정 앱에 다녀온 뒤) 모든 글자·여백·웹 페이지가 따라간다.
     func applicationDidBecomeActive(_ notification: Notification) {
         Task.detached { guard GoogleAccount.session != nil else { return }; try? GoogleAccount.exchangeKeys() }   // 기다리는 기기에 키를

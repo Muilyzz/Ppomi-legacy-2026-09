@@ -27,6 +27,8 @@ final class Tools {
     var captureInBody: (LifeStore) throws -> String = { try InBodyImport.capture(to: $0) }
     // Tests can check the real gate branching without querying TCC or touching the phone.
     var phoneGateStatus: (() -> (permissions: Bool, state: String))? = nil
+    /// Tests pin prompt-vs-settings without reading TCC / UserDefaults.
+    var permissionNeed: (() -> Permissions.Need)? = nil
     var wakePhone: () throws -> Void = { try Phone.wake() }
     var deviceRegistry = DeviceRegistry.shared
     var windowsGateStatus: (() -> (permissions: Bool, state: String))? = nil
@@ -440,9 +442,8 @@ final class Tools {
         }
         if Self.fake != nil && phoneGateStatus == nil { return nil } // tests: no mirror to check
         let supplied = phoneGateStatus?()
-        if !(supplied?.permissions ?? Permissions.ready) {    // first phone action: the console opens 설정 › 시작하기 (State.pollAsk)
-            try? db.setState("setup:needed", "1")
-            return refuse("permissions", "실행 안 함: Mac에서 뽀미에게 손쉬운 사용·화면 기록 권한이 아직 없다. 뽀미 설정 창(시작하기)이 열렸으니 사용자에게 거기서 두 권한을 켜 달라고 한 줄로 부탁하고 멈춰라.")
+        if !(supplied?.permissions ?? Permissions.ready) {
+            return refuse("permissions", signalPermissions())
         }
         let state = (supplied?.state ?? Mirroring.state().rawValue).trimmingCharacters(in: .whitespacesAndNewlines)
         if tool == "inbody_capture" {
@@ -459,6 +460,19 @@ final class Tools {
         return nil
     }
 
+    /// First miss: chat CTA + system prompt (`setup:prompt`). Already denied: 시작하기 (`setup:needed`).
+    private func signalPermissions() -> String {
+        let need = permissionNeed?() ?? Permissions.need()
+        switch need {
+        case .ready, .prompt:
+            try? db.setState("setup:prompt", "1")
+            return "실행 안 함: Mac에서 뽀미에게 손쉬운 사용·화면 기록이 없다. 채팅의 권한 허용 버튼(또는 시스템 허용 창)으로 켜 달라고 한 줄만 하고 멈춰라. 설정이 열렸다고 말하지 마라."
+        case .settings:
+            try? db.setState("setup:needed", "1")
+            return "실행 안 함: Mac에서 손쉬운 사용·화면 기록이 꺼져 있고 다시 물을 수 없다. 뽀미 설정(시작하기)이 열렸으니 시스템 설정 › 개인정보 보호 및 보안에서 손쉬운 사용과 화면 기록을 켜고, 켠 뒤 뽀미를 다시 실행하라고 한 줄만 안내하고 멈춰라."
+        }
+    }
+
     /// The Windows window has no lock or pause to wake; it only needs the permissions and a window in window mode.
     private func windowsGate(_ tool: String) -> String? {
         func refuse(_ reason: String, _ message: String) -> String { runtimeRecorder.emit(.blocked); Telemetry.record("gate", ["tool": tool, "reason": reason], db: db); return message }
@@ -468,8 +482,7 @@ final class Tools {
         if Self.fake != nil && windowsGateStatus == nil { return nil }
         let supplied = windowsGateStatus?()
         if !(supplied?.permissions ?? Permissions.ready) {
-            try? db.setState("setup:needed", "1")
-            return refuse("permissions", "실행 안 함: Mac에서 뽀미에게 손쉬운 사용·화면 기록 권한이 아직 없다. 뽀미 설정 창(시작하기)이 열렸으니 사용자에게 거기서 두 권한을 켜 달라고 한 줄로 부탁하고 멈춰라.")
+            return refuse("permissions", signalPermissions())
         }
         let state = supplied?.state ?? ((try? Desk.state()) ?? "NONE")
         if state != "READY" { return refuse("window", "실행 안 함: Parallels의 Windows 창이 없다. 사용자에게 Parallels에서 Windows를 창 모드로 열어 달라고 한 줄로 부탁하고 멈춰라.") }

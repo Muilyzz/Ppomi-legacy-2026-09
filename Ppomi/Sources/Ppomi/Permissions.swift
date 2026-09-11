@@ -1,6 +1,6 @@
-// 시작하기: 뽀미의 손(손쉬운 사용)·눈(화면 기록)·귀(마이크)와 iPhone 미러링, OpenAI 키의 상태를 읽는 검사와 각각을 여는 동작.
-// SettingsView 의 "시작하기" 섹션과 PpomiApp 의 첫 실행 자동 열기가 쓴다. 검사는 묻지 않고 읽기만 한다(preflight); 시스템 대화상자는
-// 사람이 버튼을 눌렀을 때만.
+// 시작하기: 뽀미의 손(손쉬운 사용)·눈(화면 기록)·귀(마이크)와 iPhone 미러링의 상태.
+// 첫 요청은 시스템 프롬프트와 채팅 CTA. 이미 거절되어 다시 물을 수 없을 때만 설정 › 시작하기.
+// 마이크는 통화용 선택 권한이라 여기서 묻지 않는다.
 import AppKit
 import AVFoundation
 import SwiftUI
@@ -10,6 +10,16 @@ enum Permissions {
     struct Item: Identifiable {
         let id: String, name: String, ok: Bool?, note: String, button: String, open: () -> Void
     }
+
+    /// First missing 손·눈 grant: system prompt + chat CTA. After a recorded ask, only Settings can recover.
+    enum Need: String, Equatable {
+        case ready, prompt, settings
+    }
+
+    static let promptNotification = Notification.Name("ppomi.permissionNeed")
+    static var store: UserDefaults = .standard
+    private static let askedAXKey = "ppomi.permissions.askedAX"
+    private static let askedScreenKey = "ppomi.permissions.askedScreen"
 
     static var accessibility: Bool { AXIsProcessTrusted() }
     static var screenCapture: Bool { CGPreflightScreenCaptureAccess() }
@@ -23,6 +33,10 @@ enum Permissions {
 
     static func pane(_ anchor: String) {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)")!)
+    }
+    static func openSettings() {
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate()
     }
     /// Start a fresh copy of this executable (the .app when bundled) and quit; TCC re-reads screen-capture access on launch.
     static func relaunch() {
@@ -38,16 +52,58 @@ enum Permissions {
         if let u = mirroringURL { NSWorkspace.shared.openApplication(at: u, configuration: .init()) }
     }
 
+    static func need(accessibility ax: Bool, screen: Bool, askedAX: Bool, askedScreen: Bool) -> Need {
+        if ax && screen { return .ready }
+        if (!ax && !askedAX) || (!screen && !askedScreen) { return .prompt }
+        return .settings
+    }
+    static func need() -> Need {
+        need(accessibility: accessibility, screen: screenCapture,
+             askedAX: store.bool(forKey: askedAXKey), askedScreen: store.bool(forKey: askedScreenKey))
+    }
+
+    /// AX prompt + Screen Recording request. Does not open 시작하기. Mic stays out.
+    static func requestSystemPrompts() {
+        if !accessibility {
+            _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary)
+            store.set(true, forKey: askedAXKey)
+        }
+        if !screenCapture {
+            _ = CGRequestScreenCaptureAccess()
+            store.set(true, forKey: askedScreenKey)
+        }
+    }
+
+    /// Chat CTA: small alert, then the OS allow flow. Settings only when macOS will not ask again.
+    @discardableResult
+    static func presentAllowSheet() -> Need {
+        if ready { return .ready }
+        let alert = NSAlert()
+        alert.messageText = "손쉬운 사용과 화면 기록이 필요해요"
+        alert.informativeText = "폰을 읽고 만지려면 macOS가 한 번 물어봅니다. 허용하기를 누르면 시스템 창이 열립니다."
+        alert.addButton(withTitle: "허용하기")
+        alert.addButton(withTitle: "나중에")
+        guard alert.runModal() == .alertFirstButtonReturn else { return need() }
+        if need() == .prompt { requestSystemPrompts() }
+        let now = need()
+        if now == .settings { openSettings() }
+        return now
+    }
+
     /// The rows, top to bottom.
     static func items() -> [Item] {
         let mic = AVCaptureDevice.authorizationStatus(for: .audio)
         return [
-            Item(id: "ax", name: "손쉬운 사용", ok: accessibility, note: "폰을 두드리고 창을 옮기는 손 · 필수", button: "설정 열기") {
+            Item(id: "ax", name: "손쉬운 사용", ok: accessibility,
+                 note: "시스템 설정 › 개인정보 보호 및 보안 › 손쉬운 사용에서 뽀미를 켜세요. 폰을 두드리고 창을 옮기는 손 · 필수",
+                 button: "설정 열기") {
                 // A bundle-less binary is not in the list until it asks once; the prompt registers it, then the pane opens.
                 _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary)
                 pane("Privacy_Accessibility")
             },
-            Item(id: "screen", name: "화면 기록", ok: screenCapture, note: "미러링 창을 읽는 눈 · 필수 · 켠 뒤에는 뽀미를 다시 실행해야 반영돼요", button: "설정 열기") {
+            Item(id: "screen", name: "화면 기록", ok: screenCapture,
+                 note: "같은 개인정보 보호에서 화면 기록을 켜세요. 미러링 창을 읽는 눈 · 필수 · 켠 뒤에는 아래 ‘뽀미 다시 실행’",
+                 button: "설정 열기") {
                 if !CGRequestScreenCaptureAccess() { pane("Privacy_ScreenCapture") }
             },
             Item(id: "mic", name: "마이크", ok: microphone, note: "통화(음성 대화)에만 · 선택", button: mic == .notDetermined ? "허용 요청" : "설정 열기") {
@@ -63,5 +119,3 @@ enum Permissions {
         ]
     }
 }
-
-

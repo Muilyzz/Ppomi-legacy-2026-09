@@ -31,6 +31,39 @@ final class PathColdStartTests: XCTestCase {
         XCTAssertTrue(fleet.first?.online == true)
     }
 
+    func testColdStartMissingPermissionsShowsPromptNotSettingsTheFirstTime() throws {
+        let path = NSTemporaryDirectory() + "ppomi-kb-perm-\(UUID().uuidString)/ledger.db"
+        defer { try? FileManager.default.removeItem(atPath: (path as NSString).deletingLastPathComponent) }
+        let tools = try Tools(db: try DB(path: path, writable: true))
+        tools.currentText = "해줘"
+        tools.phoneGateStatus = { (false, "CONNECTED") }
+        tools.permissionNeed = { .prompt }
+        var hands: [[String]] = []
+        Tools.fake = (screen: { [] }, hand: { hands.append($0) })
+        let out = tools.execute("path_cold_start", ["app": "kb-enterprise"])
+        XCTAssertTrue(out.hasPrefix("실행 안 함:"), out)
+        XCTAssertTrue(out.contains("권한 허용"), out)
+        XCTAssertFalse(out.contains("설정이 열렸"), out)
+        XCTAssertEqual(try tools.db.state("setup:prompt"), "1")
+        XCTAssertNil(try tools.db.state("setup:needed"))
+        XCTAssertTrue(hands.isEmpty)
+    }
+
+    func testColdStartDeniedPermissionsOpensStartupSettings() throws {
+        let path = NSTemporaryDirectory() + "ppomi-kb-deny-\(UUID().uuidString)/ledger.db"
+        defer { try? FileManager.default.removeItem(atPath: (path as NSString).deletingLastPathComponent) }
+        let tools = try Tools(db: try DB(path: path, writable: true))
+        tools.currentText = "해줘"
+        tools.phoneGateStatus = { (false, "CONNECTED") }
+        tools.permissionNeed = { .settings }
+        Tools.fake = (screen: { [] }, hand: { _ in XCTFail("denied permissions must not touch the phone") })
+        let out = tools.execute("path_cold_start", ["app": "kb-enterprise"])
+        XCTAssertTrue(out.contains("시작하기"), out)
+        XCTAssertTrue(out.contains("다시 실행"), out)
+        XCTAssertEqual(try tools.db.state("setup:needed"), "1")
+        XCTAssertNil(try tools.db.state("setup:prompt"))
+    }
+
     func testColdStartRefusesOtherApps() throws {
         let path = NSTemporaryDirectory() + "ppomi-kb-\(UUID().uuidString)/ledger.db"
         defer { try? FileManager.default.removeItem(atPath: (path as NSString).deletingLastPathComponent) }

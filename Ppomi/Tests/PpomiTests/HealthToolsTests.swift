@@ -176,6 +176,7 @@ final class HealthToolsTests: XCTestCase {
             XCTAssertTrue(tools.execute("inbody_capture", [:]).hasPrefix("실행 안 함:"), state)
         }
         tools.phoneGateStatus = { (false, "CONNECTED") }
+        tools.permissionNeed = { .settings }
         XCTAssertTrue(tools.execute("inbody_capture", [:]).contains("권한"))
         XCTAssertEqual(try tools.db.state("setup:needed"), "1")
         tools.phoneGateStatus = { (true, "CONNECTED") }

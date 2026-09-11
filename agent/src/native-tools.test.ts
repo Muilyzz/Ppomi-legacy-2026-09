@@ -207,6 +207,18 @@ test("Mac MCP tools arrive as JSON-schema specs, execute through the bridge and 
   assert.doesNotMatch(voiceInstructions(bootstrap, "text"), /\[도구 안내\]/);
 });
 
+test("requestPermissions is a native host method, not a model tool", async () => {
+  const bridge = new NativeBridge(raw => {
+    const request = JSON.parse(raw) as { id: string; method: string; args: Record<string, unknown> };
+    assert.equal(request.method, "requestPermissions");
+    assert.deepEqual(request.args, {});
+    queueMicrotask(() => bridge.receive({ id: request.id, result: { ready: false, need: "prompt" } }));
+  });
+  const result = await bridge.call<{ ready: boolean; need: string }>("requestPermissions", {});
+  assert.equal(result.ready, false);
+  assert.equal(result.need, "prompt");
+});
+
 test("an MCP error result keeps its text for the model in the shared {ok:false} shape so the UI shows a failed card", async () => {
   const mac: Bootstrap = { platform: "macos", deviceLabel: "Mac", configured: true, endpoint: "https://example.invalid", tools: ["phone_wait"],
     toolSpecs: [{ name: "phone_wait", description: "대기", parameters: { type: "object", required: [], properties: {} } }] };

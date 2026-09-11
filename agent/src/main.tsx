@@ -7,7 +7,7 @@ import { createBridge, type Bootstrap } from "./bridge";
 import { VoiceController, type VoiceState, TextController, type TextState, type ChatMessage, type ToolProgress } from "./voice";
 import { type InputCard } from "./questions";
 import { QuestionCard } from "./question-cards";
-import { Shell, ErrorBanner, Pane, Log, Welcome, Bubble, BubbleActions, Thinking, ToolCard, Procedure, Waiting, CallCard, Composer, CallBar, IncomingCall,
+import { Shell, ErrorBanner, Pane, Log, Welcome, Bubble, BubbleActions, Thinking, ToolCard, Procedure, Waiting, CallCard, Composer, CallBar, IncomingCall, PermissionCTA,
   type ProcedureStep, type StepOutcome } from "./ui/shell";
 import type { ToolPart } from "@/components/ai-elements/tool";
 import "./index.css";
@@ -86,6 +86,7 @@ function App() {
   const [notices, setNotices] = useState<{ id: string; text: string; after: string | null }[]>([]);   // 비서의 톡(네이티브 사람 차례)
   const [queue, setQueue] = useState<string[]>([]);   // 비서가 일하는 동안 보낸 글. 차례가 오면 순서대로 나간다
   const [progress, setProgress] = useState<{ tool: string; text: string } | null>(null);   // 네이티브가 알리는 도구 내부 진행(OCR 읽는 중 …)
+  const [permNeed, setPermNeed] = useState<"prompt" | "settings" | null>(null);
   const lastEntry = useRef<string | null>(null);   // a notice sits after the entry that was last when it arrived
   const missed = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);   // 벨은 45초면 끊는다(부재중)
   const actionEpoch = useRef(0);
@@ -182,6 +183,7 @@ function App() {
   }, [queue, waiting, inCall, boot?.configured]);
   const apply = (b: Bootstrap) => {
     applyUIScale(b); bootRef.current = b; setBoot(b);
+    if (b.accessibility && b.screenCapture) setPermNeed(null);
     if (b.answerCall) void startCall(b.answerCall);   // answered on the OS call screen before the page was ready
   };
   // 부트스트랩: 입력창은 이걸 기다리지 않는다(바로 타자 가능). 보내기만 첫 응답을 기다리고, 실패하면 5초마다 다시 시도한다.
@@ -223,6 +225,10 @@ function App() {
     window.ppomiNotice = (text: string) => {
       if (typeof text === "string" && text) setNotices((old) => [...old, { id: crypto.randomUUID(), text, after: lastEntry.current }]);
     };
+    window.ppomiPermissionNeed = (kind) => {
+      if (kind === "ready") setPermNeed(null);
+      else if (kind === "prompt" || kind === "settings") setPermNeed(kind);
+    };
     const unload = () => void stopCurrent();
     window.addEventListener("pagehide", unload);
     window.addEventListener("focus", refreshCapabilities);
@@ -237,6 +243,7 @@ function App() {
       delete window.ppomiNotice;
       delete window.ppomiToolProgress;
       delete window.ppomiAnswerCall;
+      delete window.ppomiPermissionNeed;
     };
   }, []);
   // 벨소리: 걸려온 동안 두 음(440·480Hz)을 1초 울리고 2초 쉰다. 파일 없이 Web Audio. 30초 뒤엔 그친다(띠는 남는다).
@@ -338,6 +345,10 @@ function App() {
       composer={inCall
         ? <CallBar word={callWords[state]} onEnd={() => void controller.current?.stop()} />
         : <>
+          {permNeed && boot?.platform !== "android" && !(boot?.accessibility && boot?.screenCapture) &&
+            <PermissionCTA onAllow={() => { void bridge.call("requestPermissions", {}).then((r) => {
+              if ((r as { ready?: unknown })?.ready === true) setPermNeed(null);
+            }).catch(() => {}); }} />}
           <Waiting items={queue} onRemove={(index) => setQueue((old) => old.filter((_, i) => i !== index))} />
           <Composer status={status} disabled={boot?.configured === false} onSend={send} onStop={() => void stopCurrent()}
             onCall={() => void startCall()} callDisabled={settling} />
