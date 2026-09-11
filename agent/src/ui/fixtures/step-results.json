@@ -1,0 +1,89 @@
+[
+  {
+    "stepId": "open-next",
+    "playbookId": "fixture-page-happy",
+    "driver": "page",
+    "action": "click",
+    "status": "ok",
+    "attempt": "executed",
+    "target": { "kind": "locator", "locator": "#next" },
+    "observation": { "summary": "step finished" },
+    "evidence": {
+      "screenshotBefore": "runs/fixture/open-next.before.png",
+      "screenshotAfter": "runs/fixture/open-next.after.png"
+    },
+    "timingMs": 42
+  },
+  {
+    "stepId": "wait-cert",
+    "playbookId": "fixture-hybrid",
+    "driver": "os-windows",
+    "action": "read",
+    "status": "retryable",
+    "attempt": "timeout",
+    "code": "screen_missing",
+    "target": { "kind": "none" },
+    "observation": { "summary": "screen missing 인증서" },
+    "timingMs": 8000
+  },
+  {
+    "stepId": "sign",
+    "playbookId": "fixture-hybrid",
+    "driver": "os-windows",
+    "action": "click",
+    "status": "failed",
+    "attempt": "not_executed",
+    "code": "not_executed",
+    "target": { "kind": "accessibility", "name": "서명", "role": "button" },
+    "observation": { "summary": "previous step stopped the run; adapter was not called" },
+    "timingMs": 0
+  },
+  {
+    "stepId": "open-form",
+    "playbookId": "fixture-page-happy",
+    "driver": "page",
+    "action": "goto",
+    "status": "ok",
+    "attempt": "executed",
+    "target": { "kind": "url", "url": "https://example.test/form" },
+    "observation": { "summary": "step finished" },
+    "timingMs": 15
+  },
+  {
+    "stepId": "confirm",
+    "playbookId": "fixture-macos",
+    "driver": "os-macos",
+    "action": "click",
+    "status": "needs_human",
+    "attempt": "not_executed",
+    "code": "commit",
+    "target": { "kind": "accessibility", "name": "확인" },
+    "observation": { "summary": "commit step: the person takes this step" },
+    "evidence": { "screenshotAfter": "runs/fixture/confirm.after.png" },
+    "timingMs": 0
+  },
+  {
+    "stepId": "tap-next",
+    "playbookId": "fixture-phone",
+    "driver": "phone",
+    "action": "click",
+    "status": "ambiguous",
+    "attempt": "not_executed",
+    "code": "ambiguous_target",
+    "target": { "kind": "accessibility", "name": "다음" },
+    "observation": { "summary": "two 다음 buttons on screen" },
+    "timingMs": 30
+  },
+  {
+    "stepId": "fill-name",
+    "playbookId": "fixture-android",
+    "driver": "os-android",
+    "action": "type",
+    "status": "protected",
+    "attempt": "not_executed",
+    "code": "protected_action",
+    "target": { "kind": "accessibility", "name": "비밀번호" },
+    "observation": { "summary": "driver refused type: protected control" },
+    "timingMs": 0
+  }
+]
