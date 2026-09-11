@@ -56,10 +56,10 @@ export async function probeAndroidLive(): Promise<LiveProbe> {
   if (missing) return skipLines(lines, "adb not on PATH");
   const resolved = resolveAdbSerial(serials, pinned);
   if (resolved.serial === undefined) {
-    if (resolved.code === "multiple_devices") {
-      return skipLines(lines, "multiple devices; set ANDROID_SERIAL or PPOMI_ANDROID_SERIAL");
+    if (resolved.code === "serial_required") {
+      return skipLines(lines, "set PPOMI_ANDROID_SERIAL or ANDROID_SERIAL to the test device (a single attached phone is never auto-targeted)");
     }
-    return skipLines(lines, "no authorized Android device");
+    return skipLines(lines, "pinned serial is not an authorized attached device");
   }
 
   const serial = resolved.serial;
@@ -84,7 +84,7 @@ export async function probeAndroidLive(): Promise<LiveProbe> {
   if (node === undefined) {
     return skipLines(
       lines,
-      `front dump is not Settings or has no 연결/Wi-Fi row — nothing else is clicked`,
+      "no safe Settings row (연결 / Wi-Fi / 블루투스 / 알림 / 배터리 / 디스플레이) on screen — nothing else is tapped",
       `nodes=${preview.nodes.length}`,
     );
   }
