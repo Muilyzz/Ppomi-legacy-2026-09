@@ -65,7 +65,21 @@ final class AppState: ObservableObject {
         return device
     }
 
-    /// Workbench / chat / 절차 탭: Home then open KB스타기업뱅킹. Stops at human login.
+    /// Chat already executed path_cold_start: dock iPhone and stop at human login. Does not run the tool again.
+    func applyPathColdStart(_ result: String) {
+        attachThisMac()
+        workSurface = .iphone
+        pathBusy = false
+        pathStatus = result
+        if result.contains("멈춤") {
+            phase = .humanTurn(reason: "Face ID·로그인")
+        } else if result.hasPrefix("실행 안 함:") || result.hasPrefix("오류:") {
+            phase = .idle
+        }
+        reveal()
+    }
+
+    /// Smoke button / 절차 탭. Chat happy path calls path_cold_start via the agent; this is not required.
     func runKBColdStart() {
         guard !pathBusy else { return }
         attachThisMac()
@@ -83,16 +97,7 @@ final class AppState: ObservableObject {
             } catch {
                 result = "실행 안 함: 장부를 열지 못했다."
             }
-            await MainActor.run {
-                guard let self else { return }
-                self.pathBusy = false
-                self.pathStatus = result
-                if result.contains("멈춤") {
-                    self.phase = .humanTurn(reason: "Face ID·로그인 · 작업대 Home → KB")
-                } else if result.hasPrefix("실행 안 함:") || result.hasPrefix("오류:") {
-                    self.phase = .idle
-                }
-            }
+            await MainActor.run { self?.applyPathColdStart(result) }
         }
     }
     func openInitialScreen(kiosk: Bool) {

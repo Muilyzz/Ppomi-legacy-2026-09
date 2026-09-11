@@ -44,7 +44,7 @@ scripts/open-mac-shell.sh
 cd Ppomi && swift run Ppomi
 ```
 
-**테스트는 메인 앱에서 한다 (`packages/*/example` 아님).** 앱을 연 뒤 대화 창 또는 작업대 제어 머리띠의 **Home → KB** 를 누르면 iPhone 미러링에서 Home 후 KB스타기업뱅킹이 열리고 Face ID·로그인에서 멈춘다. 같은 손은 MCP `path_cold_start`. [실행 메모](docs/v0.2-mac-shell.md).
+**테스트는 메인 앱 채팅에서 한다 (`packages/*/example` 아님).** 앱을 연 뒤 `KB 사업자 계좌 읽어줘` 라고 보낸다. 에이전트가 `path_cold_start` 로 Home 후 KB스타기업뱅킹을 열고 Face ID·로그인에서 멈춘다. **Home → KB** 버튼은 스모크다. [실행 메모](docs/v0.2-mac-shell.md).
 
 미러링 창을 만지는 `phone` CLI(저장소 루트 `phone.swift`)는 첫 사용 때 자동으로 빌드됩니다.
 

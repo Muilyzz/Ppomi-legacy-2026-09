@@ -7,7 +7,7 @@ final class AssistantToolBridgeTests: XCTestCase {
         let specs = MCPServer.toolSpecs
         XCTAssertTrue(JSONSerialization.isValidJSONObject(specs))
         let names = specs.map { $0["name"] as! String }
-        for name in ["phone_screen", "phone_tap", "windows_screen", "windows_click", "profile_fill", "run_combo", "bank_profile_capture", "verify_step", "read_playbook"] {
+        for name in ["phone_screen", "phone_tap", "windows_screen", "windows_click", "profile_fill", "run_combo", "path_cold_start", "bank_profile_capture", "verify_step", "read_playbook"] {
             XCTAssertTrue(names.contains(name), name)
         }
         let fill = try XCTUnwrap(specs.first { $0["name"] as? String == "profile_fill" })
@@ -23,6 +23,8 @@ final class AssistantToolBridgeTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: dir) }
         let server = try MCPServer(dbPath: dir.appendingPathComponent("ledger.db").path, fd: -1)
         XCTAssertTrue(server.instructions.contains("verify_step"))
+        XCTAssertTrue(server.instructions.contains("path_cold_start(app: kb-enterprise)"))
+        XCTAssertTrue(server.instructions.contains("버튼을 누르라고 하지 말고"))
         let r = server.call("list_playbooks", [:])
         let text = try XCTUnwrap(((r["content"] as? [[String: Any]])?.first)?["text"] as? String)
         XCTAssertTrue(text.contains("\"playbooks\""))

@@ -15,7 +15,7 @@
     {
       "id": "cold-start-open",
       "title": "Home 후 KB스타기업뱅킹 열기 (로그인 전 멈춤)",
-      "description": "뽀미.app 작업대에서 iPhone 미러링에 Home을 보낸 뒤 KB스타기업뱅킹을 연다. Face ID·로그인은 당사자. 계좌번호·비밀번호는 읽지 않는다. packages/*/example CLI가 아니라 메인 앱의 Home → KB 또는 path_cold_start다.",
+      "description": "채팅에서 KB 사업자 계좌·KB스타기업뱅킹을 열라고 하면 path_cold_start(app: kb-enterprise)를 바로 호출한다. iPhone 미러링에 Home을 보낸 뒤 앱을 연다. Face ID·로그인은 당사자. 계좌번호·비밀번호는 읽지 않는다. Home → KB 버튼은 스모크. packages/*/example CLI가 아니다.",
       "inputs": [],
       "steps": [
         {

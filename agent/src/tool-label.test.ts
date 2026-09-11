@@ -11,6 +11,7 @@ test("tool rows say what ran and how the screen was observed", () => {
   assert.equal(toolLabel("bank_profile_capture"), "은행정보 수집 · 비공개 OCR");
   assert.equal(toolLabel("ui_tap"), "화면 누르기 · DOM");
   assert.equal(toolLabel("read_playbook"), "절차 읽기");
+  assert.equal(toolLabel("path_cold_start"), "Home 후 KB 열기");
   assert.equal(toolLabel("phone_frobnicate"), "iPhone frobnicate · OCR");
   assert.equal(toolLabel("something_else"), "도구 실행");
 });
