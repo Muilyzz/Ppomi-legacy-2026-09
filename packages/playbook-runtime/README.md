@@ -10,7 +10,7 @@ Package titles are domain-specific. Do not add `core`, `common`, `engine`, `util
 | --- | --- | --- |
 | `playbook-runtime` | one | Steps, permissions, stop, evidence. No OS calls of its own. |
 | `playbook-kr-cert` | later, one of many | Korean certificate content (scenario + fixtures). Not this slice. |
-| `adapter-windows` | later, one OS | Windows click / type / read-screen / focus. Not this slice. |
+| `adapter-windows` | one OS | Windows click / type / read-screen / focus. Lives in `packages/adapter-windows`. |
 
 This package is `playbook-runtime` only. It ships `OsAdapter` and a `DummyAdapter` so the contract can be tested without Windows UI Automation or hub login.
 
