@@ -1,16 +1,17 @@
 import { spawnSync } from "node:child_process";
-import type { SecretExec, SecretExecResult } from "./store.ts";
+import type { SecretExec, SecretExecOptions, SecretExecResult } from "./store.ts";
 
 const TIMEOUT_MS = 15_000;
 
 export function defaultSecretExec(
   command: string,
   args: readonly string[],
-  extraEnv?: Readonly<Record<string, string>>,
+  options?: SecretExecOptions,
 ): SecretExecResult {
   const result = spawnSync(command, [...args], {
     encoding: "utf8",
-    env: extraEnv === undefined ? process.env : { ...process.env, ...extraEnv },
+    env: options?.extraEnv === undefined ? process.env : { ...process.env, ...options.extraEnv },
+    ...(options?.input === undefined ? {} : { input: options.input }),
     timeout: TIMEOUT_MS,
     windowsHide: true,
   });
@@ -21,10 +22,13 @@ export function defaultSecretExec(
   };
 }
 
-export function scrubDetail(text: string, secret?: string): string {
-  const collapsed = text.replace(/\s+/g, " ").trim().slice(0, 160);
-  if (secret === undefined || secret.length === 0) return collapsed;
-  return collapsed.split(secret).join("");
+/** Error detail for a thrown `SecretStoreError`: secrets removed first, then collapsed and capped. */
+export function scrubDetail(text: string, ...secrets: readonly string[]): string {
+  let scrubbed = text;
+  for (const secret of secrets) {
+    if (secret.length > 0) scrubbed = scrubbed.split(secret).join("");
+  }
+  return scrubbed.replace(/\s+/g, " ").trim().slice(0, 160);
 }
 
 export function requireExec(exec: SecretExec | undefined): SecretExec {

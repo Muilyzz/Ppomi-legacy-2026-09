@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
 import {
-  FakeSecretStore,
   KB_STAR_BIZ_ACCOUNT_KEY,
   openOsSecretStore,
   secretEvidence,
@@ -9,6 +8,7 @@ import {
   type AccountHandoff,
   type SecretStore,
 } from "../../src/index.ts";
+import { FakeSecretStore } from "../../src/testing.ts";
 
 const LIVE_KEY = "ppomi/secrets-live-probe";
 
@@ -75,11 +75,19 @@ function runLive(): "ok" | "skip" {
 
   const value = `probe-${randomBytes(8).toString("hex")}`;
   try {
-    store.put(LIVE_KEY, value);
+    // A crashed earlier probe may have left the dummy item behind; the probe key is never the KB key.
+    store.put(LIVE_KEY, value, { overwrite: true });
     const got = store.get(LIVE_KEY);
     if (got !== value) throw new Error("live get mismatch");
+    let refused = false;
+    try {
+      store.put(LIVE_KEY, `${value}-again`);
+    } catch (error) {
+      refused = error instanceof SecretStoreError && error.code === "exists";
+    }
+    if (!refused) throw new Error("live put overwrote an existing item without { overwrite: true }");
     const evidence = secretEvidence(LIVE_KEY, value);
-    process.stdout.write(`  live     PASS put/get/delete via ${process.platform === "darwin" ? "Keychain" : "Credential Manager"}\n`);
+    process.stdout.write(`  live     PASS put/get/refuse-overwrite/delete via ${process.platform === "darwin" ? "Keychain" : "Credential Manager"}\n`);
     process.stdout.write(`           key=${evidence.key} masked=${evidence.masked}\n`);
     process.stdout.write("           dummy probe value only — never a real account number\n");
   } finally {

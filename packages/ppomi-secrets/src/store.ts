@@ -1,4 +1,4 @@
-export type SecretStoreCode = "invalid_key" | "invalid_value" | "unavailable" | "failed";
+export type SecretStoreCode = "invalid_key" | "invalid_value" | "unavailable" | "exists" | "failed";
 
 export interface SecretExecResult {
   readonly status: number;
@@ -6,12 +6,25 @@ export interface SecretExecResult {
   readonly stderr: string;
 }
 
-/** Injected in tests. Live backends must never log `args` that include a secret. */
+/** Secret-bearing channels for a live backend. Never argv: argv is visible to `ps` and process telemetry. */
+export interface SecretExecOptions {
+  /** Added to the child's environment only (Windows value). */
+  readonly extraEnv?: Readonly<Record<string, string>>;
+  /** Written to the child's stdin, then closed (Mac `security -i` command line). */
+  readonly input?: string;
+}
+
+/** Injected in tests. Live backends must never log `options` (`extraEnv`, `input`). */
 export type SecretExec = (
   command: string,
   args: readonly string[],
-  extraEnv?: Readonly<Record<string, string>>,
+  options?: SecretExecOptions,
 ) => SecretExecResult;
+
+export interface SecretPutOptions {
+  /** Replace an existing item. Without it `put` throws `exists`; nothing is overwritten silently. */
+  readonly overwrite?: boolean;
+}
 
 export class SecretStoreError extends Error {
   readonly code: SecretStoreCode;
@@ -23,9 +36,13 @@ export class SecretStoreError extends Error {
   }
 }
 
-/** Local OS / test secret store. `get` is plaintext for the caller only. */
+/**
+ * Local OS / test secret store. `get` is plaintext for the caller; the OS backends
+ * protect the item at rest and from other OS users, not from other processes of
+ * the same user (see README "Protection level").
+ */
 export interface SecretStore {
-  put(key: string, value: string): void;
+  put(key: string, value: string, options?: SecretPutOptions): void;
   get(key: string): string | undefined;
   delete(key: string): void;
 }
@@ -67,31 +84,20 @@ export interface AccountHandoff {
   handoff(sink: (accountNumber: string) => void): boolean;
 }
 
-export function storeKbStarBizAccount(store: SecretStore, capture: AccountHandoff): SecretEvidence | null {
+/**
+ * Consumes the capture once. If the key already holds a value and `overwrite` is
+ * not set, `put` throws `exists` and the capture is still consumed (fail closed):
+ * re-run the read step and pass `{ overwrite: true }` deliberately.
+ */
+export function storeKbStarBizAccount(
+  store: SecretStore,
+  capture: AccountHandoff,
+  options?: SecretPutOptions,
+): SecretEvidence | null {
   let evidence: SecretEvidence | undefined;
   const ok = capture.handoff(account => {
-    store.put(KB_STAR_BIZ_ACCOUNT_KEY, account);
+    store.put(KB_STAR_BIZ_ACCOUNT_KEY, account, options);
     evidence = secretEvidence(KB_STAR_BIZ_ACCOUNT_KEY, account);
   });
   return ok && evidence !== undefined ? evidence : null;
-}
-
-export class FakeSecretStore implements SecretStore {
-  readonly #items = new Map<string, string>();
-
-  put(key: string, value: string): void {
-    assertKey(key);
-    assertValue(value);
-    this.#items.set(key, value);
-  }
-
-  get(key: string): string | undefined {
-    assertKey(key);
-    return this.#items.get(key);
-  }
-
-  delete(key: string): void {
-    assertKey(key);
-    this.#items.delete(key);
-  }
 }
