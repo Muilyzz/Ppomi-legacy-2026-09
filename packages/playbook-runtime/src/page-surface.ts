@@ -1,8 +1,8 @@
-import type { BrowserPageAdapter, PageSnapshot } from "./browser-page-adapter.ts";
+import type { BrowserPageDriver, PageSnapshot } from "./drivers.ts";
 import type { PagePlaybookStep } from "./page-playbook.ts";
 import { defaultPagePermission } from "./permissions.ts";
 import type { MaybePromise } from "./playbook.ts";
-import type { Resolution, RuntimeCode, StepClass, Surface } from "./runtime-core.ts";
+import type { Resolution, RuntimeCode, StepClass, UiDriver } from "./runtime-core.ts";
 import type { StepTarget } from "./step-result.ts";
 
 export type PageRef =
@@ -12,14 +12,14 @@ export type PageRef =
   | { readonly kind: "fill"; readonly locator: string; readonly text: string }
   | { readonly kind: "waitFor"; readonly locator: string };
 
-/** A web page as a runtime surface: locator targets over one `BrowserPageAdapter`. */
-export class PageSurface implements Surface<PageSnapshot, PageRef, PagePlaybookStep> {
-  readonly kind = "page" as const;
+/** A web page as a runtime surface: locator targets over one `BrowserPageDriver`. */
+export class PageSurface implements UiDriver<PageSnapshot, PageRef, PagePlaybookStep> {
+  readonly surface = "page" as const;
   readonly adapter = "page" as const;
-  private readonly page: BrowserPageAdapter;
+  private readonly page: BrowserPageDriver;
   private readonly allowedOrigins: readonly string[] | undefined;
 
-  constructor(adapter: BrowserPageAdapter, allowedOrigins?: readonly string[]) {
+  constructor(adapter: BrowserPageDriver, allowedOrigins?: readonly string[]) {
     this.page = adapter;
     this.allowedOrigins = allowedOrigins;
   }

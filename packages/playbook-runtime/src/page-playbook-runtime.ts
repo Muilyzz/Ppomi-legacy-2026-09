@@ -1,4 +1,4 @@
-import type { BrowserPageAdapter } from "./browser-page-adapter.ts";
+import type { BrowserPageDriver } from "./drivers.ts";
 import type { PagePlaybook } from "./page-playbook.ts";
 import { PageSurface } from "./page-surface.ts";
 import type { PermissionGate } from "./permissions.ts";
@@ -14,11 +14,11 @@ import { Runtime } from "./runtime-core.ts";
  * @deprecated Use `new Runtime(new PageSurface(adapter, allowedOrigins), permissions)` and declare `effect` on every mutation.
  */
 export class PagePlaybookRuntime {
-  private readonly adapter: BrowserPageAdapter;
+  private readonly adapter: BrowserPageDriver;
   private readonly permissions: PermissionGate;
   private readonly options: RuntimeOptions;
 
-  constructor(adapter: BrowserPageAdapter, permissions: PermissionGate, options: RuntimeOptions = {}) {
+  constructor(adapter: BrowserPageDriver, permissions: PermissionGate, options: RuntimeOptions = {}) {
     this.adapter = adapter;
     this.permissions = permissions;
     this.options = { undeclaredMutations: "run", ...options };

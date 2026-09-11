@@ -68,8 +68,8 @@ export type Resolution<Ref> =
  * `read` and `act` may be sync or async; `Runtime.run` awaits them and
  * `Runtime.runSync` requires them to be sync.
  */
-export interface Surface<Snap, Ref, Step extends RuntimeStep> {
-  readonly kind: SurfaceKind;
+export interface UiDriver<Snap, Ref, Step extends RuntimeStep> {
+  readonly surface: SurfaceKind;
   /** Which adapter family this surface drives, copied onto every `StepResult`. */
   readonly adapter: StepAdapter;
   read(): MaybePromise<Snap>;
@@ -137,7 +137,7 @@ interface Decision {
  * not a business-result claim.
  */
 export class Runtime<Snap, Ref, Step extends RuntimeStep> {
-  private readonly surface: Surface<Snap, Ref, Step>;
+  private readonly surface: UiDriver<Snap, Ref, Step>;
   private readonly permissions: PermissionGate;
   private readonly undeclaredMutations: "handoff" | "run";
   private readonly pollIntervalMs: number;
@@ -148,7 +148,7 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
   private readonly sleepSync: (ms: number) => void;
   private readonly now: () => number;
 
-  constructor(surface: Surface<Snap, Ref, Step>, permissions: PermissionGate, options: RuntimeOptions = {}) {
+  constructor(surface: UiDriver<Snap, Ref, Step>, permissions: PermissionGate, options: RuntimeOptions = {}) {
     this.surface = surface;
     this.permissions = permissions;
     this.undeclaredMutations = options.undeclaredMutations ?? "handoff";

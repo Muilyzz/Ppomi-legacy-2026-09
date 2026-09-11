@@ -1,6 +1,17 @@
-export type { OsAdapter, OsAdapterKind, ScreenSnapshot } from "./os-adapter.ts";
+export {
+  OsSurface,
+  PageSurface,
+  navigationRefusal,
+  publicUrl,
+  type BrowserPageAdapter,
+  type OsAdapter,
+  type OsAdapterKind,
+  type OsRef,
+  type PageRef,
+  type PageSnapshot,
+  type ScreenSnapshot,
+} from "./drivers.ts";
 export { AdapterTimeoutError, isAdapterTimeout } from "./adapter-timeout.ts";
-export type { BrowserPageAdapter, PageSnapshot } from "./browser-page-adapter.ts";
 export { DummyAdapter, type DummyCall } from "./dummy-adapter.ts";
 export { DummyPageAdapter, type DummyPageCall } from "./dummy-page-adapter.ts";
 export {
@@ -18,10 +29,8 @@ export {
   type RuntimePlaybook,
   type RuntimeStep,
   type StepClass,
-  type Surface,
+  type UiDriver,
 } from "./runtime-core.ts";
-export { OsSurface, type OsRef } from "./os-surface.ts";
-export { PageSurface, navigationRefusal, publicUrl, type PageRef } from "./page-surface.ts";
 export { PlaybookRuntime } from "./playbook-runtime.ts";
 export { PagePlaybookRuntime } from "./page-playbook-runtime.ts";
 export type {

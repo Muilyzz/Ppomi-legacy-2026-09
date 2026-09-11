@@ -1,4 +1,4 @@
-import type { OsAdapter, ScreenSnapshot } from "./os-adapter.ts";
+import type { OsUiDriver, ScreenSnapshot } from "./drivers.ts";
 import type { PermissionGate } from "./permissions.ts";
 import type { OsRef } from "./os-surface.ts";
 import { OsSurface } from "./os-surface.ts";
@@ -15,7 +15,7 @@ import { Runtime } from "./runtime-core.ts";
 export class PlaybookRuntime {
   private readonly core: Runtime<ScreenSnapshot, OsRef, PlaybookStep>;
 
-  constructor(adapter: OsAdapter, permissions: PermissionGate, options: RuntimeOptions = {}) {
+  constructor(adapter: OsUiDriver, permissions: PermissionGate, options: RuntimeOptions = {}) {
     this.core = new Runtime(new OsSurface(adapter), permissions, { undeclaredMutations: "run", ...options });
   }
 
