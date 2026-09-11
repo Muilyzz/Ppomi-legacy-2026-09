@@ -10,7 +10,7 @@ struct MeSheet: View {
     @State private var unlocking = false
     @State private var signingIn = false
     @State private var error: String?
-    @State private var pending: [PendingDevice] = []   // 승인을 기다리는 기기(Windows·iPad·새 Mac·웹). 이 Mac 이 승인해야 기록 키를 받는다
+    @State private var pending: [PendingDevice] = []   // 예전 승인 대기 행만. 새 Windows 기기는 Google 로그인만으로 연결된다.
     @State private var deciding: String?
     private let pendingRefresh = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
 
@@ -59,7 +59,7 @@ struct MeSheet: View {
                             .accessibilityElement(children: .contain)
                             .accessibilityLabel("\(device.label) · \(device.platformName) 승인 대기")
                         }
-                        Text("같은 Google 계정으로 로그인한 새 기기입니다. 승인한 기기에만 이 Mac 이 기록 키를 감싸 전달합니다").font(.ppomi(1)).foregroundStyle(.fg2)
+                        Text("새 기기는 Google 로그인만으로 연결됩니다. 여기에는 예전 대기 행만 남고, 거절은 그 기기를 해지합니다").font(.ppomi(1)).foregroundStyle(.fg2)
                     }
                 }
                 if account != nil {

@@ -14,7 +14,7 @@ export interface Memory {
   selection: 'automatic';
 }
 type MemoryInput = Omit<Memory, 'createdAt' | 'selection'>;
-/** `approved` arrives with the device-approval migration; older servers omit it and their devices were approved by backfill. */
+/** `approved` is leftover presentation from the device-approval migration; membership is enough (MZZ-27). */
 type Context = { workspace: { id: string }; device: { id: string; approved?: boolean } };
 type StoredMemory = { id: string; workspace_id: string; replaces_id: string | null; created_at: string; deleted_at: string | null; envelope: Json };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -190,8 +190,7 @@ export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment
       const context = await rpc('ppomi_context', {}) as Context;
       if (!context?.workspace || !UUID.test(context.workspace.id) || !context.device || !UUID.test(context.device.id))
         throw new SafeError(401, 'unauthorized', '등록된 기기의 인증을 확인하지 못했습니다.');
-      // 등록만 된 기기(승인 대기)는 모델·기억에 닿지 못한다. 소유자가 Mac 에서 승인해야 한다.
-      if (context.device.approved === false) throw new SafeError(403, 'device_unapproved', '이 기기는 아직 승인되지 않았습니다. Mac 에서 기기를 승인해 주세요.');
+      // MZZ-27: Google login + workspace membership is enough. `approved:false` is leftover and does not gate chat or memory.
       if (!(request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) invalid();
       const body = object(await boundedJson(request, path === '/v1/responses' ? 4_000_000 : 16_384));   // a Responses turn carries instructions, tools and history — or the Mac's one screenshot for the VLM
       let result: unknown;

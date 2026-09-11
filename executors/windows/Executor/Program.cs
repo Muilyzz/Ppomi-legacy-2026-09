@@ -145,7 +145,7 @@ internal sealed class ExecutorHost : IDisposable
         _ = Task.Run(() => WatchAccount(monitor.Token));
     }
 
-    /// Display label for the owner's approval list ("Windows (DESKTOP-…)"), never an identifier.
+    /// Display label for the device list ("Windows (DESKTOP-…)"), never an identifier.
     private static string DeviceLabel()
     {
         var machine = Environment.MachineName;
@@ -162,7 +162,7 @@ internal sealed class ExecutorHost : IDisposable
             pendingApproval = snapshot.PendingApproval, displayName = snapshot.DisplayName, googleSignIn = true };
     }
 
-    /// While a signed-in device waits for the owner, ask the server every 15 seconds; once approved, recheck rarely (revocation).
+    /// While signed in, refresh membership and pick up a wrapped ledger key; once the key is present, recheck rarely (revocation).
     private async Task WatchAccount(CancellationToken cancellation)
     {
         var delay = TimeSpan.FromSeconds(3);

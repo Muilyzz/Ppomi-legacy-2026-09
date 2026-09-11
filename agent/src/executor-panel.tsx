@@ -40,7 +40,7 @@ export function ExecutorPanel({ boot, active, refresh, children, manage = manage
     window.addEventListener("focus", focused);
     return () => { disposed = true; clearInterval(timer); window.removeEventListener("focus", focused); };
   }, []);
-  // The owner's approval arrives in the background (the executor polls the server); the conversation follows the fresh bootstrap.
+  // Google sign-in flips configured in the background; the conversation follows the fresh bootstrap.
   useEffect(() => {
     if (!boot || status?.configured === undefined || status.configured === boot.configured) return;
     void refreshRef.current().catch(() => {});
@@ -93,7 +93,6 @@ export function ExecutorPanel({ boot, active, refresh, children, manage = manage
         <div className="executor-sheet-heading"><DialogTitle>계정</DialogTitle>
           <DialogClose className="executor-nav-button executor-icon-button" aria-label="계정 닫기"><X aria-hidden="true" /></DialogClose></div>
         <AccountSection account={account} busy={pending || active} signingIn={signingIn} signIn={signIn}
-          refresh={() => void perform(() => manage("refreshAccount"))}
           signOut={() => void perform(() => manage("signOut"))} />
         {active && <p className="executor-hint">대화를 종료한 뒤 계정을 변경할 수 있습니다.</p>}
       </DialogContent>
@@ -121,9 +120,9 @@ export function ExecutorPanel({ boot, active, refresh, children, manage = manage
   return children({ topBar, contentPane, contentLabel: "사용자 확인", contentActionLabel: "승인 요청" });
 }
 
-/** Windows account sheet: signed out → Google sign-in; signed in → waiting for the owner's approval on the Mac, or connected. */
-function AccountSection({ account, busy, signingIn, signIn, refresh, signOut }:
-  { account?: ExecutorAccount; busy: boolean; signingIn: boolean; signIn(): void; refresh(): void; signOut(): void }) {
+/** Windows account sheet: signed out → Google sign-in → connected. Ledger key is optional and does not block chat. */
+function AccountSection({ account, busy, signingIn, signIn, signOut }:
+  { account?: ExecutorAccount; busy: boolean; signingIn: boolean; signIn(): void; signOut(): void }) {
   const name = account?.displayName || "Google";
   if (!account?.signedIn) {
     return <section className="executor-account-state" aria-label="계정 상태" data-state="signed-out">
@@ -135,20 +134,11 @@ function AccountSection({ account, busy, signingIn, signIn, refresh, signOut }:
       <p className="executor-hint">{signingIn ? "브라우저에서 Google 로그인을 마치면 이 창으로 돌아옵니다." : "시스템 브라우저가 열립니다. 비밀번호는 이 앱에 입력하지 않습니다."}</p>
     </section>;
   }
-  if (!account.approved) {
-    return <section className="executor-account-state" aria-label="계정 상태" data-state="pending-approval" aria-live="polite">
-      <p className="executor-account-title">{name} · Mac 승인 대기</p>
-      <p>Mac의 뽀미에서 <strong>나 › 기기 승인</strong>의 Windows 항목을 승인해 주세요. 승인되면 이 기기가 자동으로 연결됩니다.</p>
-      <div className="executor-setting-actions">
-        <button type="button" disabled={busy} onClick={refresh}>다시 확인</button>
-        <button type="button" disabled={busy} onClick={signOut}>로그아웃</button>
-      </div>
-      <p className="executor-hint">승인 전에는 대화와 기록 키를 받지 못합니다. 15초마다 서버에 확인합니다.</p>
-    </section>;
-  }
   return <section className="executor-account-state" aria-label="계정 상태" data-state="connected">
     <p className="executor-account-title">{name} · 기기 등록됨</p>
-    <p>{account.recordKey ? "Mac이 감싼 기록 키를 받았습니다." : "Mac이 켜져 있을 때 기록 키를 받습니다."}</p>
+    <p>{account.recordKey
+      ? "장부 기록 키를 받았습니다."
+      : "대화와 일반 작업은 바로 사용할 수 있습니다. 장부 기록 키는 키를 가진 기기가 켜져 있을 때 받습니다."}</p>
     <div className="executor-setting-actions">
       <button type="button" disabled={busy} onClick={signOut}>로그아웃</button>
     </div>

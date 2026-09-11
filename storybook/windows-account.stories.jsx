@@ -1,5 +1,5 @@
-// Windows 셸의 계정 상태 셋: 로그인 전 · Mac 승인 대기 · 연결됨. 실제 ChatPanel·ExecutorPanel 에 오프라인 실행기(windows-executor.fixture)를 꽂는다.
-// 브라우저·네트워크·토큰 없음. '승인 대기' 스토리의 "Mac 승인 시뮬레이션"은 소유자가 Mac 의 나 › 기기 승인에서 누르는 승인을 대신한다.
+// Windows 셸의 계정 상태 셋: 로그인 전 · 연결됨(대화 가능) · 장부 키 대기. 실제 ChatPanel·ExecutorPanel 에 오프라인 실행기(windows-executor.fixture)를 꽂는다.
+// 브라우저·네트워크·토큰 없음. Mac 기기 승인은 온보딩 관문이 아니다(MZZ-27).
 import React, {useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {ChatPanel} from '../agent/src/chat-panel';
@@ -7,13 +7,13 @@ import {ExecutorPanel} from '../agent/src/executor-panel';
 import {createWindowsExecutorStory} from './windows-executor.fixture';
 import '../agent/src/executor-panel.css';
 
-function WindowsShell({state, simulateApproval}) {
+function WindowsShell({state, simulateKey}) {
   const [fixture] = useState(() => createWindowsExecutorStory(state));
-  const [approved, setApproved] = useState(false);
-  return <div className="windows-account-story" style={{height: '100dvh', display: 'grid', gridTemplateRows: simulateApproval ? 'auto minmax(0, 1fr)' : 'minmax(0, 1fr)'}}>
-    {simulateApproval && <div style={{display: 'flex', gap: '.75rem', alignItems: 'center', padding: '.5rem .75rem', borderBottom: '1px solid var(--line)'}}>
-      <span style={{opacity: .7}}>Mac 쪽 시뮬레이션</span>
-      <button className="text" aria-label="Mac 승인 시뮬레이션" disabled={approved} onClick={() => { fixture.approve(); setApproved(true); }}>{approved ? '승인됨 · 다음 확인에서 연결' : '나 › 기기 승인 › 승인'}</button>
+  const [delivered, setDelivered] = useState(false);
+  return <div className="windows-account-story" style={{height: '100dvh', display: 'grid', gridTemplateRows: simulateKey ? 'auto minmax(0, 1fr)' : 'minmax(0, 1fr)'}}>
+    {simulateKey && <div style={{display: 'flex', gap: '.75rem', alignItems: 'center', padding: '.5rem .75rem', borderBottom: '1px solid var(--line)'}}>
+      <span style={{opacity: .7}}>장부 키 전달(선택)</span>
+      <button className="text" aria-label="장부 키 전달 시뮬레이션" disabled={delivered} onClick={() => { fixture.deliverRecordKey(); setDelivered(true); }}>{delivered ? '기록 키 도착' : '키를 가진 기기가 감쌈'}</button>
     </div>}
     <ChatPanel host={fixture.host} frame={(slots, render) => <ExecutorPanel {...slots} manage={fixture.manage}>{render}</ExecutorPanel>} />
   </div>;
@@ -38,18 +38,17 @@ export default {
   parameters: {skin: ['shell', 'workbench']},
   render: (args) => mount(<WindowsShell {...args} />),
   argTypes: {
-    state: {control: 'radio', options: ['signed-out', 'pending-approval', 'connected'], description: '실행기가 보고하는 계정 상태'},
-    simulateApproval: {control: 'boolean', description: 'Mac 승인 버튼(시뮬레이션) 표시'},
+    state: {control: 'radio', options: ['signed-out', 'waiting-key', 'connected'], description: '실행기가 보고하는 계정 상태'},
+    simulateKey: {control: 'boolean', description: '장부 키 전달 버튼(시뮬레이션) 표시'},
   },
-  args: {state: 'signed-out', simulateApproval: false},
+  args: {state: 'signed-out', simulateKey: false},
 };
 
 export const SignedOut = {name: '로그인 전', args: {state: 'signed-out'}};
 export const SignedOutAccount = {name: '로그인 전 · 계정 시트', args: {state: 'signed-out'}, play: () => open('Google 계정으로 로그인')};
-export const PendingApproval = {name: '승인 대기', args: {state: 'pending-approval', simulateApproval: true}};
-export const PendingApprovalAccount = {name: '승인 대기 · 계정 시트', args: {state: 'pending-approval'}, play: () => open('나 · 계정')};
-// 소유자가 Mac 에서 승인을 누른 뒤: 실행기의 다음 상태 확인이 approved 를 보고 → 패널이 bootstrap 을 다시 읽어 → 띠가 사라진다.
-export const ApprovedOnMac = {name: '승인 대기 → Mac 승인 → 연결', args: {state: 'pending-approval', simulateApproval: true}, play: () => open('Mac 승인 시뮬레이션')};
+export const WaitingKey = {name: '연결됨 · 장부 키 대기', args: {state: 'waiting-key'}};
+export const WaitingKeyAccount = {name: '연결됨 · 장부 키 대기 · 계정 시트', args: {state: 'waiting-key'}, play: () => open('나 · 계정')};
+export const KeyArrives = {name: '연결됨 → 장부 키 도착', args: {state: 'waiting-key', simulateKey: true}, play: () => open('장부 키 전달 시뮬레이션')};
 export const Connected = {name: '연결됨', args: {state: 'connected'}};
 export const ConnectedAccount = {name: '연결됨 · 계정 시트', args: {state: 'connected'}, play: () => open('나 · 계정')};
 export const SettingsSheet = {name: '설정 · 제어할 앱만', args: {state: 'connected'}, play: () => open('설정')};

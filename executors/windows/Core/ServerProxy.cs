@@ -29,7 +29,7 @@ public sealed class ServerProxy : IDisposable
     /// Some credential exists. Whether the device may actually converse is `Connected`.
     public bool Configured => account?.SignedIn == true || LegacyConfigured;
     public bool LegacyConfigured { get { lock (configurationGate) return configuration != null; } }
-    /// Google session: the owner approved this device. Legacy import: the imported device account is present.
+    /// Google session: signed in and registered (MZZ-27). Legacy import: the imported device account is present.
     public bool Connected => account?.SignedIn == true ? account.Snapshot.Configured : LegacyConfigured;
 
     public void Configure(DeviceConfiguration value)
@@ -71,8 +71,6 @@ public sealed class ServerProxy : IDisposable
     {
         if (account?.SignedIn == true)
         {
-            // The agent server refuses unapproved devices anyway; refusing here keeps a pending device from spending a token refresh.
-            if (!account.Snapshot.Configured) throw new NativeFailure("server_auth");
             return (await account.AccessToken(cancellation), account.DeviceId);
         }
         await authGate.WaitAsync(cancellation);

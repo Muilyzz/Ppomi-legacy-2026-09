@@ -32,7 +32,7 @@ export type ExecutorStatus = {
   approval?: { id: string; text: string; options: string[] } | null;
   availableApps?: { label: string; packageName: string; allowed: boolean }[];
   capabilities?: Record<string, unknown>;
-  /** Windows: mirrors bootstrap.configured so the panel can refresh when the owner's approval arrives. */
+  /** Windows: mirrors bootstrap.configured so the panel can refresh after Google sign-in. */
   configured?: boolean;
   account?: ExecutorAccount;
 };
