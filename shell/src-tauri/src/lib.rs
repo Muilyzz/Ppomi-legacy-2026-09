@@ -50,8 +50,8 @@ async fn executor_request(app: AppHandle, window: WebviewWindow, request: Reques
 #[cfg(not(target_os = "android"))]
 async fn sign_in(app: &AppHandle, id: String) -> Value {
     use tauri_plugin_opener::OpenerExt;
-    let begun = dispatch(app, Request { id: id.clone(), method: "beginSignIn".into(), args: json!({}) }).await;
-    if begun.get("error").is_some() { return begun; }
+    let begun = dispatch(app, account::begin_frame()).await;
+    if let Some(error) = begun.get("error") { return json!({"id": id, "error": error}); }
     let url = begun.get("result").and_then(|result| result.get("url")).and_then(Value::as_str).and_then(|text| tauri::Url::parse(text).ok());
     let Some(url) = url.filter(account::is_authorize_url) else { return failure(&id, "sign_in_failed"); };
     let callbacks = app.state::<account::SignInCallback>();
@@ -62,7 +62,7 @@ async fn sign_in(app: &AppHandle, id: String) -> Value {
         Ok(Ok(callback)) => callback,
         _ => { callbacks.disarm(); return failure(&id, "sign_in_failed"); }
     };
-    dispatch(app, Request { id, method: "completeSignIn".into(), args: json!({"callback": callback}) }).await
+    dispatch(app, account::complete_frame(id, callback)).await
 }
 
 /// Settings and human answers are separate from the model's request channel.
