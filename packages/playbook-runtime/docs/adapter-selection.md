@@ -5,7 +5,7 @@ Pick the port from the **surface**, not the app name or site. One playbook-runti
 | Surface | Runner | Port | Package |
 | --- | --- | --- | --- |
 | In-page web DOM, forms, locator waits | `PagePlaybookRuntime` | `BrowserPageAdapter` (`goto` / `click` / `fill` / `waitFor` / `readPage`) | `adapter-playwright` |
-| Native windows, system dialogs, cert UI, non-DOM chrome | `PlaybookRuntime` | `OsAdapter` (`readScreen` / `focus` / `click` / `type`) | `adapter-windows` (UIA), `adapter-macos` (AX) |
+| Native windows, system dialogs, cert UI, non-DOM chrome | `PlaybookRuntime` | `OsAdapter` (`readScreen` / `focus` / `click` / `type`) | `adapter-windows` (UIA), `adapter-macos` (AX), `adapter-android` (accessibility) |
 
 Same `ui.read` / `ui.control`, fail-closed stop, and evidence. Different step shape: page `locator` / `url` vs OS `target`.
 
@@ -23,14 +23,15 @@ An in-page "Next" button is Playwright. Do not drive that button through UIA/AX 
 
 ## Native / system chrome → OS adapter
 
-Use `PlaybookRuntime` + `adapter-windows` or `adapter-macos` when the control is outside the page DOM:
+Use `PlaybookRuntime` + `adapter-windows`, `adapter-macos`, or `adapter-android` when the control is outside the page DOM:
 
 - Native application windows
 - System dialogs (file picker, permission, print)
 - Certificate / security-module UI (including Korean cert helper windows)
 - Browser chrome that is not DOM (OS dialogs attached to the browser process)
+- Android app chrome via accessibility (`android_screen` / `android_click` / `android_type` / `android_open`). Pixel `android_tap` / `android_swipe` are not playbook selectors.
 
-Those steps use screen text / focus `target`, not CSS locators. Do not replace the OS adapters with Playwright. A cert window, a native file picker, or a browser OS dialog is still UIA/AX.
+Those steps use screen text / focus `target`, not CSS locators. Do not replace the OS adapters with Playwright. A cert window, a native file picker, a browser OS dialog, or an Android accessibility tree is still UIA/AX/Android.
 
 ## Hybrid handoff
 

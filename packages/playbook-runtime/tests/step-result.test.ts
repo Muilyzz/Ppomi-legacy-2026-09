@@ -90,6 +90,17 @@ const run: readonly StepResult[] = [
     timingMs: 30,
   },
   {
+    stepId: "open-settings",
+    playbookId: "fixture-android",
+    adapter: "os-android",
+    action: "click",
+    status: "ok",
+    attempt: "executed",
+    target: { kind: "accessibility", name: "Network & internet" },
+    observation: { summary: "android_click on Network & internet" },
+    timingMs: 48,
+  },
+  {
     stepId: "fill-name",
     playbookId: "fixture-page-happy",
     adapter: "page",
@@ -110,6 +121,7 @@ test("dumpStepResults writes a JSON array and parseStepResultsJson round-trips",
   assert.equal(parsed.length, run.length);
   assert.deepEqual(parsed, run);
   assert.match(json, /"adapter": "page"/);
+  assert.match(json, /"adapter": "os-android"/);
   assert.match(json, /"screenshotBefore": "runs\/fixture\/open-next.before.png"/);
   assert.doesNotMatch(json, /"x":/);
   assert.doesNotMatch(json, /approv/i);
@@ -154,7 +166,7 @@ test("target rejects coordinates and session geometry", () => {
 });
 
 test("every adapter, status, and attempt value is accepted", () => {
-  const adapters: StepAdapter[] = ["page", "os-windows", "os-macos", "phone"];
+  const adapters: StepAdapter[] = ["page", "os-windows", "os-macos", "os-android", "phone"];
   const statuses: StepResultStatus[] = [
     "ok",
     "retryable",
@@ -179,6 +191,7 @@ test("every adapter, status, and attempt value is accepted", () => {
 test("missing required fields, bad enums, and invalid JSON fail closed", () => {
   assert.throws(() => parseStepResult({ ...pageOk, stepId: "" }), StepResultError);
   assert.throws(() => parseStepResult({ ...pageOk, adapter: "playwright" }), StepResultError);
+  assert.throws(() => parseStepResult({ ...pageOk, adapter: "android" }), StepResultError);
   assert.throws(() => parseStepResult({ ...pageOk, status: "permission_denied" }), StepResultError);
   assert.throws(() => parseStepResult({ ...pageOk, attempt: "skipped" }), StepResultError);
   assert.throws(() => parseStepResult({ ...pageOk, timingMs: -1 }), StepResultError);

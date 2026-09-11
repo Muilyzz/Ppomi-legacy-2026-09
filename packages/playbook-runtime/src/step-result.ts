@@ -4,7 +4,7 @@
  * Runtimes do not emit `StepResult` yet; that is the next slice.
  */
 
-export type StepAdapter = "page" | "os-windows" | "os-macos" | "phone";
+export type StepAdapter = "page" | "os-windows" | "os-macos" | "os-android" | "phone";
 
 export type StepAction = "focus" | "click" | "type" | "read" | "goto" | "fill" | "waitFor";
 
@@ -62,7 +62,7 @@ export class StepResultError extends Error {
   }
 }
 
-const ADAPTERS = ["page", "os-windows", "os-macos", "phone"] as const;
+const ADAPTERS = ["page", "os-windows", "os-macos", "os-android", "phone"] as const;
 const ACTIONS = ["focus", "click", "type", "read", "goto", "fill", "waitFor"] as const;
 const STATUSES = ["ok", "retryable", "ambiguous", "protected", "needs_human", "failed"] as const;
 const ATTEMPTS = ["executed", "timeout", "not_executed"] as const;
