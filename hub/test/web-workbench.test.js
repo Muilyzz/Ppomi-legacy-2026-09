@@ -46,7 +46,7 @@ test('the service worker caches the workbench bundle as a public file and nothin
   assert.equal(paths.includes('/web/transcript-crypto.js'), false);
   assert.equal(paths.some(path => path.startsWith('/api/') || path.includes('supabase')), false);
   assert.match(worker, /request\.headers\.has\('Authorization'\)/, 'authenticated requests bypass the cache');
-  assert.match(worker, /ppomi-public-home-20260911-11/, 'the cache version moved with the new static files');
+  assert.match(worker, /ppomi-public-home-20260911-12/, 'the cache version moved with the new static files');
 });
 
 test('the committed bundle exposes the mount function, points at the shared font and carries no credential', async () => {
@@ -55,6 +55,7 @@ test('the committed bundle exposes the mount function, points at the shared font
   assert.match(js, /^var PpomiWebWorkbench=/);
   assert.match(js, /mountWebWorkbench/);
   assert.match(js, /"web"/, 'the browser bootstrap platform');
+  assert.match(js, /generateId:\(\)=>crypto\.randomUUID\(\)/, 'transcript turn ids are UUIDs');
   // SDK code names its environment variables; what must be absent is any key value in the known formats.
   assert.doesNotMatch(js, /sb_(?:publishable|secret)_[A-Za-z0-9_-]{16,}|\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}\b|\bvck_[A-Za-z0-9_-]{16,}\b/);
   assert.doesNotMatch(js, /https:\/\/[a-z0-9]{20}\.supabase\.co/, 'the bundle does not name the auth server; the glue owns that configuration');

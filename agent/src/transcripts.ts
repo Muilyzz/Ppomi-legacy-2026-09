@@ -28,7 +28,7 @@ export function redactTranscriptText(text: string): string {
 
 export function projectTurn(message: UIMessage): TranscriptTurn | null {
   if (message.role !== "user" && message.role !== "assistant") return null;
-  if (typeof message.id !== "string" || !message.id || message.id.length > 80) return null;
+  if (typeof message.id !== "string" || !UUID.test(message.id)) return null;
   const parts: TranscriptPart[] = [];
   for (const part of message.parts) {
     if (part.type === "text") {

@@ -221,7 +221,8 @@ select pg_temp.agent_error($q$delete from public.ppomi_agent_memories where work
 select pg_temp.agent_error($q$update public.ppomi_agent_memories set envelope='{}' where workspace_id='97b00000-0000-4000-8000-000000000001' and id='97d00000-0000-4000-8000-000000000001'$q$,'55000','history content immutable');
 select pg_temp.agent_error($q$update public.ppomi_agent_memories set deleted_at=null where workspace_id='97b00000-0000-4000-8000-000000000001' and id='97d00000-0000-4000-8000-000000000002'$q$,'55000','tombstone cannot be undone');
 
--- Leftover GCM: list returns the stored envelope; rewrap seals it.
+-- Leftover GCM: list still returns the stored envelope for the one-shot
+-- rewrap script. The agent handler no longer decrypts these rows.
 insert into public.ppomi_agent_memories(workspace_id,id,created_by_device_id,envelope,request_digest)
 values (
     '97b00000-0000-4000-8000-000000000001',

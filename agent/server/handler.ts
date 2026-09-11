@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 
 type Json = Record<string, unknown>;
 type Fetcher = typeof fetch;
@@ -108,46 +108,18 @@ function settings(env: Environment) {
   if (!isPublic) throw new SafeError(503, 'not_configured', '공유 서버의 공개 연결 키가 필요합니다.');
   return { url, publicKey };
 }
-function encryptionKey(env: Environment): Buffer {
-  const raw = env.PPOMI_AGENT_MEMORY_KEY ?? '';
-  if (!/^[A-Za-z0-9+/]{43}=$/.test(raw)) throw new SafeError(503, 'not_configured', '기록 암호화 설정이 필요합니다.');
+/** HMAC key for OpenAI Realtime `OpenAI-Safety-Identifier` only. Not a memory AES key. */
+function voiceSafetyKey(env: Environment): Buffer {
+  const raw = env.PPOMI_VOICE_SAFETY_KEY ?? '';
+  if (!/^[A-Za-z0-9+/]{43}=$/.test(raw)) throw new SafeError(503, 'not_configured', '음성 식별 설정이 필요합니다.');
   const key = Buffer.from(raw, 'base64');
-  if (key.length !== 32 || key.toString('base64') !== raw) throw new SafeError(503, 'not_configured', '기록 암호화 설정이 필요합니다.');
+  if (key.length !== 32 || key.toString('base64') !== raw) throw new SafeError(503, 'not_configured', '음성 식별 설정이 필요합니다.');
   return key;
-}
-function aad(workspace: string, id: string, replacesId: string | null): Buffer {
-  return Buffer.from(JSON.stringify(['ppomi-agent-memory', 1, workspace, id, replacesId]));
 }
 function memoryPayload(input: MemoryInput): Json {
   return { id: input.id, kind: input.kind, text: input.text, source: input.source, confidence: input.confidence, replacesId: input.replacesId ?? null, selection: 'automatic' };
 }
 
-/** Leftover GCM rows (slice 3 dual-read). New writes seal in Postgres. Removed in slice 4. */
-function encrypt(input: MemoryInput, workspace: string, key: Buffer): { envelope: Json; digest: string } {
-  const payload = JSON.stringify(memoryPayload(input));
-  const binding = aad(workspace, input.id, input.replacesId ?? null);
-  const nonce = randomBytes(12), cipher = createCipheriv('aes-256-gcm', key, nonce);
-  cipher.setAAD(binding);
-  const encrypted = Buffer.concat([cipher.update(payload, 'utf8'), cipher.final()]);
-  return {
-    envelope: { version: 1, nonce: nonce.toString('base64url'), ciphertext: encrypted.toString('base64url'), tag: cipher.getAuthTag().toString('base64url') },
-    digest: createHmac('sha256', key).update('ppomi-memory-idempotency\0').update(binding).update(payload).digest('hex'),
-  };
-}
-function decrypt(row: StoredMemory, workspace: string, key: Buffer): Memory {
-  try {
-    if (row.workspace_id !== workspace || !UUID.test(row.id) || row.deleted_at !== null || !Number.isFinite(Date.parse(row.created_at))) throw new Error();
-    const envelope = row.envelope;
-    if (!envelope || envelope.version !== 1 || typeof envelope.nonce !== 'string' || typeof envelope.ciphertext !== 'string' || typeof envelope.tag !== 'string') throw new Error();
-    const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(envelope.nonce, 'base64url'));
-    decipher.setAAD(aad(workspace, row.id, row.replaces_id));
-    decipher.setAuthTag(Buffer.from(envelope.tag, 'base64url'));
-    const payload = JSON.parse(Buffer.concat([decipher.update(Buffer.from(envelope.ciphertext, 'base64url')), decipher.final()]).toString('utf8')) as Json;
-    return memoryFromPayload(row, payload);
-  } catch { throw new SafeError(502, 'record_unreadable', '기록의 무결성을 확인하지 못했습니다. 저장 키와 서버 기록을 확인해 주세요.'); }
-}
-
-/** RPC-opened at-rest row (slice 2). Legacy GCM rows still go through decrypt(). */
 function memoryFromOpened(row: StoredMemory, workspace: string): Memory {
   try {
     if (row.workspace_id !== workspace || !UUID.test(row.id) || row.deleted_at !== null || !Number.isFinite(Date.parse(row.created_at))) throw new Error();
@@ -161,11 +133,6 @@ function memoryFromPayload(row: StoredMemory, payload: Json): Memory {
   const { selection: _selection, replacesId, ...rest } = payload;
   const validated = memoryInput({ ...rest, ...(typeof replacesId === 'string' ? { replacesId } : {}) });
   return { ...validated, createdAt: row.created_at, selection: 'automatic' };
-}
-
-function readStoredMemory(row: StoredMemory, workspace: string, env: Environment): Memory {
-  if (row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload)) return memoryFromOpened(row, workspace);
-  return decrypt(row, workspace, encryptionKey(env));
 }
 
 /** Injectable transport/configuration keeps tests offline. No requests, tokens or sessions are retained. */
@@ -215,11 +182,8 @@ export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment
       const context = await rpc('ppomi_context', {}) as Context;
       if (!context?.workspace || !UUID.test(context.workspace.id) || !context.device || !UUID.test(context.device.id))
         throw new SafeError(401, 'unauthorized', '등록된 기기의 인증을 확인하지 못했습니다.');
-      // Memory crypto is membership (MZZ-27): no Mac approval gate. native_only
-      // is the browser-vs-agent-HTTP boundary, not a decrypt/write gate.
-      if (context.device.approved === false && !path.startsWith('/v1/memories/')) {
-        throw new SafeError(403, 'device_unapproved', '이 기기는 아직 승인되지 않았습니다. Mac 에서 기기를 승인해 주세요.');
-      }
+      // Chat and memory RPCs are membership (MZZ-27). native_only is the
+      // browser-vs-agent-HTTP boundary. Tool execution stays on the device.
       if (!(request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) invalid();
       const body = object(await boundedJson(request, path === '/v1/responses' ? 4_000_000 : 16_384));   // a Responses turn carries instructions, tools and history — or the Mac's one screenshot for the VLM
       let result: unknown;
@@ -230,7 +194,7 @@ export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment
         if (body.mode === 'text') return new Response(JSON.stringify({ model: gateway(env, request).textModel }), { status: 200, headers: { ...NO_STORE, ...cors } });
         const key = env.OPENAI_API_KEY ?? '', model = env.OPENAI_REALTIME_MODEL ?? 'gpt-realtime-2.1';
         if (!key || /\s/.test(key) || !MODEL_ID.test(model)) throw new SafeError(503, 'not_configured', '에이전트 서버 설정이 필요합니다.');
-        const safetyIdentifier = createHmac('sha256', encryptionKey(env)).update('ppomi-voice-safety\0').update(JSON.stringify([context.workspace.id, context.device.id])).digest('hex');
+        const safetyIdentifier = createHmac('sha256', voiceSafetyKey(env)).update('ppomi-voice-safety\0').update(JSON.stringify([context.workspace.id, context.device.id])).digest('hex');
         let response: Response;
         try {
           response = await transport('https://api.openai.com/v1/realtime/client_secrets', { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20_000),
@@ -265,20 +229,10 @@ export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment
         exactFields(body, []);
         const rows = await rpc('ppomi_agent_memory_list', {});
         if (!Array.isArray(rows) || rows.length > 50) throw new SafeError(502, 'invalid_response', '저장 기록 응답을 확인하지 못했습니다.');
-        const records: Memory[] = [];
-        for (const raw of rows) {
-          const row = raw as StoredMemory;
-          const record = readStoredMemory(row, context.workspace.id, env);
-          records.push(record);
-          if (!row.payload) {
-            try {
-              await rpc('ppomi_agent_memory_rewrap', { p_id: record.id, p_payload: memoryPayload(record) });
-            } catch (error) {
-              if (!(error instanceof SafeError)) throw error;
-            }
-          }
-        }
-        result = { records };
+        result = { records: (rows as StoredMemory[]).flatMap(row => {
+          if (!row.payload || typeof row.payload !== 'object' || Array.isArray(row.payload)) return [];
+          return [memoryFromOpened(row, context.workspace.id)];
+        }) };
       } else if (path === '/v1/memories/save') {
         const input = memoryInput(body);
         const row = await rpc('ppomi_agent_memory_save', { p_id: input.id, p_payload: memoryPayload(input), p_replaces_id: input.replacesId ?? null });

@@ -52,7 +52,7 @@ npm run build
 
 Mac 개발 서명 패키징은 저장소 루트의 `scripts/make-app.sh`를 사용한다. 설치된 번들 실행 파일에 `--configure-agent-endpoint https://ppomi-agent.vercel.app`를 전달하고 `--voice`로 화면을 연다. 단축키는 ⌥Space다. Android는 설정으로 복귀할 수 있는 채팅 기본 화면을 사용한다. 개발용 초기 설정은 `android.permission.DUMP`로 보호된 `.DebugProvisioningActivity`에 ADB shell로 전달하며, 일반 실행 화면은 provisioning extra를 무시한다.
 
-[프로토콜](PROTOCOL.md)과 [서버 설정](server/README.md)을 참고한다. `scripts/provision-server.mjs`는 기존 비공개 기기 설정과 `.env`를 읽어 Vercel production secret을 설정하고 새 기록 키를 `.ppomi/agent/server.env`에 권한 600으로 보관한다. 기록 키를 단순 교체하면 기존 기록을 읽을 수 없으므로 보존해야 한다.
+[프로토콜](PROTOCOL.md)과 [서버 설정](server/README.md)을 참고한다. `scripts/provision-server.mjs`는 기존 비공개 기기 설정과 `.env`를 읽어 Vercel production secret을 설정하고 `PPOMI_VOICE_SAFETY_KEY`를 `.ppomi/agent/server.env`에 권한 600으로 보관한다. 기억 암호는 Vault `ppomi-at-rest-key`다. 남은 GCM 행은 `scripts/rewrap-gcm-leftovers.mjs`로 옮긴 뒤 `PPOMI_AGENT_MEMORY_KEY`를 제거한다.
 
 `scripts/smoke.mjs`는 실제 인증·저장·다른 기기 조회·중복·삭제를 검사하고 자신이 만든 가상 항목만 삭제한다. `scripts/model-smoke.ts`는 마이크를 열지 않고 실제 Realtime 모델의 도구 호출·음성 응답을 검증한다. SQL 회귀 검사는 가상 작업공간을 트랜잭션 안에서 만들고 롤백한다.
 

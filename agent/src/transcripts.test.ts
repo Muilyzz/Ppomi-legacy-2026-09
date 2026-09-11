@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import type { UIMessage } from "ai";
 import { completedTurns, mergeTranscriptMessages, projectTurn, redactTranscriptText, turnToMessage } from "./transcripts";
 
@@ -31,6 +32,16 @@ test("hydrate and merge keep existing messages and append remote turns by id", (
   assert.equal(merged.length, 2);
   assert.equal(merged[1]?.id, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
   assert.equal(turnToMessage(remote[1]!).parts[0]?.type, "text");
+});
+
+test("useChat generateId is a UUID so transcript append matches hub/SQL", async () => {
+  const source = await readFile(new URL("./chat-panel.tsx", import.meta.url), "utf8");
+  assert.match(source, /generateId:\s*\(\)\s*=>\s*crypto\.randomUUID\(\)/);
+});
+
+test("projectTurn drops non-UUID ids so hub/SQL never see nanoid turn keys", () => {
+  assert.equal(projectTurn(message("msg_local_nanoid", "user", [{ type: "text", text: "hi" }])), null);
+  assert.equal(completedTurns([message("msg_local_nanoid", "user", [{ type: "text", text: "hi" }])], true).length, 0);
 });
 
 test("completedTurns wait until the local turn is ready", () => {

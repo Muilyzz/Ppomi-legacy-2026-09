@@ -111,7 +111,7 @@ export function ChatPanel({ host, frame }: { host: ChatHost; frame?: ChatFrame }
     setError, trackTools, setInputCards,
   );
   // 글 대화: Vercel AI SDK useChat. 전송·상태(submitted/streaming/ready/error)·메시지 parts 는 SDK가, 도구 실행과 세션 수명은 TextController가 맡는다.
-  const chat = useChat<UIMessage>({ transport: textController.current, onError: (error) => {
+  const chat = useChat<UIMessage>({ transport: textController.current, generateId: () => crypto.randomUUID(), onError: (error) => {
     if (textStateRef.current !== "idle") setError(error.message || "응답 실패");   // a session that already ended reports nothing
   } });
   chatRef.current = chat;

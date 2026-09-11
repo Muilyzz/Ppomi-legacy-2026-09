@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createCipheriv, createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createHandler } from './handler.js';
 
@@ -8,7 +8,7 @@ const WORKSPACE = 'aaaaaaaa-1111-4111-8111-111111111111';
 const DEVICE = 'dddddddd-1111-4111-8111-111111111111';
 const ID = 'bbbbbbbb-1111-4111-8111-111111111111';
 const NEXT = 'cccccccc-1111-4111-8111-111111111111';
-const environment = (): Record<string, string | undefined> => ({ SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co', SUPABASE_ANON_KEY: 'sb_publishable_test_public_key_only_123456', OPENAI_API_KEY: 'server-only-test-key', AI_GATEWAY_API_KEY: 'gateway-only-test-key', PPOMI_AGENT_MEMORY_KEY: randomBytes(32).toString('base64') });
+const environment = (): Record<string, string | undefined> => ({ SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co', SUPABASE_ANON_KEY: 'sb_publishable_test_public_key_only_123456', OPENAI_API_KEY: 'server-only-test-key', AI_GATEWAY_API_KEY: 'gateway-only-test-key', PPOMI_VOICE_SAFETY_KEY: randomBytes(32).toString('base64') });
 type Row = { id: string; workspace_id: string; replaces_id: string | null; created_at: string; deleted_at: string | null; envelope: Record<string, unknown>; request_digest: string; payload?: Record<string, unknown> };
 function opened(row: Row) {
   return { id: row.id, workspace_id: row.workspace_id, replaces_id: row.replaces_id, created_at: row.created_at, deleted_at: row.deleted_at, payload: row.payload };
@@ -133,27 +133,27 @@ test('a Google-account device names itself in a header that reaches the shared s
   assert.equal(f.calls.at(-1)?.device ?? null, null);   // legacy devices send no header and none is invented
 });
 
-test('unapproved devices may list, save and delete memories; model paths still check approval', async () => {
+test('unapproved devices may use chat and memory paths; approval is not a session gate', async () => {
   const pending = createHandler({ env: environment(), fetch: (async (url: string | URL | Request) => {
-    if (String(url).endsWith('ppomi_context')) return Response.json({ workspace: { id: WORKSPACE }, device: { id: DEVICE, approved: false } });
-    if (String(url).endsWith('ppomi_agent_memory_list')) return Response.json([]);
-    if (String(url).endsWith('ppomi_agent_memory_save')) {
+    const address = String(url);
+    if (address.endsWith('ppomi_context')) return Response.json({ workspace: { id: WORKSPACE }, device: { id: DEVICE, approved: false } });
+    if (address.endsWith('ppomi_agent_memory_list')) return Response.json([]);
+    if (address.endsWith('ppomi_agent_memory_save')) {
       return Response.json({ id: ID, workspace_id: WORKSPACE, replaces_id: null, created_at: '2026-09-09T13:00:00Z', deleted_at: null,
         payload: { id: ID, kind: 'preference', text: '답변은 한국어로 간결하게 받는 것을 선호한다.', source: 'user_reported', confidence: 0.9, replacesId: null, selection: 'automatic' } });
     }
-    if (String(url).endsWith('ppomi_agent_memory_delete')) return Response.json({ deleted: true });
-    throw new Error('Unexpected endpoint ' + String(url));
+    if (address.endsWith('ppomi_agent_memory_delete')) return Response.json({ deleted: true });
+    if (address.endsWith('/client_secrets')) return Response.json({ value: 'ek_ephemeral_test_only' });
+    if (address.endsWith('/v1/responses')) return Response.json({ id: 'resp_1', object: 'response', output: [] });
+    throw new Error('Unexpected endpoint ' + address);
   }) as typeof fetch });
-  for (const path of ['/v1/session', '/v1/responses']) {
-    const denied = await pending(request(path, {}, { 'X-Ppomi-Device': DEVICE }));
-    assert.equal(denied.status, 403);
-    assert.equal(((await denied.json()) as { error: { code: string } }).error.code, 'device_unapproved');
-  }
-  assert.equal((await pending(request('/v1/memories/list', {}, { 'X-Ppomi-Device': DEVICE }))).status, 200);
-  assert.equal((await pending(request('/v1/memories/save', memory(), { 'X-Ppomi-Device': DEVICE }))).status, 200);
-  assert.equal((await pending(request('/v1/memories/delete', { id: ID }, { 'X-Ppomi-Device': DEVICE }))).status, 200);
-  const f = fixture();
-  assert.equal((await f.handle(request('/v1/memories/list', {}, { 'X-Ppomi-Device': DEVICE }))).status, 200);
+  const headers = { 'X-Ppomi-Device': DEVICE };
+  assert.equal((await pending(request('/v1/session', { mode: 'text' }, headers))).status, 200);
+  assert.equal((await pending(request('/v1/session', {}, headers))).status, 200);
+  assert.equal((await pending(request('/v1/responses', { input: [] }, headers))).status, 200);
+  assert.equal((await pending(request('/v1/memories/list', {}, headers))).status, 200);
+  assert.equal((await pending(request('/v1/memories/save', memory(), headers))).status, 200);
+  assert.equal((await pending(request('/v1/memories/delete', { id: ID }, headers))).status, 200);
 });
 
 test('every request rechecks active device; no reused authentication context', async () => {
@@ -279,9 +279,9 @@ test('known secrets, raw transcripts, unknown fields, invalid sources/confidence
   assert.equal(f.rows.size, 0);
 });
 
-test('save and list work without the Vercel memory key', async () => {
+test('save and list work without a voice-safety or leftover memory key', async () => {
   const f = fixture();
-  f.env.PPOMI_AGENT_MEMORY_KEY = undefined;
+  f.env.PPOMI_VOICE_SAFETY_KEY = undefined;
   const saved = await f.handle(request('/v1/memories/save', memory()));
   assert.equal(saved.status, 200);
   const listed = await (await f.handle(request('/v1/memories/list'))).json();
@@ -289,40 +289,34 @@ test('save and list work without the Vercel memory key', async () => {
   assert.equal(listed.records[0].selection, 'automatic');
 });
 
-test('list decrypts leftover GCM and asks the shared server to rewrap it', async () => {
+test('list skips leftover GCM envelopes; the migrate script rewraps them', async () => {
   const f = fixture();
-  const key = Buffer.from(f.env.PPOMI_AGENT_MEMORY_KEY!, 'base64');
-  const payload = { id: NEXT, kind: 'fact', text: '옛 GCM 기록이다.', source: 'tool_observed', confidence: 1, replacesId: null, selection: 'automatic' };
-  const binding = Buffer.from(JSON.stringify(['ppomi-agent-memory', 1, WORKSPACE, NEXT, null]));
-  const nonce = Buffer.alloc(12), cipher = createCipheriv('aes-256-gcm', key, nonce);
-  cipher.setAAD(binding);
-  const encrypted = Buffer.concat([cipher.update(JSON.stringify(payload), 'utf8'), cipher.final()]);
-  const gcm = {
+  f.rows.set(NEXT, {
     id: NEXT, workspace_id: WORKSPACE, replaces_id: null, created_at: '2026-09-09T14:00:00Z', deleted_at: null,
-    envelope: { version: 1, nonce: nonce.toString('base64url'), ciphertext: encrypted.toString('base64url'), tag: cipher.getAuthTag().toString('base64url') },
+    envelope: { version: 1, nonce: 'AAAAAAAAAAAAAAAA', ciphertext: 'legacy', tag: 'AAAAAAAAAAAAAAAAAAAAAA' },
     request_digest: 'c'.repeat(64),
-  };
-  f.rows.set(NEXT, gcm);
+  });
   const listed = await (await f.handle(request('/v1/memories/list'))).json();
-  assert.equal(listed.records[0].text, '옛 GCM 기록이다.');
-  assert.equal(f.calls.some(call => call.url.endsWith('ppomi_agent_memory_rewrap')), true);
-  assert.equal(f.rows.get(NEXT)!.payload?.text, '옛 GCM 기록이다.');
+  assert.deepEqual(listed.records, []);
+  assert.equal(f.calls.some(call => call.url.endsWith('ppomi_agent_memory_rewrap')), false);
 });
 
-test('misconfigured admin key fails closed; voice still needs the leftover memory key', async () => {
+test('misconfigured admin key fails closed; voice needs PPOMI_VOICE_SAFETY_KEY, not a memory AES key', async () => {
   const f = fixture();
   f.env.SUPABASE_ANON_KEY = 'sb_secret_do_not_expose_this_value';
   const response = await f.handle(request('/v1/session'));
   assert.equal(response.status, 503); assert.equal((await response.text()).includes('sb_secret'), false);
-  const g = fixture(); g.env.PPOMI_AGENT_MEMORY_KEY = '';
+  const g = fixture(); g.env.PPOMI_VOICE_SAFETY_KEY = '';
   assert.equal((await g.handle(request('/v1/memories/save', memory()))).status, 200);
   assert.equal((await g.handle(request('/v1/session'))).status, 503);
+  assert.equal((await g.handle(request('/v1/session', { mode: 'text' }))).status, 200);
 });
 
 test('server implementation has no transcript persistence, raw logging, or filesystem writes', async () => {
   const source = await readFile(new URL('./handler.ts', import.meta.url), 'utf8');
   assert.equal(/console\.|writeFile|appendFile|localStorage|sessionStorage|createWriteStream/.test(source), false);
   assert.equal(/from ['"]node:fs/.test(source), false);
+  assert.equal(/PPOMI_AGENT_MEMORY_KEY|aes-256-gcm|createCipheriv|createDecipheriv/.test(source), false);
   // The text chat proxy is the one model endpoint the server may relay: no storage upstream, no streaming, no memory of the turn.
   assert.equal(/\/v1\/(?:conversations|chat\/completions)/.test(source), false);
   assert.match(source, /model: textModel, stream: false, store: false/);
