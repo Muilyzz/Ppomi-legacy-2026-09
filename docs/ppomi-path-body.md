@@ -16,6 +16,7 @@
 | `ppomi-body-macos` | `adapter-macos` / `driver-macos` | macOS AX (sibling PRs) |
 | `ppomi-body-android` | `adapter-android` | Android (sibling PRs) |
 | `ppomi-body-iphone-mirroring` | `adapter-iphone-mirroring` | iPhone Mirroring (sibling PRs) |
+| `ppomi-secrets` | — | Local OS secret store (Keychain / Credential Manager). Not a body. |
 | `ppomi-body-playwright` | `adapter-playwright` / `driver-playwright` | In-page Playwright |
 
 Native OS boundaries stay separate packages. Do not invent `adapter` / `adaptor` types or package titles. Ports stay `OsUiDriver` and `BrowserPageDriver`.

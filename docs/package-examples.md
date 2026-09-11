@@ -28,6 +28,7 @@ There is no top-level `examples/` tree.
 | --- | --- |
 | `ppomi-path` | `packages/ppomi-path/example` |
 | `ppomi-brain` | `packages/ppomi-brain/example` |
+| `ppomi-secrets` | `packages/ppomi-secrets/example` |
 | `ppomi-body-windows` | `packages/ppomi-body-windows/example` |
 | `ppomi-body-macos` | `packages/ppomi-body-macos/example` |
 | `ppomi-body-android` | `packages/ppomi-body-android/example` |
@@ -61,6 +62,9 @@ node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts
 # Android live dump+tap (Settings via AndroidDriver + LiveAndroidNativeTools)
 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts
 node --experimental-strip-types packages/ppomi-body-iphone-mirroring/example/src/main.ts
+# local secret store (fixture). Mac/Windows live: dummy probe key, then delete
+node --experimental-strip-types packages/ppomi-secrets/example/src/main.ts
+PPOMI_SECRETS_LIVE=1 node --experimental-strip-types packages/ppomi-secrets/example/src/main.ts
 ```
 
 ## Rules
