@@ -13,6 +13,8 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
     var onSurfaceHint: ((WorkSurface) -> Void)?
     /// Marks to draw over the docked window (tap rings, validated fields, reading sweep, a VLM line).
     var onOverlay: ((OverlayMark) -> Void)?
+    /// Workbench Home → KB (same Tools.path_cold_start as the control toolbar).
+    var onPathColdStart: (() -> Void)?
     var onClose: (() -> Void)?
     /// When this returns a host, the conversation is mounted there instead of opening its own window.
     var host: (() -> ConversationHost?)?
@@ -90,6 +92,8 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
     }
 
     /// The page reads uiScale from bootstrap; a later change reaches the live document here.
+    @objc private func pathColdStart() { onPathColdStart?() }
+
     @objc private func pushUIScale() {
         webView?.evaluateJavaScript("document.documentElement.style.setProperty('--ui-scale', '\(AppSettings.uiScale)')")
     }
@@ -115,6 +119,18 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
                              styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         panel.title = "뽀미"; panel.minSize = NSSize(width: 360, height: 460)
         panel.isReleasedWhenClosed = false; panel.delegate = self; panel.center()
+        let accessory = NSTitlebarAccessoryViewController()
+        let button = NSButton(title: "Home → KB", target: self, action: #selector(pathColdStart))
+        button.bezelStyle = .rounded
+        button.controlSize = .small
+        button.setAccessibilityIdentifier("kb-cold-start-chat")
+        button.sizeToFit()
+        let wrap = NSView(frame: NSRect(x: 0, y: 0, width: button.frame.width + 16, height: 28))
+        button.frame.origin = NSPoint(x: 8, y: 3)
+        wrap.addSubview(button)
+        accessory.view = wrap
+        accessory.layoutAttribute = .right
+        panel.addTitlebarAccessoryViewController(accessory)
         window = panel
         guard let view = makeWebView(frame: panel.contentView?.bounds ?? .zero) else {
             panel.contentView = fallbackLabel(AgentNativeError.unavailable.localizedDescription)

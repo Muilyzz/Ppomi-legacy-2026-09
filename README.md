@@ -37,9 +37,14 @@
 LOCAL_SIGN_ID="Apple Development: …" scripts/make-app.sh
 # → dist/Ppomi.app. 이후 빌드도 같은 인증서와 설치 경로를 사용하세요.
 
+# Finder: scripts/open-mac-shell.command
+scripts/open-mac-shell.sh
+
 # 또는 소스로
 cd Ppomi && swift run Ppomi
 ```
+
+**테스트는 메인 앱에서 한다 (`packages/*/example` 아님).** 앱을 연 뒤 대화 창 또는 작업대 제어 머리띠의 **Home → KB** 를 누르면 iPhone 미러링에서 Home 후 KB스타기업뱅킹이 열리고 Face ID·로그인에서 멈춘다. 같은 손은 MCP `path_cold_start`. [실행 메모](docs/v0.2-mac-shell.md).
 
 미러링 창을 만지는 `phone` CLI(저장소 루트 `phone.swift`)는 첫 사용 때 자동으로 빌드됩니다.
 
@@ -94,7 +99,7 @@ args = ["--mcp"]
 
 소스로 쓸 때는 경로를 `Ppomi/.build/debug/Ppomi` 로 바꾸면 됩니다.
 
-내놓는 도구: `phone_screen` `phone_tap` `phone_type` `phone_key` `phone_scroll` `phone_open` `phone_installed` `pay_preference` `confirm_payment` `record_spend` `ask_choice` `balances` `today_spending` `transactions` `sql`(읽기 전용) `list_playbooks` `read_playbook` `note_footprint` `run_combo` `windows_screen` `windows_click` `windows_type` `windows_key` `windows_scroll` `windows_open` `health_records` `record_health` `inbody_capture`.
+내놓는 도구: `phone_screen` `phone_tap` `phone_type` `phone_key` `phone_scroll` `phone_open` `phone_installed` `pay_preference` `confirm_payment` `record_spend` `ask_choice` `balances` `today_spending` `transactions` `sql`(읽기 전용) `list_playbooks` `read_playbook` `note_footprint` `run_combo` `path_cold_start` `windows_screen` `windows_click` `windows_type` `windows_key` `windows_scroll` `windows_open` `health_records` `record_health` `inbody_capture`.
 
 PC 전용 웹(대법원 인터넷등기소 등)은 Parallels의 Windows 창에서 같은 방식으로 다룹니다: `windows_open`이 URL을 열고, `windows_screen`이 OCR로 읽고, `windows_click`·`windows_type`(클립보드 붙여넣기라 한글 그대로)·`windows_key`(`ctrl+l`, `alt+f4`, `win+r` 같은 조합)·`windows_scroll`이 손입니다. Windows는 창 모드여야 하고, Parallels 구성 › 하드웨어 › 마우스 및 키보드의 마우스가 “게임용 자동 감지”(SmartMouse)여야 클릭이 게스트 포인터로 전달됩니다. 보안 프로그램 설치·로그인은 사용자 몫이고, 결제 버튼은 `confirm_payment` 승인 뒤에만 눌립니다.
 
