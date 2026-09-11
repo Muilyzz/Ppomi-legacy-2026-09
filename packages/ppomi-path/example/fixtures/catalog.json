@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "catalogId": "ppomi-path-sample",
+  "version": "0.1.0",
+  "paths": [
+    {
+      "id": "sample-browse",
+      "title": "Open a public page and read the title",
+      "bodyKind": "macos",
+      "grant": "ui.read",
+      "financialSubmit": false,
+      "steps": [
+        { "id": "open", "kind": "open", "title": "Open the public page" },
+        { "id": "read-title", "kind": "read", "title": "Read the document title" }
+      ]
+    },
+    {
+      "id": "joint-certificate-prepare",
+      "title": "Prepare a business joint-certificate issuance (no submit)",
+      "bodyKind": "windows",
+      "grant": "ui.control",
+      "financialSubmit": "human",
+      "steps": [
+        { "id": "focus-issuer", "kind": "focus", "title": "Focus the issuer window", "target": "인증서 발급" },
+        { "id": "read-purpose", "kind": "read", "title": "Confirm purpose copy" },
+        { "id": "human-identity", "kind": "human", "title": "Identity check is the person" },
+        { "id": "pay-certificate", "kind": "payment", "title": "Payment — no auto click", "target": "결제하기" },
+        { "id": "submit-application", "kind": "submit", "title": "Submit — no auto click", "target": "제출" }
+      ]
+    }
+  ]
+}
