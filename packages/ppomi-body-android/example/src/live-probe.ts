@@ -82,7 +82,11 @@ export async function probeAndroidLive(): Promise<LiveProbe> {
 
   const node = pickLiveAndroidClickTarget(preview.nodes);
   if (node === undefined) {
-    return skipLines(lines, `Settings dump had no clickable row`, `nodes=${preview.nodes.length}`);
+    return skipLines(
+      lines,
+      `front dump is not Settings or has no 연결/Wi-Fi row — nothing else is clicked`,
+      `nodes=${preview.nodes.length}`,
+    );
   }
 
   const target = liveAndroidClickLabel(node);

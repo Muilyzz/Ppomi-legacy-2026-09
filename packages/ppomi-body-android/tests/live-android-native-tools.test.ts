@@ -92,6 +92,22 @@ test("pickLiveAndroidClickTarget prefers 연결 over a pay word", () => {
   );
 });
 
+test("pickLiveAndroidClickTarget never falls back to an arbitrary clickable", () => {
+  const otherApp = [
+    { id: "a", text: "로그아웃", clickable: true, editable: false },
+    { id: "b", text: "연결", clickable: true, editable: false },
+  ];
+  assert.equal(pickLiveAndroidClickTarget(otherApp), undefined, "연결 without Settings/설정 page");
+  assert.equal(
+    pickLiveAndroidClickTarget([
+      { id: "h", text: "설정", clickable: false, editable: false },
+      { id: "x", text: "로그아웃", clickable: true, editable: false },
+    ]),
+    undefined,
+    "Settings page without a smoke row",
+  );
+});
+
 test("LiveAndroidNativeTools: read → tap → stale_screen, pay word refused", () => {
   const commands: LiveAndroidCommand[] = [];
   const pay: LiveAndroidNode = {
@@ -130,10 +146,17 @@ test("LiveAndroidNativeTools: read → tap → stale_screen, pay word refused", 
 });
 
 test("AndroidDriver Runtime 1-step clicks through LiveAndroidNativeTools without a device", async () => {
+  const heading: LiveAndroidNode = {
+    text: "설정",
+    clickable: false,
+    editable: false,
+    password: false,
+    bounds: { left: 40, top: 80, right: 400, bottom: 160 },
+  };
   const tools = new LiveAndroidNativeTools({
     serial: "R3CX",
     exec: scripted(command => {
-      if (command.op === "dump") return readReply([connection]);
+      if (command.op === "dump") return readReply([heading, connection]);
       if (command.op === "tap") return { ok: true, result: { invoked: true } };
       return { ok: false, code: "failed", message: command.op };
     }),
@@ -162,4 +185,54 @@ test("no_adb reply becomes AndroidAdapterError so the example can SKIP", () => {
   });
   assert.throws(() => tools.android_screen(), error =>
     error instanceof AndroidAdapterError && error.code === "no_adb");
+});
+
+test("gate: tap uses the live dump frame, not the first-read point after the tree drifts", () => {
+  const drifted: LiveAndroidNode = {
+    ...connection,
+    text: "알림",
+    bounds: { left: 0, top: 800, right: 1080, bottom: 950 },
+  };
+  const commands: LiveAndroidCommand[] = [];
+  let dumps = 0;
+  const tools = new LiveAndroidNativeTools({
+    serial: "R3CX",
+    exec: scripted(command => {
+      commands.push(command);
+      if (command.op === "dump") {
+        dumps += 1;
+        return readReply([dumps === 1 ? connection : drifted]);
+      }
+      if (command.op === "tap") return { ok: true, result: { invoked: true } };
+      return { ok: false, code: "failed", message: JSON.stringify(command) };
+    }),
+  });
+  const screen = tools.android_screen();
+  assert.throws(() => tools.android_click({ nodeId: screen.nodes[0]!.id }), error =>
+    error instanceof AndroidAdapterError && error.code === "stale_screen");
+  assert.equal(commands.some(command => command.op === "tap"), false);
+});
+
+test("gate: ui_type refuses newline before adb input text", () => {
+  const field: LiveAndroidNode = {
+    text: "",
+    contentDescription: "Search",
+    clickable: true,
+    editable: true,
+    password: false,
+    bounds: { left: 40, top: 200, right: 1040, bottom: 280 },
+  };
+  const commands: LiveAndroidCommand[] = [];
+  const tools = new LiveAndroidNativeTools({
+    serial: "R3CX",
+    exec: scripted(command => {
+      commands.push(command);
+      if (command.op === "dump") return readReply([field]);
+      return { ok: true, result: { typed: true } };
+    }),
+  });
+  const screen = tools.android_screen();
+  assert.throws(() => tools.android_type({ nodeId: screen.nodes[0]!.id, text: "submit\n" }), error =>
+    error instanceof AndroidAdapterError && error.code === "protected_action");
+  assert.equal(commands.some(command => command.op === "type" || command.op === "tap"), false);
 });

@@ -126,35 +126,55 @@ export class LiveAndroidNativeTools implements AndroidNativeTools {
   }
 
   android_click(args: { nodeId: string }): { invoked: boolean } {
-    const node = this.requireAddressable(args.nodeId);
-    if (node.password || isAndroidPayWord(node.text) || !node.clickable) {
-      throw new AndroidAdapterError("protected_action", `protected_action. ${node.text}`);
+    const checked = this.requireAddressable(args.nodeId);
+    if (isProtected(checked) || !checked.clickable) {
+      throw new AndroidAdapterError("protected_action", `protected_action. ${checked.text}`);
     }
-    const x = Math.round((node.bounds.left + node.bounds.right) / 2);
-    const y = Math.round((node.bounds.top + node.bounds.bottom) / 2);
-    this.stored = null;
-    const reply = this.exec({ op: "tap", serial: this.requireSerial(), x, y });
+    const live = this.liveMatch(checked, "clickable");
+    const reply = this.exec({ op: "tap", serial: this.requireSerial(), ...centerOf(live.bounds) });
     if (!reply.ok) throw liveError(reply);
+    this.stored = null;
     return { invoked: true };
   }
 
   android_type(args: { nodeId: string; text: string }): { typed: boolean } {
-    if (args.text.length > 4096 || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(args.text)) {
+    if (args.text.length > 4096 || CONTROL_CHARS.test(args.text)) {
       throw new AndroidAdapterError("protected_action", "protected_action. text");
     }
-    const node = this.requireAddressable(args.nodeId);
-    if (node.password || !node.editable) {
-      throw new AndroidAdapterError("protected_action", `protected_action. ${node.text}`);
+    const checked = this.requireAddressable(args.nodeId);
+    if (isProtected(checked) || !checked.editable) {
+      throw new AndroidAdapterError("protected_action", `protected_action. ${checked.text}`);
     }
-    const x = Math.round((node.bounds.left + node.bounds.right) / 2);
-    const y = Math.round((node.bounds.top + node.bounds.bottom) / 2);
-    this.stored = null;
+    const live = this.liveMatch(checked, "editable");
     const serial = this.requireSerial();
-    const tapped = this.exec({ op: "tap", serial, x, y });
+    const tapped = this.exec({ op: "tap", serial, ...centerOf(live.bounds) });
     if (!tapped.ok) throw liveError(tapped);
     const typed = this.exec({ op: "type", serial, text: args.text });
     if (!typed.ok) throw liveError(typed);
+    this.stored = null;
     return { typed: true };
+  }
+
+  /** Re-dump and act only if the live node still has the checked identity and a usable frame. */
+  private liveMatch(checked: StoredNode, need: "clickable" | "editable"): StoredNode {
+    this.android_screen();
+    const current = this.stored;
+    const live = current?.nodes.find(node => sameIdentity(checked, node)) ?? null;
+    if (live === null) {
+      this.stored = null;
+      throw new AndroidAdapterError("stale_screen", "stale_screen. node changed");
+    }
+    if (need === "clickable" ? !live.clickable : !live.editable) {
+      this.stored = null;
+      throw new AndroidAdapterError("protected_action", `protected_action. ${live.text}`);
+    }
+    if (isProtected(live) || !usableFrame(live.bounds)) {
+      const code = isProtected(live) ? "protected_action" : "stale_screen";
+      const message = code === "stale_screen" ? "stale_screen. no live frame" : `protected_action. ${live.text}`;
+      this.stored = null;
+      throw new AndroidAdapterError(code, message);
+    }
+    return live;
   }
 
   private requireSerial(): string {
@@ -238,8 +258,34 @@ export function parseUiAutomatorDump(xml: string): LiveAndroidNode[] {
   return nodes;
 }
 
+/** Every C0/C1 control except `\t`. A typed `\n` would be Return (submit). */
+const CONTROL_CHARS = /[\u0000-\u0008\u000A-\u001F\u007F-\u009F]/;
+const SETTINGS_PAGE = /^(Settings|설정)$/;
+
 export function isAndroidPayWord(text: string): boolean {
   return PAY_WORD.test(text.trim());
+}
+
+function isProtected(node: StoredNode): boolean {
+  return node.password
+    || isAndroidPayWord(node.text)
+    || isAndroidPayWord(node.contentDescription ?? "");
+}
+
+function sameIdentity(checked: StoredNode, live: StoredNode): boolean {
+  return checked.text === live.text
+    && (checked.contentDescription ?? "") === (live.contentDescription ?? "");
+}
+
+function usableFrame(bounds: LiveAndroidBounds): boolean {
+  return bounds.right - bounds.left >= 2 && bounds.bottom - bounds.top >= 2;
+}
+
+function centerOf(bounds: LiveAndroidBounds): { x: number; y: number } {
+  return {
+    x: Math.round((bounds.left + bounds.right) / 2),
+    y: Math.round((bounds.top + bounds.bottom) / 2),
+  };
 }
 
 export function liveAndroidRequested(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -252,13 +298,16 @@ export function liveAndroidClickLabel(node: AndroidScreenNode): string {
   return node.contentDescription?.trim() ?? "";
 }
 
-/** Prefer a Settings row (연결 / Wi-Fi / …). Never a pay word. */
+/**
+ * Only a Settings row (연결 / Wi-Fi / …) on a snapshot that also shows Settings/설정.
+ * Never the first arbitrary clickable: another app's dump would otherwise tap 로그아웃 / 삭제.
+ */
 export function pickLiveAndroidClickTarget(nodes: readonly AndroidScreenNode[]): AndroidScreenNode | undefined {
-  const clickable = nodes.filter(node => {
+  if (!nodes.some(node => SETTINGS_PAGE.test(node.text.trim()))) return undefined;
+  return nodes.find(node => {
     const label = liveAndroidClickLabel(node);
-    return node.clickable && label.length > 0 && !isAndroidPayWord(label);
+    return node.clickable && label.length > 0 && !isAndroidPayWord(label) && SMOKE_ROW.test(label);
   });
-  return clickable.find(node => SMOKE_ROW.test(liveAndroidClickLabel(node))) ?? clickable[0];
 }
 
 export function skipCode(message: string): string {
