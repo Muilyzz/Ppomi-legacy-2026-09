@@ -11,8 +11,9 @@ struct ContentView: View {
     var body: some View {
         PadWebView(generation: generation)
             .overlay(alignment: .topTrailing) {
-                Button { settings = true } label: { Image(systemName: "gearshape").font(.title3) }
-                    .padding(10).opacity(0.5).accessibilityLabel("설정")
+                // 프로필 아이콘 = 나: 로그인 전엔 실루엣, 뒤엔 구글 사진. Mac 과 같은 자리·같은 시트.
+                Button { settings = true } label: { AvatarView(session: Session.load(), size: 28) }
+                    .padding(10).accessibilityLabel("나")
             }
             .sheet(isPresented: $settings) { SettingsSheet(generation: $generation) }
             .onAppear { if !PadSettings.configured { settings = true } }
@@ -86,7 +87,7 @@ final class PadFiles: NSObject, WKURLSchemeHandler {
         let text: String
         switch error {
         case PadServerClient.Failure.unconfigured: text = "설정에서 구글 로그인"
-        case SharedRecordError.key: text = "Mac 뽀미 설정에서 구글 계정 연결"
+        case SharedRecordError.key: text = "Mac 뽀미가 켜져 있으면 몇 초 안에 키를 받습니다 · 탭을 다시 누르세요"
         default: text = (error as? PadServerClient.Failure)?.message ?? (error as? LocalizedError)?.errorDescription ?? "기록을 읽지 못함"
         }
         let escaped = text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
@@ -104,18 +105,27 @@ struct SettingsSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    HStack(spacing: 12) {
+                        AvatarView(session: session, size: 44)
+                        VStack(alignment: .leading) {
+                            Text(session?.name ?? "나").font(.headline)
+                            if let email = session?.email { Text(email).font(.footnote).foregroundStyle(.secondary) }
+                        }
+                    }
+                }
                 Section("계정") {
                     if let session {
-                        Text(session.registered ? "로그인됨 · 기기 등록됨" : "로그인됨 · 기기 등록 전").foregroundStyle(.secondary)
+                        Text(session.registered ? "Google · 기기 등록됨" : "Google · 기기 등록 전").foregroundStyle(.secondary)
                         Button("로그아웃", role: .destructive) { Session.clear(); self.session = nil; generation += 1 }
                     } else {
                         Button("Google 계정으로 로그인") { run { try await PadAuth.shared.signInWithGoogle() } }
-                        Text("Mac 뽀미 설정에서 같은 구글 계정을 연결해 두면 장부가 보입니다").font(.footnote).foregroundStyle(.secondary)
+                        Text("Mac 뽀미와 같은 구글 계정으로 로그인하면 같은 장부를 봅니다").font(.footnote).foregroundStyle(.secondary)
                     }
                 }
                 if let error { Text(error).foregroundStyle(.red) }
             }
-            .navigationTitle("설정")
+            .navigationTitle("나")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("닫기") { dismiss() } } }
             .disabled(busy)
         }
@@ -126,6 +136,28 @@ struct SettingsSheet: View {
             do { try await work(); session = Session.load(); generation += 1 }
             catch { self.error = (error as? PadServerClient.Failure)?.message ?? (error as? LocalizedError)?.errorDescription ?? "실패: \(error)" }
             busy = false
+        }
+    }
+}
+
+/// 구글 프로필 사진, 없으면 이니셜, 로그인 전엔 실루엣. Mac 과 같은 모양.
+struct AvatarView: View {
+    let session: Session?
+    let size: CGFloat
+    var body: some View {
+        Group {
+            if let session, let url = session.avatarURL.flatMap(URL.init(string:)) {
+                AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { initial(session) }
+            } else if let session { initial(session) }
+            else { Image(systemName: "person.crop.circle").resizable().foregroundStyle(.secondary) }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+    private func initial(_ session: Session) -> some View {
+        ZStack {
+            Circle().fill(Color.accentColor.opacity(0.2))
+            Text(String((session.name ?? session.email ?? "나").prefix(1)).uppercased()).font(.system(size: size * 0.5, weight: .medium)).foregroundStyle(Color.accentColor)
         }
     }
 }
