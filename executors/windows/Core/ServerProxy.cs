@@ -5,26 +5,33 @@ using System.Text.Json;
 namespace Ppomi.Executor;
 
 // Long-lived credentials and Supabase bearer tokens never become protocol results.
+// Two credentials exist: the Google session of this device (product path, sends X-Ppomi-Device like the Mac and iPad) and,
+// only with the developer import flag, the legacy email/password device account. The Google session always wins.
 public sealed class ServerProxy : IDisposable
 {
     private readonly HttpClient client;
+    private readonly bool ownsClient;
+    private readonly GoogleAccount? account;
     private readonly SemaphoreSlim authGate = new(1, 1);
     private readonly object configurationGate = new();
     private DeviceConfiguration? configuration;
     private string? accessToken;
     private DateTimeOffset expiresAt;
 
-    public ServerProxy(DeviceConfiguration? configuration, HttpMessageHandler? testHandler = null)
+    public ServerProxy(DeviceConfiguration? configuration, HttpMessageHandler? testHandler = null, GoogleAccount? account = null, HttpClient? sharedClient = null)
     {
         this.configuration = configuration;
-        client = new HttpClient(testHandler ?? new SocketsHttpHandler
-        {
-            AllowAutoRedirect = false, UseCookies = false, AutomaticDecompression = DecompressionMethods.None,
-            ConnectTimeout = TimeSpan.FromSeconds(15), MaxResponseHeadersLength = 32
-        }) { Timeout = TimeSpan.FromSeconds(120) };
+        this.account = account;
+        ownsClient = sharedClient == null;
+        client = sharedClient ?? NativeHttp.Create(testHandler);
     }
 
-    public bool Configured { get { lock (configurationGate) return configuration != null; } }
+    /// Some credential exists. Whether the device may actually converse is `Connected`.
+    public bool Configured => account?.SignedIn == true || LegacyConfigured;
+    public bool LegacyConfigured { get { lock (configurationGate) return configuration != null; } }
+    /// Google session: the owner approved this device. Legacy import: the imported device account is present.
+    public bool Connected => account?.SignedIn == true ? account.Snapshot.Configured : LegacyConfigured;
+
     public void Configure(DeviceConfiguration value)
     {
         lock (configurationGate) { configuration = value; accessToken = null; expiresAt = default; }
@@ -39,10 +46,11 @@ public sealed class ServerProxy : IDisposable
         if (bytes.Length > 1024 * 1024) throw new NativeFailure("invalid_request");
         try
         {
-            var token = await Authenticate(lease.Token);
+            var (token, deviceId) = await Authenticate(lease.Token);
             lease.Check();
-            using var request = JsonRequest(uri, bytes);
+            using var request = NativeHttp.JsonRequest(uri, bytes);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            if (deviceId is { } device) request.Headers.Add("X-Ppomi-Device", device.ToString("D"));
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, lease.Token);
             if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
@@ -50,7 +58,7 @@ public sealed class ServerProxy : IDisposable
                 throw new NativeFailure("server_auth");
             }
             if (!response.IsSuccessStatusCode) throw new NativeFailure("server_rejected");
-            var result = await ReadJson(response, 2_000_000, lease.Token);
+            var result = await NativeHttp.ReadJson(response, 2_000_000, lease.Token);
             lease.Check();
             return result;
         }
@@ -59,8 +67,14 @@ public sealed class ServerProxy : IDisposable
         catch (HttpRequestException) { throw new NativeFailure("server_unavailable"); }
     }
 
-    private async Task<string> Authenticate(CancellationToken cancellation)
+    private async Task<(string Token, Guid? DeviceId)> Authenticate(CancellationToken cancellation)
     {
+        if (account?.SignedIn == true)
+        {
+            // The agent server refuses unapproved devices anyway; refusing here keeps a pending device from spending a token refresh.
+            if (!account.Snapshot.Configured) throw new NativeFailure("server_auth");
+            return (await account.AccessToken(cancellation), account.DeviceId);
+        }
         await authGate.WaitAsync(cancellation);
         try
         {
@@ -68,25 +82,25 @@ public sealed class ServerProxy : IDisposable
             lock (configurationGate)
             {
                 config = configuration ?? throw new NativeFailure("server_unconfigured");
-                if (accessToken != null && expiresAt > DateTimeOffset.UtcNow) return accessToken;
+                if (accessToken != null && expiresAt > DateTimeOffset.UtcNow) return (accessToken, null);
             }
-            using var auth = JsonRequest(new Uri(config.Url + "/auth/v1/token?grant_type=password"),
+            using var auth = NativeHttp.JsonRequest(new Uri(config.Url + "/auth/v1/token?grant_type=password"),
                 JsonSerializer.SerializeToUtf8Bytes(new { email = config.Email, password = config.Password }));
             auth.Headers.Add("apikey", config.PublishableKey);
             using var response = await client.SendAsync(auth, HttpCompletionOption.ResponseHeadersRead, cancellation);
             if (response.StatusCode != HttpStatusCode.OK) throw new NativeFailure("server_auth");
-            var json = await ReadJson(response, 65536, cancellation);
+            var json = await NativeHttp.ReadJson(response, 65536, cancellation);
             var token = JsonArgs.String(json, "access_token", 16384);
             if (token.Length < 16 || token.Any(char.IsWhiteSpace) ||
                 !json.TryGetProperty("expires_in", out var expiry) || !expiry.TryGetInt32(out var seconds) || seconds <= 0)
                 throw new NativeFailure("server_auth");
 
-            using var context = JsonRequest(new Uri(config.Url + "/rest/v1/rpc/ppomi_context"), "{}"u8.ToArray());
+            using var context = NativeHttp.JsonRequest(new Uri(config.Url + "/rest/v1/rpc/ppomi_context"), "{}"u8.ToArray());
             context.Headers.Add("apikey", config.PublishableKey);
             context.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             using var contextResponse = await client.SendAsync(context, HttpCompletionOption.ResponseHeadersRead, cancellation);
             if (contextResponse.StatusCode != HttpStatusCode.OK) throw new NativeFailure("server_auth");
-            var contextJson = await ReadJson(contextResponse, 65536, cancellation);
+            var contextJson = await NativeHttp.ReadJson(contextResponse, 65536, cancellation);
             var device = JsonArgs.Object(contextJson, "device");
             var workspace = JsonArgs.Object(contextJson, "workspace");
             if (!Guid.TryParse(JsonArgs.String(device, "id", 36), out var deviceId) || deviceId != config.DeviceId ||
@@ -100,41 +114,10 @@ public sealed class ServerProxy : IDisposable
                 accessToken = token;
                 expiresAt = DateTimeOffset.UtcNow.AddSeconds(Math.Max(0, Math.Min(seconds, 86400) - 30));
             }
-            return token;
+            return (token, null);
         }
         finally { authGate.Release(); }
     }
 
-    private static HttpRequestMessage JsonRequest(Uri uri, byte[] bytes)
-    {
-        var request = new HttpRequestMessage(HttpMethod.Post, uri) { Content = new ByteArrayContent(bytes) };
-        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true, NoStore = true };
-        return request;
-    }
-
-    private static async Task<JsonElement> ReadJson(HttpResponseMessage response, int limit, CancellationToken cancellation)
-    {
-        if (response.Content.Headers.ContentLength > limit) throw new NativeFailure("response_invalid");
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellation);
-        using var memory = new MemoryStream();
-        var buffer = new byte[8192];
-        while (true)
-        {
-            var count = await stream.ReadAsync(buffer, cancellation);
-            if (count == 0) break;
-            if (memory.Length + count > limit) throw new NativeFailure("response_invalid");
-            memory.Write(buffer, 0, count);
-        }
-        try
-        {
-            using var document = JsonDocument.Parse(memory.ToArray(), new JsonDocumentOptions { MaxDepth = 64 });
-            if (document.RootElement.ValueKind != JsonValueKind.Object) throw new NativeFailure("response_invalid");
-            return document.RootElement.Clone();
-        }
-        catch (JsonException) { throw new NativeFailure("response_invalid"); }
-    }
-
-    public void Dispose() { client.Dispose(); authGate.Dispose(); }
+    public void Dispose() { if (ownsClient) client.Dispose(); authGate.Dispose(); }
 }

@@ -6,11 +6,19 @@ using System.Text.Json;
 
 namespace Ppomi.Executor;
 
-internal sealed class DeviceStore
+// Everything secret (legacy import, Google session, device private key, unwrapped record key) is a DPAPI blob for the current
+// Windows user inside a directory whose ACL admits only that user. The device ID is a plain stable identifier, not a secret.
+internal sealed class DeviceStore : IAccountStore
 {
     public string DirectoryPath { get; }
     private string CredentialPath => Path.Combine(DirectoryPath, "device.dpapi");
     private string EndpointPath => Path.Combine(DirectoryPath, "endpoint.txt");
+    private string SessionPath => Path.Combine(DirectoryPath, "session.dpapi");
+    private string DeviceKeyPath => Path.Combine(DirectoryPath, "device-key.dpapi");
+    private string RecordKeyPath => Path.Combine(DirectoryPath, "record-key.dpapi");
+    private string DeviceIdPath => Path.Combine(DirectoryPath, "device-id.txt");
+    private readonly object accountGate = new();
+    private Guid? deviceId;
 
     public DeviceStore()
     {
@@ -51,6 +59,88 @@ internal sealed class DeviceStore
             return config;
         }
         finally { CryptographicOperations.ZeroMemory(bytes); }
+    }
+
+    public Guid DeviceId
+    {
+        get
+        {
+            lock (accountGate)
+            {
+                if (deviceId is { } known) return known;
+                try
+                {
+                    using var held = WindowsHandles.Open(DirectoryPath, true);
+                    if (Guid.TryParse(NativePolicy.Utf8.GetString(WindowsHandles.ReadFile(DeviceIdPath, 64)).Trim(), out var stored)) return (deviceId = stored).Value;
+                }
+                catch { /* missing or unreadable: a fresh installation gets a new ID */ }
+                var created = Guid.NewGuid();
+                AtomicWrite(DeviceIdPath, NativePolicy.Utf8.GetBytes(created.ToString("D")));
+                deviceId = created;
+                return created;
+            }
+        }
+    }
+
+    public byte[] DevicePrivateKey()
+    {
+        lock (accountGate)
+        {
+            var existing = LoadProtected(DeviceKeyPath, 4096);
+            if (existing is { Length: X25519.KeySize }) return existing;
+            var created = RandomNumberGenerator.GetBytes(X25519.KeySize);
+            AtomicWrite(DeviceKeyPath, Protect(created, true));
+            return created;
+        }
+    }
+
+    public GoogleSession? LoadSession()
+    {
+        var bytes = LoadProtected(SessionPath, 65536);
+        try { return bytes == null ? null : GoogleSession.Decode(bytes); }
+        finally { if (bytes != null) CryptographicOperations.ZeroMemory(bytes); }
+    }
+    public void SaveSession(GoogleSession session)
+    {
+        var bytes = session.Encode();
+        try { AtomicWrite(SessionPath, Protect(bytes, true)); }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
+    }
+    public void DeleteSession() => Delete(SessionPath);
+
+    public RecordKey? LoadRecordKey()
+    {
+        var bytes = LoadProtected(RecordKeyPath, 16384);
+        try { return bytes == null ? null : RecordKey.Decode(bytes); }
+        finally { if (bytes != null) CryptographicOperations.ZeroMemory(bytes); }
+    }
+    public void SaveRecordKey(RecordKey key)
+    {
+        var bytes = key.Encode();
+        try { AtomicWrite(RecordKeyPath, Protect(bytes, true)); }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
+    }
+    public void DeleteRecordKey() => Delete(RecordKeyPath);
+
+    private byte[]? LoadProtected(string path, int limit)
+    {
+        if (!File.Exists(path)) return null;
+        try
+        {
+            using var held = WindowsHandles.Open(DirectoryPath, true);
+            return Protect(WindowsHandles.ReadFile(path, limit), false);
+        }
+        catch { return null; } // Corruption means signing in again; no stored content is logged.
+    }
+
+    private void Delete(string path)
+    {
+        try
+        {
+            using var held = WindowsHandles.Open(DirectoryPath, true);
+            if (File.Exists(path)) File.Delete(path);
+        }
+        catch { /* an unreadable leftover cannot be decrypted by anyone else; the next save replaces it */ }
     }
 
     public string LoadEndpoint()

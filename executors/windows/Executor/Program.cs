@@ -124,18 +124,57 @@ internal sealed class ExecutorHost : IDisposable
     private readonly WindowsWorkspace workspace;
     private readonly WindowsControl control;
     private readonly AutomationWorker automation = new();
+    private readonly GoogleAccount account;
     private readonly ServerProxy server;
     private readonly SemaphoreSlim tools = new(1, 1);
     private readonly SemaphoreSlim management = new(1, 1);
+    private readonly CancellationTokenSource monitor = new();
     private string endpoint;
+    /// The email/password device-file import is a developer compatibility path. It exists only when the shell was started with this flag.
+    private static readonly bool DeveloperDeviceImport = Environment.GetEnvironmentVariable("PPOMI_DEVELOPER_DEVICE_IMPORT") == "1";
     private static readonly string[] ToolNames = ["device_status", "app_list", "app_open", "screen_read", "ui_tap", "ui_type", "ui_scroll", "file_list", "file_read", "file_write"];
 
     public ExecutorHost(int ownerPid)
     {
         control = new WindowsControl(ownerPid);
         workspace = new WindowsWorkspace(Path.Combine(store.DirectoryPath, "workspace"));
-        server = new ServerProxy(store.Load());
+        var http = NativeHttp.Create();
+        account = new GoogleAccount(store, http, DeviceLabel());
+        server = new ServerProxy(DeveloperDeviceImport ? store.Load() : null, account: account, sharedClient: http);
         endpoint = store.LoadEndpoint();
+        _ = Task.Run(() => Monitor(monitor.Token));
+    }
+
+    /// Display label for the owner's approval list ("Windows (DESKTOP-…)"), never an identifier.
+    private static string DeviceLabel()
+    {
+        var machine = Environment.MachineName;
+        return machine.Length is >= 1 and <= 63 && machine.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_') ? $"Windows ({machine})" : "Windows";
+    }
+
+    /// Presentation only: sign-in and approval state, never tokens or the account email.
+    private object Authentication()
+    {
+        var snapshot = account.Snapshot;
+        if (!snapshot.SignedIn && server.LegacyConfigured)
+            return new { method = "deviceConfigImport", developerOnly = true, signedIn = false, approved = false, pendingApproval = false, googleSignIn = true };
+        return new { method = "google", developerOnly = false, signedIn = snapshot.SignedIn, approved = snapshot.Approved,
+            pendingApproval = snapshot.PendingApproval, displayName = snapshot.DisplayName, googleSignIn = true };
+    }
+
+    /// While a signed-in device waits for the owner, ask the server every 15 seconds; once approved, recheck rarely (revocation).
+    private async Task Monitor(CancellationToken cancellation)
+    {
+        var delay = TimeSpan.FromSeconds(3);
+        while (!cancellation.IsCancellationRequested)
+        {
+            try { await Task.Delay(delay, cancellation); } catch (OperationCanceledException) { return; }
+            var snapshot = account.Snapshot;
+            if (!snapshot.SignedIn) { delay = TimeSpan.FromSeconds(30); continue; }
+            try { snapshot = await account.Refresh(cancellation); delay = snapshot.Configured && snapshot.RecordKey ? TimeSpan.FromMinutes(5) : TimeSpan.FromSeconds(15); }
+            catch (OperationCanceledException) { return; }
+            catch (Exception) { delay = TimeSpan.FromSeconds(45); }   // network or server trouble: keep the last known state, retry later
+        }
     }
 
     public async Task<object> Dispatch(string method, JsonElement args)
@@ -143,8 +182,9 @@ internal sealed class ExecutorHost : IDisposable
         switch (method)
         {
             case "bootstrap":
-                return new { platform = "windows", deviceLabel = "Windows", configured = server.Configured, endpoint,
-                    authentication = new { method = "deviceConfigImport", developerOnly = true, googleSignIn = false },
+                return new { platform = "windows", deviceLabel = "Windows", configured = server.Connected, endpoint,
+                    authentication = Authentication(),
+                    executor = new { googleSignIn = true, developmentDeviceImport = DeveloperDeviceImport, nativeAutomation = true },
                     tools = ToolNames, accessibility = true, bankProfileSupported = false,
                     controlApps = await automation.Run(control.ControlApps),
                     toolGuide = "This is a local Windows executor. app_list enumerates visible running applications, not installed packages. app_open activates an existing allowed application; it does not launch an executable. Ask the user to open an absent application and allow it in Ppomi settings while the session is idle. Grants expire when that application process restarts. Only UI Automation Invoke, Value, and a single Scroll target are supported. Read a fresh screen before every mutation. Password, protected labels, command/system hosts, elevated and Ppomi windows are rejected. Do not bypass a refusal using other elements. Unknown/custom-drawn controls are unsupported. file tools are UTF-8 files in the local Windows Ppomi workspace; no Mac, remote desktop, Parallels, shell commands, arbitrary filesystem, browser debugging, or coordinate input is available. Never automatically retry an uncertain mutation." };
@@ -155,17 +195,37 @@ internal sealed class ExecutorHost : IDisposable
                 control.Invalidate();
                 return new { active = session.Active, mode = session.Mode };
             case "executorStatus":
-                return new { platform = "windows", active = session.Active, mode = session.Mode, approval = (object?)null,
-                    capabilities = new { configureDevice = true, developmentDeviceImport = true, googleSignIn = false, controlApps = true, nativeAutomation = true,
+                return new { platform = "windows", active = session.Active, mode = session.Mode, approval = (object?)null, configured = server.Connected,
+                    account = account.Snapshot.Json,
+                    capabilities = new { configureDevice = DeveloperDeviceImport, developmentDeviceImport = DeveloperDeviceImport, googleSignIn = true, controlApps = true, nativeAutomation = true,
                         fileWorkspace = true, bankProfile = false, approval = false },
                     availableApps = await automation.Run(control.AvailableApps) };
             case "setControlApps":
             case "configureDevice":
             case "setEndpoint":
+            case "beginSignIn":
+            case "completeSignIn":
+            case "signOut":
+            case "refreshAccount":
                 if (!await management.WaitAsync(0)) throw new NativeFailure("invalid_request");
                 try
                 {
                     if (session.Active) throw new NativeFailure("protected_action");
+                    // Account changes are trusted local UI operations. The browser round trip itself happens in the shell.
+                    if (method == "beginSignIn") return account.BeginSignIn();
+                    if (method == "completeSignIn" || method == "refreshAccount")
+                    {
+                        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(method == "completeSignIn" ? 90 : 45));
+                        AccountSnapshot snapshot;
+                        try
+                        {
+                            snapshot = method == "completeSignIn" ? await account.CompleteSignIn(JsonArgs.String(args, "callback", 4096), timeout.Token)
+                                : account.SignedIn ? await account.Refresh(timeout.Token) : account.Snapshot;
+                        }
+                        catch (OperationCanceledException) { throw new NativeFailure("server_unavailable"); }
+                        return new { configured = snapshot.Configured, account = snapshot.Json };
+                    }
+                    if (method == "signOut") { account.SignOut(); return new { signedOut = true, account = account.Snapshot.Json }; }
                     if (method == "setControlApps")
                     {
                         if (!args.TryGetProperty("packageNames", out var names) || names.ValueKind != JsonValueKind.Array || names.GetArrayLength() > 100)
@@ -177,8 +237,9 @@ internal sealed class ExecutorHost : IDisposable
                     }
                     if (method == "configureDevice")
                     {
+                        if (!DeveloperDeviceImport) throw new NativeFailure("invalid_request");
                         server.Configure(store.Import(JsonArgs.String(args, "path", 32768)));
-                        return new { configured = true };
+                        return new { configured = server.Connected };
                     }
                     endpoint = store.SetEndpoint(JsonArgs.String(args, "endpoint", 2048, true));
                     return new { endpoint };
@@ -231,5 +292,5 @@ internal sealed class ExecutorHost : IDisposable
     }
 
     public void Stop() { session.Set(false, session.Mode); control.Invalidate(); }
-    public void Dispose() { Stop(); server.Dispose(); session.Dispose(); }
+    public void Dispose() { Stop(); monitor.Cancel(); monitor.Dispose(); server.Dispose(); session.Dispose(); }
 }
