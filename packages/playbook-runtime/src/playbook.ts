@@ -3,6 +3,9 @@ export type Permission = "ui.read" | "ui.control";
 
 export type StepKind = "focus" | "click" | "type" | "read";
 
+/** In-page steps for `BrowserPageAdapter`. Not OS screen-text `click` / `type`. */
+export type PageStepKind = "goto" | "click" | "fill" | "waitFor" | "read";
+
 export type StepOutcome = "ok" | "permission_denied" | "precondition_failed";
 
 export type RunStatus = "completed" | "stopped";
@@ -28,7 +31,7 @@ export interface Playbook {
 
 export interface StepEvidence {
   readonly stepId: string;
-  readonly kind: StepKind;
+  readonly kind: StepKind | PageStepKind;
   readonly outcome: StepOutcome;
   readonly screenTexts: readonly string[];
   readonly note: string;
