@@ -5,6 +5,7 @@
     "paths": {
       "ppomi-body": ["./packages/ppomi-body/src/index.ts"],
       "ppomi-path": ["./packages/ppomi-path/src/index.ts"],
+      "ppomi-body-windows": ["./packages/ppomi-body-windows/src/index.ts"],
       "playbook-runtime": ["./packages/ppomi-body/src/index.ts"]
     }
   },

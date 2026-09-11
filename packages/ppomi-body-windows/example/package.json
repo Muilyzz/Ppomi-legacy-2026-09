@@ -1,0 +1,14 @@
+{
+  "name": "ppomi-body-windows-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "1-step ppomi-body-windows smoke. Fixture Runtime always; live UIA skips off Windows.",
+  "scripts": {
+    "start": "node --experimental-strip-types src/main.ts",
+    "example": "node --experimental-strip-types src/main.ts"
+  },
+  "engines": {
+    "node": ">=22.6"
+  }
+}

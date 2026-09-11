@@ -4,7 +4,8 @@
   "workspaces": [
     "packages/ppomi-body",
     "packages/ppomi-path",
-    "packages/playbook-runtime"
+    "packages/playbook-runtime",
+    "packages/ppomi-body-windows"
   ],
   "scripts": {
     "test": "npm test --workspaces --if-present",
