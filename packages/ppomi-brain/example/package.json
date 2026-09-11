@@ -1,0 +1,15 @@
+{
+  "name": "ppomi-brain-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Orchestration mini-app: mocks by default; PPOMI_BODY points at a body example.",
+  "scripts": {
+    "start": "node --experimental-strip-types src/main.ts",
+    "example": "node --experimental-strip-types src/main.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
