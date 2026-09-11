@@ -5,6 +5,11 @@
       "id": "kr-cert",
       "version": "0.1.0",
       "href": "kr-cert/0.1.0.json"
+    },
+    {
+      "id": "kb-star-biz-win-cert",
+      "version": "0.1.0",
+      "href": "kb-star-biz-win-cert/0.1.0.json"
     }
   ]
 }

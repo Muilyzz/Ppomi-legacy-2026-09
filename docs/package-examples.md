@@ -52,6 +52,9 @@ PPOMI_BODY=windows node --experimental-strip-types packages/ppomi-brain/example/
 
 # body 1-step fixtures (live UIA/AX skips off-host)
 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts
+# KB스타기업뱅킹 공동인증서 path (page dry-run; live Edge on Windows)
+node --experimental-strip-types packages/ppomi-body-windows/example/src/kb-star-biz-win-cert.ts
+PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/kb-star-biz-win-cert.ts
 node --experimental-strip-types packages/ppomi-body-macos/example/src/main.ts
 # Mac live AX (Safari/Chrome System Events). Deprecated alias: packages/adapter-macos/example
 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-macos/example/src/main.ts

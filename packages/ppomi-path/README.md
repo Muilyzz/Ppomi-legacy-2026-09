@@ -12,6 +12,8 @@ The schema accepts the body core fields `effect` (`navigate` | `input` | `commit
 
 `kr-cert@0.1.0` is the absorbed `playbook-kr-cert` fixture (PR #8): 사업자 공동인증서 발급 준비. `payment` / `submit` keep targets so a later body run can fail-close. No secrets, resident-registration numbers, or device-approval fields.
 
+`kb-star-biz-win-cert@0.1.0` is the KB스타기업뱅킹 Windows Edge 공동인증서 (구 공인) issuance path (MZZ-48): Playwright/`PageSurface` `goto` to the official cert-center and issue URLs, then `human` handoffs for terms, identity, OTP, passwords, UAC, and final confirm. No `payment` / `submit`. Post-issue store check is `%USERPROFILE%\AppData\LocalLow\NPKI` (see [`catalogs/paths/kb-star-biz-win-cert/README.md`](../../catalogs/paths/kb-star-biz-win-cert/README.md)).
+
 ```ts
 import { loadPath, loadPathCatalog } from "ppomi-path";
 

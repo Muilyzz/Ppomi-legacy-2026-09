@@ -14,7 +14,10 @@ import {
 test("loads the sample kr-cert path from the versioned JSON catalog", () => {
   const catalog = loadPathCatalog();
   assert.equal(catalog.schemaVersion, 1);
-  assert.deepEqual(catalog.paths, [{ id: "kr-cert", version: "0.1.0", href: "kr-cert/0.1.0.json" }]);
+  assert.deepEqual(catalog.paths, [
+    { id: "kr-cert", version: "0.1.0", href: "kr-cert/0.1.0.json" },
+    { id: "kb-star-biz-win-cert", version: "0.1.0", href: "kb-star-biz-win-cert/0.1.0.json" },
+  ]);
 
   const document = loadPath("kr-cert");
   assert.equal(document.id, "kr-cert");
@@ -35,6 +38,22 @@ test("loads the sample kr-cert path from the versioned JSON catalog", () => {
   assert.doesNotMatch(raw, /approv|deviceApproved|pendingApproval/i);
   assert.doesNotMatch(raw, /주민등록|인증서 비밀번호|deviceApproved/i);
   assert.ok(defaultCatalogRoot().endsWith(`${path.sep}catalogs${path.sep}paths`));
+});
+
+test("loads kb-star-biz-win-cert: page gotos, human handoffs, no payment, no secrets", () => {
+  const document = loadPath("kb-star-biz-win-cert");
+  assert.equal(document.surface, "os-windows");
+  assert.deepEqual(
+    document.steps.map(step => step.kind),
+    ["goto", "goto", "human", "human", "human", "human", "human", "human", "human", "human", "human"],
+  );
+  assert.equal(document.steps.find(step => step.id === "goto-issue")?.effect, "navigate");
+  assert.equal(document.steps.find(step => step.id === "goto-issue")?.require?.permission, "ui.control");
+  assert.equal(document.steps.some(step => step.kind === "payment" || step.kind === "submit"), false);
+  const raw = JSON.stringify(document);
+  assert.doesNotMatch(raw, /\d{6}-\d{2}-\d{6}|\d{12,14}/);
+  assert.doesNotMatch(raw, /approv|deviceApproved|pendingApproval/i);
+  assert.equal(document.steps.some(step => step.text !== undefined), false);
 });
 
 test("loadPath selects an explicit version and rejects unknown ids", () => {
