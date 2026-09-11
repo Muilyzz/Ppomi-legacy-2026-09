@@ -3,7 +3,7 @@ export type Permission = "ui.read" | "ui.control";
 
 export type StepKind = "focus" | "click" | "type" | "read";
 
-export type StepOutcome = "ok" | "permission_denied" | "precondition_failed";
+export type StepOutcome = "ok" | "permission_denied" | "precondition_failed" | "protected_action";
 
 export type RunStatus = "completed" | "stopped";
 

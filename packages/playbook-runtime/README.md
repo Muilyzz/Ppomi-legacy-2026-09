@@ -9,7 +9,7 @@ Package titles are domain-specific. Do not add `core`, `common`, `engine`, `util
 | Package | Count | Role |
 | --- | --- | --- |
 | `playbook-runtime` | one | Steps, permissions, stop, evidence. No OS calls of its own. |
-| `playbook-kr-cert` | later, one of many | Korean certificate content (scenario + fixtures). Not this slice. |
+| `playbook-kr-cert` | one of many | Korean certificate content (scenario + fixtures). Lives in `packages/playbook-kr-cert`. |
 | `adapter-windows` | one OS | Windows click / type / read-screen / focus. Lives in `packages/adapter-windows`. |
 
 This package is `playbook-runtime` only. It ships `OsAdapter` and a `DummyAdapter` so the contract can be tested without Windows UI Automation or hub login.
@@ -22,7 +22,7 @@ Ppomi onboarding and playbook packages have **no device-approval or Mac-approver
 
 - Control steps (`focus`, `click`, `type`) need `ui.control`. `read` needs `ui.read`. These are UI step permissions, not device approval.
 - Before a mutation, `playbook-runtime` reads the screen and checks declared screen/target/focus preconditions.
-- Permission denial or a failed precondition **stops the run**. Later steps are not sent to the adapter.
+- Permission denial, a failed precondition, or a submit/payment-like target (`protected_action`) **stops the run**. Later steps are not sent to the adapter.
 - Evidence records each attempted step and its outcome. `completed` means declared steps finished. It is not a business-result claim and does not write a journal.
 
 ```ts

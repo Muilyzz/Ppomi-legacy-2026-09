@@ -18,7 +18,7 @@ Live UI Automation stays in `executors/windows`. This package talks to that tool
 ## Out of scope
 
 - Device-approval / Mac-approver / hub login (`beginSignIn`, `completeSignIn`, `configureDevice`, …)
-- `playbook-kr-cert` content
+- Live `playbook-kr-cert` issuance (content + fixtures live in that package)
 - A second `playbook-runtime`
 - Package titles `core`, `common`, `engine`, `util`, `shared`, `adapter`, or `runtime`
 
