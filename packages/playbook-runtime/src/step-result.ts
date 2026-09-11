@@ -54,9 +54,8 @@ export interface Evidence {
 export interface StepResult {
   readonly stepId: string;
   readonly playbookId: string;
+  /** `adapter` is accepted as a deprecated input alias by `parseStepResult`; rows carry `driver` only. */
   readonly driver: StepDriver;
-  /** @deprecated Read `driver`. Present as a non-enumerable mirror so older call sites keep working; never serialized. */
-  readonly adapter?: StepDriver;
   readonly action: StepAction;
   readonly status: StepResultStatus;
   readonly attempt: StepAttempt;
@@ -84,12 +83,6 @@ const TARGET_KEYS = ["kind", "locator", "url", "name", "role"] as const;
 const MAX_SUMMARY_LENGTH = 2048;
 const SUMMARY_MARKER = " …[truncated]";
 
-/** Attach the deprecated `adapter` mirror without making it enumerable: `JSON.stringify` and `deepEqual` see `driver` only. */
-export function withDeprecatedAdapter(result: StepResult): StepResult {
-  Object.defineProperty(result, "adapter", { value: result.driver, enumerable: false, writable: false, configurable: true });
-  return result;
-}
-
 export function parseStepResult(value: unknown): StepResult {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new StepResultError("StepResult must be an object");
@@ -109,10 +102,8 @@ export function parseStepResult(value: unknown): StepResult {
   const withCode = "code" in row && row.code !== undefined
     ? { ...result, code: requireNonEmptyString(row.code, "code") }
     : result;
-  const withEvidence = !("evidence" in row) || row.evidence === undefined
-    ? withCode
-    : { ...withCode, evidence: parseEvidence(row.evidence) };
-  return withDeprecatedAdapter(withEvidence);
+  if (!("evidence" in row) || row.evidence === undefined) return withCode;
+  return { ...withCode, evidence: parseEvidence(row.evidence) };
 }
 
 export function parseStepResults(value: unknown): StepResult[] {

@@ -2,7 +2,6 @@ import { isDriverTimeout } from "./adapter-timeout.ts";
 import type { PageStepKind, StepKind, StepOutcome } from "./playbook.ts";
 import { redactText } from "./public-url.ts";
 import type { StepAttempt, StepDriver, StepResult, StepResultStatus, StepTarget } from "./step-result.ts";
-import { withDeprecatedAdapter } from "./step-result.ts";
 
 /**
  * The mapping from what the runtime observed to the model-facing `StepResult`.
@@ -132,7 +131,7 @@ export function stepResultRow(input: {
   readonly summary: string;
   readonly timingMs: number;
 }): StepResult {
-  const row: StepResult = {
+  return {
     stepId: input.stepId,
     playbookId: input.playbookId,
     driver: input.driver,
@@ -144,7 +143,6 @@ export function stepResultRow(input: {
     observation: { summary: input.summary },
     timingMs: Math.max(0, input.timingMs),
   };
-  return withDeprecatedAdapter(row);
 }
 
 /** Steps after a stop: recorded, never sent to the driver. */

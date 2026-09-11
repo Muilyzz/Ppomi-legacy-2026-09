@@ -52,7 +52,6 @@ export type {
   StepKind,
   StepOutcome,
   StepRequirement,
-  SurfaceKind,
 } from "./playbook.ts";
 export type {
   PagePlaybook,

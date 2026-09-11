@@ -13,8 +13,6 @@ export type MaybePromise<T> = T | Promise<T>;
  */
 export type StepEffect = "navigate" | "input" | "commit";
 
-export type SurfaceKind = "os" | "page";
-
 export type StepKind = "focus" | "click" | "type" | "read";
 
 /** In-page steps for `BrowserPageAdapter`. Not OS screen-text `click` / `type`. */

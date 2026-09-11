@@ -67,7 +67,7 @@ test("happy path runs goto, waitFor, click, fill, and read against the dummy pag
     url: "https://example.test/form",
   });
   assert.deepEqual(result.stepResults[2]?.target, { kind: "locator", locator: "#next" });
-  assert.equal(result.stepResults[0]?.adapter, "page");
+  assert.equal(result.stepResults[0]?.driver, "page");
   assert.equal(result.stepResults[0]?.playbookId, "fixture-page-happy");
   assert.deepEqual(parseStepResultsJson(dumpStepResults(result.stepResults)), result.stepResults);
   assert.deepEqual(adapter.calls, [
@@ -332,7 +332,7 @@ function assertStepResults(
     assert.equal(actual?.attempt, row.attempt);
     assert.equal(actual?.observation.summary, row.summary);
     assert.deepEqual(actual?.target, row.target);
-    assert.equal(actual?.adapter, "page");
+    assert.equal(actual?.driver, "page");
     assert.equal(typeof actual?.timingMs, "number");
     assert.equal(actual!.timingMs >= 0, true);
     if (row.attempt === "not_executed") assert.equal(actual?.timingMs, 0);

@@ -20,7 +20,6 @@ import type {
   StepEffect,
   StepEvidence,
   StepKind,
-  SurfaceKind,
 } from "./playbook.ts";
 import type { StepDriver, StepResult, StepTarget } from "./step-result.ts";
 
@@ -59,7 +58,6 @@ export type Resolution<Ref> =
  * or async; `Runtime.run` awaits them and `Runtime.runSync` requires them to be sync.
  */
 export interface UiDriver<Snap, Ref, Step extends RuntimeStep> {
-  readonly surface: SurfaceKind;
   /** Which driver family this is, copied onto every `StepResult`; `undefined` when the port did not say. */
   readonly driver: StepDriver | undefined;
   read(): MaybePromise<Snap>;

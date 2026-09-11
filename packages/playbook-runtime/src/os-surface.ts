@@ -13,7 +13,6 @@ export type OsRef =
 
 /** The OS screen as a `UiDriver`: screen-text targets over one `OsUiDriver` port. */
 export class OsSurface implements UiDriver<ScreenSnapshot, OsRef, PlaybookStep> {
-  readonly surface = "os" as const;
   readonly driver: StepDriver | undefined;
   private readonly os: OsUiDriver;
 

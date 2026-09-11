@@ -188,12 +188,11 @@ test("missing required fields, bad enums, and invalid JSON fail closed", () => {
   assert.throws(() => parseStepResultsJson("{}"), StepResultError);
 });
 
-test("adapter is accepted as a deprecated input alias and normalized to driver; the mirror is never serialized", () => {
+test("adapter is accepted as a deprecated input alias and normalized to driver; rows carry driver only", () => {
   const { driver: _driver, ...withoutDriver } = pageOk;
   const parsed = parseStepResult({ ...withoutDriver, adapter: "os-android" });
   assert.equal(parsed.driver, "os-android");
-  assert.equal(parsed.adapter, "os-android");
-  assert.deepEqual(Object.keys(parsed).includes("adapter"), false);
+  assert.equal("adapter" in parsed, false);
   assert.doesNotMatch(dumpStepResults([parsed]), /"adapter"/);
   assert.throws(() => parseStepResult({ ...withoutDriver }), StepResultError);
 });

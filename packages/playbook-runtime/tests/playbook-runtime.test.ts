@@ -52,7 +52,7 @@ test("happy path runs focus, click, type, and read against the dummy adapter", (
   ]);
   assert.deepEqual(result.stepResults.map(row => row.action), ["focus", "click", "type", "read"]);
   assert.deepEqual(result.stepResults[0]?.target, { kind: "accessibility", name: "Demo App" });
-  assert.equal(result.stepResults[0]?.adapter, "os-windows");
+  assert.equal(result.stepResults[0]?.driver, "os-windows");
   assert.equal(result.stepResults[0]?.playbookId, "fixture-happy");
   assert.deepEqual(parseStepResultsJson(dumpStepResults(result.stepResults)), result.stepResults);
   assert.deepEqual(adapter.calls, [
@@ -155,7 +155,7 @@ test("step permissions are ui.read and ui.control only; a run has no device-appr
   assert.equal("approved" in result, false);
   assert.match(JSON.stringify(result), /"outcome":"ok"/);
   assert.doesNotMatch(JSON.stringify(result), /approv/i);
-  assert.equal(result.stepResults[0]?.adapter, "os-windows");
+  assert.equal(result.stepResults[0]?.driver, "os-windows");
 });
 
 test("missing target stops without a mutation", () => {
@@ -180,6 +180,7 @@ test("missing target stops without a mutation", () => {
   assert.equal(result.stepResults[1]?.attempt, "not_executed");
 });
 
+// Differs from #18: rows carry `driver` (the #22 name); `adapter` is only an input alias of the parser.
 test("injected OsAdapter.kind is copied onto each StepResult", () => {
   const adapter = new DummyAdapter(screen, "os-macos");
   const runtime = new PlaybookRuntime(
@@ -192,7 +193,7 @@ test("injected OsAdapter.kind is copied onto each StepResult", () => {
   });
 
   assert.equal(result.status, "completed");
-  assert.equal(result.stepResults[0]?.adapter, "os-macos");
+  assert.equal(result.stepResults[0]?.driver, "os-macos");
   assert.equal(adapter.kind, "os-macos");
 });
 
@@ -268,7 +269,7 @@ class TimeoutClickAdapter implements OsAdapter {
 
 function assertOsStepResults(
   rows: readonly StepResult[],
-  adapter: StepResult["adapter"],
+  driver: StepResult["driver"],
   expected: readonly {
     stepId: string;
     status: StepResult["status"];
@@ -285,7 +286,7 @@ function assertOsStepResults(
     assert.equal(actual?.attempt, row.attempt);
     assert.equal(actual?.observation.summary, row.summary);
     assert.deepEqual(actual?.target, row.target);
-    assert.equal(actual?.adapter, adapter);
+    assert.equal(actual?.driver, driver);
     assert.equal(typeof actual?.timingMs, "number");
     assert.equal(actual!.timingMs >= 0, true);
     if (row.attempt === "not_executed") assert.equal(actual?.timingMs, 0);

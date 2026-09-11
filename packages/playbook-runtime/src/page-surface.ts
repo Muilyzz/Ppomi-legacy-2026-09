@@ -16,7 +16,6 @@ export type PageRef =
 
 /** A web page as a `UiDriver`: locator targets over one `BrowserPageDriver` port. */
 export class PageSurface implements UiDriver<PageSnapshot, PageRef, PagePlaybookStep> {
-  readonly surface = "page" as const;
   readonly driver = "page" as const;
   private readonly page: BrowserPageDriver;
   private readonly allowedOrigins: readonly string[] | undefined;
