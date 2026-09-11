@@ -15,7 +15,7 @@ test("projectTurn keeps visible text and tool names and drops tool payloads", ()
     id: "11111111-1111-4111-8111-111111111111",
     role: "assistant",
     parts: [
-      { type: "text", text: "잔액은 62,000원입니다. Bearer [redacted]" },
+      { type: "text", text: "잔액은 62,000원입니다. [redacted]" },
       { type: "reasoning", text: "계산 중" },
       { type: "tool", name: "screen_read", state: "output-available" },
     ],

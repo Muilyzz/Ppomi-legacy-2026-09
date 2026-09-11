@@ -60,8 +60,9 @@ export function turnToMessage(turn: TranscriptTurn): UIMessage {
         type: "dynamic-tool" as const,
         toolCallId: `${turn.id}-${part.name}-${index}`,
         toolName: part.name,
-        state: part.state === "output-error" ? "output-error" as const : "output-available" as const,
+        state: "output-available" as const,
         input: {},
+        output: undefined,
       };
     }),
   };
