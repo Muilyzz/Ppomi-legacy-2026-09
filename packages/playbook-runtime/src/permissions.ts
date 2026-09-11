@@ -1,4 +1,4 @@
-import type { Permission, StepKind } from "./playbook.ts";
+import type { PageStepKind, Permission, StepKind } from "./playbook.ts";
 
 export interface PermissionGate {
   allows(permission: Permission): boolean;
@@ -23,6 +23,22 @@ export function defaultPermission(kind: StepKind): Permission {
     case "focus":
     case "click":
     case "type":
+      return "ui.control";
+    default: {
+      const exhaustive: never = kind;
+      return exhaustive;
+    }
+  }
+}
+
+export function defaultPagePermission(kind: PageStepKind): Permission {
+  switch (kind) {
+    case "read":
+    case "waitFor":
+      return "ui.read";
+    case "goto":
+    case "click":
+    case "fill":
       return "ui.control";
     default: {
       const exhaustive: never = kind;
