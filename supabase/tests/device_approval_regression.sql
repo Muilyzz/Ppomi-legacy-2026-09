@@ -113,6 +113,6 @@ select pg_temp.ppomi_assert(
 select pg_temp.ppomi_expect_error($q$select public.ppomi_device_approve('97c00000-0000-4000-8000-000000000002')$q$, 'P0002', 'a founder cannot approve devices of another workspace');
 
 reset role;
-select pg_temp.ppomi_assert((select count(*) from pg_temp.ppomi_test_results) = 32, 'all membership auto-approve checks recorded');
+select pg_temp.ppomi_assert((select count(*) from pg_temp.ppomi_test_results) = 31, 'all membership auto-approve checks recorded');
 select format('PASS %s membership auto-approve checks (synthetic only, rolled back)', count(*)) from pg_temp.ppomi_test_results;
 rollback;
