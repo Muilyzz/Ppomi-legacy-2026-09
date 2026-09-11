@@ -21,6 +21,9 @@ dist/
 *.icns
 *.iconset/
 hub/node_modules/
+web/node_modules/
+web/.next/
+web/*.tsbuildinfo
 # Generated from Ppomi/Sources/Ppomi/Catalog; deployment runs scripts/sync-catalog.mjs.
 hub/catalog/
 hub/.catalog-staging-*/
@@ -34,6 +37,7 @@ data/chats/
 .venv/
 node_modules/
 hub/.env.local
+web/.env.local
 .env.local
 # real-ledger parity oracles (owner-only; tests XCTSkip without them)
 Ppomi/Tests/PpomiTests/parse-parity.json
