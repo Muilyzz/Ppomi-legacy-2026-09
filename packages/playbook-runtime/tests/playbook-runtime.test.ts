@@ -21,12 +21,13 @@ const screen: ScreenSnapshot = {
   focused: null,
 };
 
+// Differs from #18: mutations declare their effect (focus has an implied navigate), as the core requires.
 const happy: Playbook = {
   id: "fixture-happy",
   steps: [
     { id: "focus-app", kind: "focus", target: "Demo App" },
-    { id: "open-next", kind: "click", target: "Next" },
-    { id: "fill-name", kind: "type", target: "Name", text: "fixture" },
+    { id: "open-next", kind: "click", target: "Next", effect: "navigate" },
+    { id: "fill-name", kind: "type", target: "Name", text: "fixture", effect: "input" },
     { id: "confirm-screen", kind: "read", require: { screen: ["Demo App", "Next"] } },
   ],
 };
@@ -71,8 +72,8 @@ test("permission denied stops before any adapter call", () => {
   const result = runtime.run({
     id: "fixture-denied",
     steps: [
-      { id: "open-next", kind: "click", target: "Next" },
-      { id: "fill-name", kind: "type", target: "Name", text: "fixture" },
+      { id: "open-next", kind: "click", target: "Next", effect: "navigate" },
+      { id: "fill-name", kind: "type", target: "Name", text: "fixture", effect: "input" },
     ],
   });
 
@@ -115,8 +116,8 @@ test("missing screen text stops without a mutation", () => {
   const result = runtime.run({
     id: "fixture-screen",
     steps: [
-      { id: "need-receipt", kind: "click", target: "Next", require: { screen: ["Receipt"] } },
-      { id: "fill-name", kind: "type", target: "Name", text: "fixture" },
+      { id: "need-receipt", kind: "click", target: "Next", effect: "navigate", require: { screen: ["Receipt"] } },
+      { id: "fill-name", kind: "type", target: "Name", text: "fixture", effect: "input" },
     ],
   });
 
@@ -145,7 +146,7 @@ test("step permissions are ui.read and ui.control only; a run has no device-appr
   );
   const result = runtime.run({
     id: "fixture-no-device-gate",
-    steps: [{ id: "open-next", kind: "click", target: "Next" }],
+    steps: [{ id: "open-next", kind: "click", target: "Next", effect: "navigate" }],
   });
 
   assert.equal(result.status, "completed");
@@ -166,8 +167,8 @@ test("missing target stops without a mutation", () => {
   const result = runtime.run({
     id: "fixture-target",
     steps: [
-      { id: "submit", kind: "click", target: "Submit" },
-      { id: "fill-name", kind: "type", target: "Name", text: "fixture" },
+      { id: "submit", kind: "click", target: "Submit", effect: "navigate" },
+      { id: "fill-name", kind: "type", target: "Name", text: "fixture", effect: "input" },
     ],
   });
 
@@ -207,8 +208,8 @@ test("OS click timeout is attempt timeout, later click is not_executed", () => {
   const result = runtime.run({
     id: "fixture-hybrid",
     steps: [
-      { id: "wait-cert", kind: "click", target: "인증서" },
-      { id: "sign", kind: "click", target: "Next" },
+      { id: "wait-cert", kind: "click", target: "인증서", effect: "navigate" },
+      { id: "sign", kind: "click", target: "Next", effect: "commit" },
     ],
   });
 

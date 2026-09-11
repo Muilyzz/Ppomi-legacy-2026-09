@@ -24,13 +24,14 @@ const page: PageSnapshot = {
 
 const happy: PagePlaybook = {
   id: "fixture-page-happy",
-  // Differs from #18: goto requires the playbook to declare where it may navigate.
+  // Differs from #18: goto requires the playbook to declare where it may navigate,
+  // and mutations declare their effect, as the core requires.
   allowedOrigins: ["https://example.test"],
   steps: [
-    { id: "open-form", kind: "goto", url: "https://example.test/form" },
+    { id: "open-form", kind: "goto", url: "https://example.test/form", effect: "navigate" },
     { id: "wait-next", kind: "waitFor", locator: "#next" },
-    { id: "open-next", kind: "click", locator: "#next" },
-    { id: "fill-name", kind: "fill", locator: "#name", text: "fixture" },
+    { id: "open-next", kind: "click", locator: "#next", effect: "navigate" },
+    { id: "fill-name", kind: "fill", locator: "#name", text: "fixture", effect: "input" },
     { id: "confirm-page", kind: "read", require: { texts: ["Demo Page", "Next"] } },
   ],
 };
@@ -88,8 +89,8 @@ test("page permission denied stops before any adapter call", () => {
   const result = runtime.run({
     id: "fixture-page-denied",
     steps: [
-      { id: "open-next", kind: "click", locator: "#next" },
-      { id: "fill-name", kind: "fill", locator: "#name", text: "fixture" },
+      { id: "open-next", kind: "click", locator: "#next", effect: "navigate" },
+      { id: "fill-name", kind: "fill", locator: "#name", text: "fixture", effect: "input" },
     ],
   });
 
@@ -132,8 +133,8 @@ test("missing page text stops without a mutation", () => {
   const result = runtime.run({
     id: "fixture-page-texts",
     steps: [
-      { id: "need-receipt", kind: "click", locator: "#next", require: { texts: ["Receipt"] } },
-      { id: "fill-name", kind: "fill", locator: "#name", text: "fixture" },
+      { id: "need-receipt", kind: "click", locator: "#next", effect: "navigate", require: { texts: ["Receipt"] } },
+      { id: "fill-name", kind: "fill", locator: "#name", text: "fixture", effect: "input" },
     ],
   });
 
@@ -156,8 +157,8 @@ test("missing click locator stops without a mutation", () => {
   const result = runtime.run({
     id: "fixture-page-locator",
     steps: [
-      { id: "submit", kind: "click", locator: "#submit" },
-      { id: "fill-name", kind: "fill", locator: "#name", text: "fixture" },
+      { id: "submit", kind: "click", locator: "#submit", effect: "navigate" },
+      { id: "fill-name", kind: "fill", locator: "#name", text: "fixture", effect: "input" },
     ],
   });
 
@@ -186,7 +187,7 @@ test("page step permissions are ui.read and ui.control only; a run has no device
   );
   const result = runtime.run({
     id: "fixture-page-no-device-gate",
-    steps: [{ id: "open-next", kind: "click", locator: "#next" }],
+    steps: [{ id: "open-next", kind: "click", locator: "#next", effect: "navigate" }],
   });
 
   assert.equal(result.status, "completed");
@@ -209,7 +210,7 @@ test("waitFor timeout is attempt timeout, not not_executed", () => {
     id: "fixture-page-timeout",
     steps: [
       { id: "wait-cert", kind: "waitFor", locator: "#cert" },
-      { id: "sign", kind: "click", locator: "#next" },
+      { id: "sign", kind: "click", locator: "#next", effect: "commit" },
     ],
   });
 

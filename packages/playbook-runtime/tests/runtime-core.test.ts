@@ -139,9 +139,8 @@ test("ui.control alone is refused: every step needs ui.read to observe the surfa
   assert.deepEqual(adapter.calls, []);
 });
 
-test("Runtime hands off a mutation without a declared effect before any adapter call", async () => {
+test("a mutation without a declared effect is handed off before any driver call; focus has an implied navigate", async () => {
   for (const step of [
-    { id: "focus", kind: "focus" as const, target: "Demo App" },
     { id: "click", kind: "click" as const, target: "Next" },
     { id: "type", kind: "type" as const, target: "Name", text: "fixture" },
   ]) {
@@ -152,23 +151,27 @@ test("Runtime hands off a mutation without a declared effect before any adapter 
     });
     assert.equal(result.stopReason, "handoff", step.id);
     assert.deepEqual(result.evidence.map(row => [row.stepId, row.outcome]), [[step.id, "handoff"]]);
-    assert.deepEqual(result.stepResults.map(row => [row.stepId, row.status, row.attempt]), [
-      [step.id, "needs_human", "not_executed"],
-      ["later", "failed", "not_executed"],
+    assert.deepEqual(result.stepResults.map(row => [row.stepId, row.status, row.attempt, row.code]), [
+      [step.id, "needs_human", "not_executed", "no_effect"],
+      ["later", "failed", "not_executed", "not_executed"],
     ]);
     assert.deepEqual(adapter.calls, [{ kind: "read" }], step.id);
+    assert.equal("legacy" in result, false);
+
+    // The deprecated wrappers apply the same closed default.
+    const wrapped = new DummyAdapter(screen);
+    const wrappedResult = new PlaybookRuntime(wrapped, all).run({ id: "undeclared-wrapper", steps: [step] });
+    assert.equal(wrappedResult.stopReason, "handoff", step.id);
+    assert.deepEqual(wrapped.calls, [{ kind: "read" }]);
   }
+
+  const focus = new DummyAdapter(screen);
+  const focused = await new Runtime(new OsSurface(focus), all).run({ id: "focus", steps: [{ id: "app", kind: "focus", target: "Demo App" }] });
+  assert.equal(focused.status, "completed");
+  assert.equal(new PlaybookRuntime(new DummyAdapter(screen), new FixedPermissionGate(["ui.read"])).run({ id: "focus-perm", steps: [{ id: "app", kind: "focus", target: "Demo App" }] }).stopReason, "permission_denied");
 });
 
-test("the deprecated wrappers run undeclared mutations (legacy) but still hand off a declared commit", () => {
-  const legacy = new DummyAdapter(screen);
-  const legacyResult = new PlaybookRuntime(legacy, all).run({
-    id: "legacy",
-    steps: [{ id: "n", kind: "click", target: "Next" }],
-  });
-  assert.equal(legacyResult.status, "completed");
-  assert.deepEqual(legacy.calls.at(-1), { kind: "click", target: "Next" });
-
+test("a declared commit is handed off even with every permission; nothing auto-commits", () => {
   const adapter = new DummyAdapter(screen);
   const result = new PlaybookRuntime(adapter, all).run({
     id: "commit",
@@ -194,6 +197,34 @@ test("the deprecated wrappers run undeclared mutations (legacy) but still hand o
   assert.equal(pageResult.stopReason, "handoff");
   assert.equal(pageResult.stepResults[0]?.status, "needs_human");
   assert.deepEqual(web.calls, [{ kind: "read" }]);
+});
+
+test("the wrappers' legacy opt-in runs undeclared mutations loudly; Runtime refuses the option", async () => {
+  const adapter = new DummyAdapter(screen);
+  const result = new PlaybookRuntime(adapter, all, { legacy: { runUndeclaredMutations: true } }).run({
+    id: "legacy",
+    steps: [
+      { id: "n", kind: "click", target: "Next" },
+      { id: "declared", kind: "type", target: "Name", text: "x", effect: "input" },
+      { id: "pay", kind: "click", target: "결제하기", effect: "commit" },
+    ],
+  });
+  assert.equal(result.legacy, true);
+  assert.equal(result.stopReason, "handoff");
+  assert.deepEqual(result.stepResults.map(row => [row.stepId, row.status, row.code]), [
+    ["n", "ok", "undeclared_effect"],
+    ["declared", "ok", undefined],
+    ["pay", "needs_human", "commit"],
+  ]);
+  assert.match(result.evidence[0]?.note ?? "", /legacy mode: executed without a declared effect/);
+  assert.match(result.stepResults[0]?.observation.summary ?? "", /legacy mode/);
+  assert.deepEqual(adapter.calls.filter(call => call.kind === "click"), [{ kind: "click", target: "Next" }]);
+
+  const refused = await new Runtime(new OsSurface(new DummyAdapter(screen)), all, { legacy: { runUndeclaredMutations: true } } as never).run({
+    id: "core-legacy",
+    steps: [{ id: "n", kind: "click", target: "Next" }],
+  });
+  assert.deepEqual([refused.status, refused.invalid?.code], ["invalid", "legacy_not_allowed"]);
 });
 
 test("an adapter throw during act keeps earlier evidence and its executor code decides the status", () => {
@@ -434,7 +465,7 @@ test("Runtime with a PageSurface reports adapter page and one StepResult per dec
     id: "direct-page",
     steps: [
       { id: "r", kind: "read", require: { texts: ["Checkout"] } },
-      { id: "pay", kind: "click", locator: "#pay" },
+      { id: "pay", kind: "click", locator: "#pay", effect: "commit" },
       { id: "never", kind: "read" },
     ],
   });

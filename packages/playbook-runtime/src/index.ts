@@ -28,6 +28,7 @@ export {
   Runtime,
   requiredPermissions,
   validatePlaybook,
+  type LegacyOptions,
   type Resolution,
   type RuntimeOptions,
   type RuntimePlaybook,

@@ -32,7 +32,13 @@ export type StepOutcome =
 export type RunStatus = "completed" | "stopped" | "invalid";
 
 export interface RunInvalid {
-  readonly code: "empty_playbook_id" | "empty_step_id" | "duplicate_step_id" | "unknown_driver" | "wait_requires_run";
+  readonly code:
+    | "empty_playbook_id"
+    | "empty_step_id"
+    | "duplicate_step_id"
+    | "unknown_driver"
+    | "wait_requires_run"
+    | "legacy_not_allowed";
   readonly detail: string;
 }
 
@@ -76,4 +82,6 @@ export interface RunResult {
   readonly stepResults: readonly StepResult[];
   /** Set only when `status` is `invalid`. */
   readonly invalid?: RunInvalid;
+  /** Set when a deprecated wrapper ran with `legacy.runUndeclaredMutations`; such a dump is never a declared-effect run. */
+  readonly legacy?: true;
 }

@@ -37,8 +37,9 @@ export class OsSurface implements UiDriver<ScreenSnapshot, OsRef, PlaybookStep> 
       : { kind: "none" };
   }
 
+  /** `focus` only foregrounds an app: it needs `ui.control` but has an implied `navigate` effect and is never gated. */
   classify(step: PlaybookStep): StepClass {
-    return { permission: defaultPermission(step.kind), mutation: step.kind !== "read" };
+    return { permission: defaultPermission(step.kind), mutation: step.kind === "click" || step.kind === "type" };
   }
 
   resolve(snap: ScreenSnapshot, step: PlaybookStep): Resolution<OsRef> {

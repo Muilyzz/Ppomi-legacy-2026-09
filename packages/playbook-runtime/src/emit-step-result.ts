@@ -30,7 +30,8 @@ export type RuntimeCode =
   | "locator_not_on_page"
   | "url_required"
   | "origins_required"
-  | "navigation_refused";
+  | "navigation_refused"
+  | "undeclared_effect";
 
 export interface Decision {
   readonly outcome: StepOutcome;
@@ -45,6 +46,15 @@ export interface Decision {
 const MUTATING_ACTIONS: ReadonlySet<StepKind | PageStepKind> = new Set(["click", "fill", "type"]);
 
 export const DONE: Decision = { outcome: "ok", status: "ok", attempt: "executed", code: null, note: "step finished" };
+
+/** A wrapper in legacy mode executed a mutation that declared no effect. Loud on purpose; never emitted by `Runtime.run`. */
+export const LEGACY_DONE: Decision = {
+  outcome: "ok",
+  status: "ok",
+  attempt: "executed",
+  code: "undeclared_effect",
+  note: "legacy mode: executed without a declared effect (wrapper option legacy.runUndeclaredMutations)",
+};
 
 /** A plain permission stop is a failed step, not a protected control. */
 export function refused(note: string): Decision {

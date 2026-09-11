@@ -1,5 +1,6 @@
 import {
   DONE,
+  LEGACY_DONE,
   driverFailed,
   handoff,
   notExecutedRest,
@@ -71,13 +72,17 @@ export interface UiDriver<Snap, Ref, Step extends RuntimeStep> {
   act(step: Step, ref: Ref): MaybePromise<void>;
 }
 
+/**
+ * Wrapper-only escape hatch: execute mutations that declare no `effect`, as the
+ * pre-core runners did. Every such row carries `code: "undeclared_effect"` and the
+ * result carries `legacy: true`. `Runtime.run` refuses it; it is deleted together
+ * with the wrappers in the driver-* port slice.
+ */
+export interface LegacyOptions {
+  readonly runUndeclaredMutations: true;
+}
+
 export interface RuntimeOptions {
-  /**
-   * `handoff` (default): a mutation without a declared effect is a `commit` and stops the run.
-   * `run`: legacy behaviour for the deprecated wrappers only — undeclared mutations execute.
-   * A declared `commit` is handed off in both modes.
-   */
-  readonly undeclaredMutations?: "handoff" | "run";
   /** Fallback `StepResult.driver` when the port does not declare its kind. */
   readonly driver?: StepDriver;
   readonly pollIntervalMs?: number;
@@ -134,7 +139,7 @@ type Effect<Ref, Step> =
 export class Runtime<Snap, Ref, Step extends RuntimeStep> {
   private readonly driver: UiDriver<Snap, Ref, Step>;
   private readonly permissions: PermissionGate;
-  private readonly undeclaredMutations: "handoff" | "run";
+  private readonly refusedLegacyOption: boolean;
   private readonly driverName: StepDriver | undefined;
   private readonly pollIntervalMs: number;
   private readonly maxEvidenceTexts: number;
@@ -146,7 +151,7 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
   constructor(driver: UiDriver<Snap, Ref, Step>, permissions: PermissionGate, options: RuntimeOptions = {}) {
     this.driver = driver;
     this.permissions = permissions;
-    this.undeclaredMutations = options.undeclaredMutations ?? "handoff";
+    this.refusedLegacyOption = "legacy" in options;
     this.driverName = driver.driver ?? options.driver;
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULTS.pollIntervalMs;
     this.maxEvidenceTexts = options.maxEvidenceTexts ?? DEFAULTS.maxEvidenceTexts;
@@ -156,9 +161,10 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
     this.now = options.now ?? (() => Date.now());
   }
 
-  /** Async driver loop: awaits every driver call. Use this for real drivers. */
+  /** Async driver loop: awaits every driver call. Use this for real drivers. Undeclared mutations always hand off. */
   async run(playbook: RuntimePlaybook<Step>): Promise<RunResult> {
-    const loop = this.loop(playbook);
+    if (this.refusedLegacyOption) return invalidResult({ code: "legacy_not_allowed", detail: "legacy options belong to the deprecated wrappers, not Runtime" });
+    const loop = this.loop(playbook, undefined);
     let next = loop.next();
     while (!next.done) {
       const effect = next.value;
@@ -181,17 +187,14 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
    * (`wait_requires_run`); a driver that returns a Promise is a programming
    * error and throws `TypeError` — use `Runtime.run` for both.
    */
-  runSync(playbook: RuntimePlaybook<Step>): RunResult {
+  runSync(playbook: RuntimePlaybook<Step>, legacy?: LegacyOptions): RunResult {
     if (playbook.steps.some(step => (step.require?.wait ?? 0) > 0)) {
-      return {
-        status: "invalid",
-        stopReason: null,
-        evidence: [],
-        stepResults: [],
-        invalid: { code: "wait_requires_run", detail: "require.wait polls the driver; use Runtime.run, the synchronous wrappers cannot sleep" },
-      };
+      return invalidResult(
+        { code: "wait_requires_run", detail: "require.wait polls the driver; use Runtime.run, the synchronous wrappers cannot sleep" },
+        legacy,
+      );
     }
-    const loop = this.loop(playbook);
+    const loop = this.loop(playbook, legacy);
     let next = loop.next();
     while (!next.done) {
       const effect = next.value;
@@ -227,15 +230,16 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
   }
 
   /** The single loop. Effects are yielded to a driver loop; adapter errors come back through `throw`. */
-  private *loop(playbook: RuntimePlaybook<Step>): Generator<Effect<Ref, Step>, RunResult, unknown> {
+  private *loop(playbook: RuntimePlaybook<Step>, legacy: LegacyOptions | undefined): Generator<Effect<Ref, Step>, RunResult, unknown> {
     const driverName = this.driverName;
     const invalid = validatePlaybook(playbook)
       ?? (driverName === undefined
         ? { code: "unknown_driver" as const, detail: "the driver declares no kind and RuntimeOptions.driver is not set" }
         : null);
     if (invalid !== null || driverName === undefined) {
-      return { status: "invalid", stopReason: null, evidence: [], stepResults: [], invalid: invalid ?? { code: "unknown_driver", detail: "" } };
+      return invalidResult(invalid ?? { code: "unknown_driver", detail: "" }, legacy);
     }
+    const runUndeclared = legacy?.runUndeclaredMutations === true;
 
     const evidence: StepEvidence[] = [];
     const stepResults: StepResult[] = [];
@@ -246,6 +250,7 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
       stepResults: stepResults.concat(
         notExecutedRest(playbook.id, driverName, playbook.steps, stoppedAt, step => this.driver.target(step)),
       ),
+      ...(runUndeclared ? { legacy: true as const } : {}),
     });
 
     for (const [index, step] of playbook.steps.entries()) {
@@ -279,10 +284,9 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
         return stop([], driverFailed(error, "read", step.kind), this.now() - startedAt);
       }
 
-      if (cls.mutation) {
-        const effect = step.effect ?? "commit";
-        const gated = step.effect !== undefined || this.undeclaredMutations === "handoff";
-        if (effect === "commit" && gated) return stop(this.driver.observed(snap), handoff(step.effect === undefined), 0);
+      const undeclared = cls.mutation && step.effect === undefined;
+      if (cls.mutation && (step.effect === "commit" || (undeclared && !runUndeclared))) {
+        return stop(this.driver.observed(snap), handoff(undeclared), 0);
       }
 
       let resolution = this.driver.resolve(snap, step);
@@ -307,7 +311,7 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
       } catch (error) {
         return stop(this.driver.observed(snap), driverFailed(error, "act", step.kind), this.now() - actedAt);
       }
-      record(this.driver.observed(snap), DONE, this.now() - actedAt);
+      record(this.driver.observed(snap), undeclared ? LEGACY_DONE : DONE, this.now() - actedAt);
     }
     return finish("completed", null, playbook.steps.length);
   }
@@ -321,6 +325,17 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
       note: decision.note.slice(0, this.maxNoteLength),
     };
   }
+}
+
+function invalidResult(invalid: RunInvalid, legacy?: LegacyOptions): RunResult {
+  return {
+    status: "invalid",
+    stopReason: null,
+    evidence: [],
+    stepResults: [],
+    invalid,
+    ...(legacy?.runUndeclaredMutations === true ? { legacy: true as const } : {}),
+  };
 }
 
 function isThenable(value: unknown): boolean {

@@ -53,7 +53,7 @@ test("proposal 1: code travels as a structured field and survives the JSON round
 test("proposal 1: the runtime emits a code on every non-ok result and none on ok", () => {
   const denied = new PlaybookRuntime(new DummyAdapter(screen), new FixedPermissionGate(["ui.read"])).run({
     id: "codes",
-    steps: [{ id: "n", kind: "click", target: "Next" }, { id: "later", kind: "read" }],
+    steps: [{ id: "n", kind: "click", target: "Next", effect: "navigate" }, { id: "later", kind: "read" }],
   });
   assert.deepEqual(denied.stepResults.map(row => row.code), ["permission_denied", "not_executed"]);
 
