@@ -144,7 +144,7 @@ export function ChatPanel({ host, frame }: { host: ChatHost; frame?: ChatFrame }
     const epoch = actionEpoch.current;
     try {
       const b = await readiness.wait();
-      if (!b.configured || inCallRef.current || epoch !== actionEpoch.current) return;
+      if (!b.configured || b.voiceSupported === false || inCallRef.current || epoch !== actionEpoch.current) return;
       setError(""); clearIncoming();
       if (textStateRef.current !== "idle") await textController.current?.stop();
       const afterStop = actionEpoch.current;
@@ -284,6 +284,7 @@ export function ChatPanel({ host, frame }: { host: ChatHost; frame?: ChatFrame }
   const cards = questions ? inputCards.map((card) =>
     <QuestionCard key={card.id} card={card} requests={questions} onError={setError} />) : null;
   const android = boot?.platform === "android";
+  const canCall = boot?.voiceSupported !== false;   // a host without a call (web) hides 📞 instead of failing at the microphone
   // 단계 판정(verify_step)은 절차 카드의 진행으로 보인다.
   const outcomes: Record<string, StepOutcome> = {};
   for (const message of chat.messages) for (const tool of toolParts(message)) {
@@ -338,13 +339,13 @@ export function ChatPanel({ host, frame }: { host: ChatHost; frame?: ChatFrame }
   // 뼈대(ui/shell.tsx)에 서브트리를 주입한다. 상태와 브리지는 여기, DOM 모양은 뼈대, 스타일은 index.css(토큰 매핑)+style.css.
   const render = (slots?: ShellFrameSlots) => <Shell platform={boot?.platform} {...slots}
     error={error ? <ErrorBanner onClose={() => setError("")}>{error}</ErrorBanner>
-      : boot && !boot.configured ? <ErrorBanner>{boot.executor?.googleSignIn === true ? "Google 계정으로 로그인해 주세요." : "기기가 아직 연결되지 않았습니다."}</ErrorBanner>
+      : boot && !boot.configured ? <ErrorBanner>{boot.executor?.googleSignIn === true && boot.authentication?.signedIn !== true ? "Google 계정으로 로그인해 주세요." : "기기가 아직 연결되지 않았습니다."}</ErrorBanner>
       : boot && android && !boot.accessibility && <ErrorBanner>접근성 연결 필요 · 설정</ErrorBanner>}
     conversation={<Pane
       incoming={incoming !== null && !inCall && boot?.configured && <IncomingCall reason={incoming} onAccept={() => void startCall(incoming)} onLater={declineCall} />}
       log={<Log>
         {!call && entries.length === 0 && <Welcome disabled={waiting}
-          hint={android ? "앱 열기 · 화면 읽기 · 일 처리" : "절차 · 기억 · 할 일"}
+          hint={android ? "앱 열기 · 화면 읽기 · 일 처리" : boot?.platform === "web" ? "절차 · 할 일" : "절차 · 기억 · 할 일"}
           suggestions={[android ? "토스를 열고 현재 화면을 읽어 줘." : "사용할 수 있는 플레이북을 찾아서 알려 줘."]}
           onSuggest={(text) => void send(text).catch(() => {})} />}
         {call && <CallCard kind="start" time={clock(call.startedAt)} />}
@@ -360,7 +361,7 @@ export function ChatPanel({ host, frame }: { host: ChatHost; frame?: ChatFrame }
         : <>
           <Waiting items={queue} onRemove={(index) => setQueue((old) => old.filter((_, i) => i !== index))} />
           <Composer status={status} disabled={boot?.configured === false} onSend={send} onStop={() => void stopCurrent()}
-            onCall={() => void startCall()} callDisabled={settling} />
+            onCall={canCall ? () => void startCall() : undefined} callDisabled={settling} />
         </>}
     />} />;
   return frame ? frame({ boot, active: inCall || textState !== "idle", refresh: async () => {

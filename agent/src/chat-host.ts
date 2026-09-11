@@ -28,7 +28,7 @@ type NativeChatWindow = {
   removeEventListener(type: "pagehide" | "focus", listener: () => void): void;
 };
 
-type NativeChatDocument = {
+export type ChatHostDocument = {
   readonly visibilityState: string;
   readonly documentElement: {
     readonly style: Pick<CSSStyleDeclaration, "setProperty">;
@@ -38,19 +38,22 @@ type NativeChatDocument = {
   removeEventListener(type: "visibilitychange", listener: () => void): void;
 };
 
+/** Text size follows the host; the colour scheme changes only when the host names one (otherwise tokens.css follows the system). */
+export function applyBootstrapAppearance(document: Pick<ChatHostDocument, "documentElement">, b: Bootstrap) {
+  const scale = typeof b.uiScale === "number" && Number.isFinite(b.uiScale) ? Math.min(3, Math.max(0.75, b.uiScale)) : 1;
+  document.documentElement.style.setProperty("--ui-scale", String(scale));
+  if (typeof b.dark === "boolean") document.documentElement.dataset.theme = b.dark ? "dark" : "light";
+}
+
 /** One native document owns its bridge/readiness; the panel owns stopping its controllers. */
 export function createNativeChatHost({ bridge, window, document }: {
   bridge: NativeBridge;
   window: NativeChatWindow;
-  document: NativeChatDocument;
+  document: ChatHostDocument;
 }): ChatHost {
   const readiness = new BootstrapReadiness(() => bridge.call("updateReady", { bridgeVersion: 1 }, 5_000));
 
-  function applyBootstrap(b: Bootstrap) {
-    const scale = typeof b.uiScale === "number" && Number.isFinite(b.uiScale) ? Math.min(3, Math.max(0.75, b.uiScale)) : 1;
-    document.documentElement.style.setProperty("--ui-scale", String(scale));
-    if (typeof b.dark === "boolean") document.documentElement.dataset.theme = b.dark ? "dark" : "light";
-  }
+  const applyBootstrap = (b: Bootstrap) => applyBootstrapAppearance(document, b);
 
   function subscribe(events: ChatHostEvents) {
     const refresh = () => { if (document.visibilityState !== "hidden") events.refresh(); };

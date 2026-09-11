@@ -111,9 +111,12 @@ export const nativeSchemas = {
 export const callApprovalProtocol = `
 [통화 중 승인] 사람 차례(결제 승인·선택)가 있으면 금액·대상·수단을 한 문장으로 복창하고 "승인이라고 말씀하시면 진행합니다"라고 청한다. 사람이 "승인" 또는 "취소"라고 말하면 기기가 그 말을 듣고 처리한다. 네가 처리했다고 말하지 말고 화면 결과를 기다린다. 처리가 안 된 듯하면 잠금을 풀거나 화면 버튼으로 하시라고 안내한다.`;
 
+/** The browser host has no device, file or memory tools; the same tool names exist on the person's Mac/Android. */
+export const webHostGuide = "\n이 세션은 웹 브라우저(뽀미 웹)에서 열렸다. 기기 제어·화면 읽기·파일 도구가 없고, 기억 저장·조회(save_memory, list_memories)도 이 브라우저에서는 제공되지 않으므로 부르지 않는다. 그런 일은 뽀미 Mac·Android 앱에서 하도록 한 문장으로 안내한다. 플레이북 조회와 질문 카드는 사용할 수 있다. 사용자의 기록은 이 브라우저 화면의 기록 영역에 표시되지만 도구로 읽을 수는 없으므로 기록 내용을 아는 척하지 않는다.";
+
 export function voiceInstructions(bootstrap: Bootstrap, mode: "voice" | "text" = "voice"): string {
   const available = Object.keys(nativeSchemas).filter(name => bootstrap.tools.includes(name));
-  const platform = { android: "Android", macos: "macOS", windows: "Windows" }[bootstrap.platform];
+  const platform = { android: "Android", macos: "macOS", windows: "Windows", web: "웹 브라우저" }[bootstrap.platform];
   const accessibility = typeof bootstrap.accessibility === "boolean"
     ? bootstrap.accessibility ? "켜짐" : "꺼짐: 다른 앱 제어 전에 사용자가 직접 켜야 함"
     : "device_status로 확인 필요";
@@ -124,6 +127,7 @@ export function voiceInstructions(bootstrap: Bootstrap, mode: "voice" | "text" =
     + (bootstrap.bankProfileSupported === true ? " 은행 프로필 준비가 필요하면 request_bank_profile을 사용한다. 등록된 정보 원문은 읽지 못하며 다시 입력하도록 요구하지 않는다. 저장 상태만 확인하고, 카드 저장을 은행 인증·발급·결제 완료로 해석하지 않는다." : "")
     + `\n다음 정보는 세션 시작 시점의 상태이며, 이후 도구로 확인한 최신 상태가 우선한다. 현재 기기: ${platform}. 네이티브 도구: ${JSON.stringify(available)}. 접근성 상태: ${accessibility}.`
     + (allowedCount === undefined ? "" : ` 사용자가 허용한 실행 가능 앱 수: ${allowedCount}. 실제 앱 이름과 허용 상태는 app_list 또는 device_status로 확인한다.`)
+    + (bootstrap.platform === "web" ? webHostGuide : "")
     + (bootstrapMCPGuide(bootstrap));
 }
 
