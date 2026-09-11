@@ -20,6 +20,21 @@ This package is `playbook-runtime` only. It ships `OsAdapter` + `DummyAdapter` a
 
 A later `adapter-windows` package should wrap the existing `executors/windows` tools (`screen_read`, `ui_tap`, `ui_type`, `app_open`). `adapter-macos` maps the same OS port onto Mac native names. `adapter-playwright` implements `BrowserPageAdapter` only.
 
+## Playwright vs OS adapter
+
+Pick the port from the **surface**, not the app name. Full rules: [docs/adapter-selection.md](docs/adapter-selection.md).
+
+| Surface | Runner | Port | Package |
+| --- | --- | --- | --- |
+| In-page web DOM, forms, locator waits | `PagePlaybookRuntime` | `BrowserPageAdapter` | `adapter-playwright` |
+| Native windows, system dialogs, cert UI, non-DOM chrome | `PlaybookRuntime` | `OsAdapter` | `adapter-windows` (UIA), `adapter-macos` (AX) |
+
+An in-page "Next" button is Playwright. A Korean certificate window, a native file picker, or a browser OS dialog is UIA/AX. Do not replace the OS adapters with Playwright.
+
+**Hybrid handoff:** page request → watch for the native window → `PlaybookRuntime` → back to `PagePlaybookRuntime` for the page result. Do not leave Playwright blocked in `waitFor` on a locator that only appears after a native modal is dismissed. The modal is not in the DOM. Do not treat that timeout as "the native step never ran" and retry a signing step.
+
+Permanent contracts are page locators / URL and OS accessibility text (`target`). Do **not** store coordinates, pixel boxes, or session node IDs as playbook selectors. Vision, OCR, and VLM are fallbacks when the DOM or accessibility tree is missing — not the default path.
+
 Ppomi onboarding and playbook packages have **no device-approval or Mac-approver gate**. Do not add approved-device checks to `playbook-runtime`, `adapter-windows`, `adapter-macos`, `adapter-playwright`, `playbook-kr-cert`, or their tests.
 
 ## Contract

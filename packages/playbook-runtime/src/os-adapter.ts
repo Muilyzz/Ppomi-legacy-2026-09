@@ -1,4 +1,4 @@
-/** Minimal OS port. Slice 2 implements this as `adapter-windows`; this package ships a dummy. No device-approval input. */
+/** Native / system-chrome port (`PlaybookRuntime`). Not in-page DOM. See `docs/adapter-selection.md`. No device-approval input. */
 export interface ScreenSnapshot {
   readonly title: string;
   readonly texts: readonly string[];

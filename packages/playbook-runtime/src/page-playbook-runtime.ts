@@ -8,6 +8,10 @@ import type { RunResult, StepEvidence, StepOutcome } from "./playbook.ts";
 
 /**
  * Runs declared in-page steps against one `BrowserPageAdapter`.
+ * Authors: web DOM, forms, locator waits (`adapter-playwright`).
+ * Native windows and cert UI use `PlaybookRuntime` + `OsAdapter`.
+ * Do not `waitFor` a locator that only appears after a native modal.
+ * See `docs/adapter-selection.md`.
  * Permission and page preconditions are fail-closed: the run stops
  * and later steps are not sent to the adapter.
  * Does not call `OsAdapter`. There is no device-approval input.

@@ -3,7 +3,7 @@ export type Permission = "ui.read" | "ui.control";
 
 export type StepKind = "focus" | "click" | "type" | "read";
 
-/** In-page steps for `BrowserPageAdapter`. Not OS screen-text `click` / `type`. */
+/** In-page steps for `PagePlaybookRuntime`. Not OS screen-text `click` / `type`. See `docs/adapter-selection.md`. */
 export type PageStepKind = "goto" | "click" | "fill" | "waitFor" | "read";
 
 export type StepOutcome = "ok" | "permission_denied" | "precondition_failed";
