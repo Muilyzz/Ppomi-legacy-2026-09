@@ -1,4 +1,11 @@
 export { PathError } from "./errors.ts";
+export {
+  grantsUsed,
+  handoffSteps,
+  isHandoffStep,
+  isPageAutomatableStep,
+  pageStepsUntilHandoff,
+} from "./handoff.ts";
 export { defaultCatalogRoot, loadPath, loadPathCatalog } from "./load.ts";
 export {
   PATH_EFFECTS,

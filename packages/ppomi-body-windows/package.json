@@ -9,6 +9,7 @@
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "smoke:live": "node --experimental-strip-types --test tests/live-edge-uia-smoke.test.ts",
+    "example:kb-cert": "node --experimental-strip-types example/src/kb-star-biz-win-cert.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {

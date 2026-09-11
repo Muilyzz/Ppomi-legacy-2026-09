@@ -1,3 +1,22 @@
+export {
+  KB_STAR_BIZ_WIN_CERT_ID,
+  KB_STAR_BIZ_WIN_CERT_VERSION,
+  describeKbCertHandoffs,
+  dryRunKbStarBizWinCertPage,
+  kbStarBizWinCertGrants,
+  kbStarBizWinCertHandoffs,
+  kbStarBizWinCertPagePlaybook,
+  loadKbStarBizWinCert,
+  pagePlaybookFromPath,
+  publicStepUrl,
+} from "./kb-star-biz-win-cert.ts";
+export {
+  defaultNpkiRoot,
+  probeNpki,
+  type NpkiProbe,
+  type NpkiProbeOptions,
+  type NpkiProbeStatus,
+} from "./npki-probe.ts";
 export { WindowsDriver } from "./windows-driver.ts";
 export {
   FixtureWindowsExecutorTools,

@@ -94,4 +94,6 @@ npm --prefix packages/ppomi-body-windows test       # fixture + fake-executor br
 npm --prefix packages/ppomi-body-windows run typecheck
 # 1-step example (fixture Runtime; live UIA skips off Windows)
 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts
+# KB 공동인증서 path: page dry-run + human handoffs (live Edge on Windows)
+node --experimental-strip-types packages/ppomi-body-windows/example/src/kb-star-biz-win-cert.ts
 ```

@@ -20,3 +20,14 @@ node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts
 ```
 
 No Clerk / hub / payment / submit.
+
+## KB스타기업뱅킹 공동인증서 (`kb-star-biz-win-cert@0.1.0`)
+
+Page `goto` dry-run + human handoffs. Live opens Edge on the official issue URL, then stops. NPKI probe reports file count / newest mtime only.
+
+```sh
+node --experimental-strip-types packages/ppomi-body-windows/example/src/kb-star-biz-win-cert.ts
+PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/kb-star-biz-win-cert.ts
+```
+
+URLs and NPKI verify: [`catalogs/paths/kb-star-biz-win-cert/README.md`](../../../catalogs/paths/kb-star-biz-win-cert/README.md). Executor install follows [PR #48](https://github.com/Muilyzz/Ppomi/pull/48) (`node scripts/build-windows-executor.mjs --download`). This path does not tap UAC or type secrets.
