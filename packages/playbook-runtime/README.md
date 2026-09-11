@@ -1,6 +1,6 @@
 # playbook-runtime
 
-One package for playbook steps, permissions, stop, and results. Content packs (the **ppomi-path**, `playbook-*`) and drivers (the **ppomi-body**, `playbook-runtime` + `driver-*`) stay in other packages. A driver is an eye (observation) plus a hand (actuation).
+One package for playbook steps, permissions, stop, and results. Recipes (the **ppomi-path**: `ppomi-path` + its JSON catalog) and surfaces (the **ppomi-body**: this core plus `ppomi-body-windows`, `ppomi-body-macos`, `ppomi-body-android`, `ppomi-body-iphone-mirroring`, `ppomi-body-playwright`) stay in other packages. A surface package is an eye (observation) plus a hand (actuation). `driver-*` and `adapter-*` are legacy package names only; this core package itself becomes `ppomi-body` in #28 (with a re-export shim) once this lands in #6.
 
 Package titles are domain-specific. Do not add `core`, `common`, `engine`, `util`, `shared`, `runtime`, `adapter`, `playbook-core`, or `playbook-content`.
 
@@ -10,8 +10,8 @@ There is **one runtime loop**, `Runtime`, and **two surfaces** it can drive thro
 
 | Surface (`UiDriver`) | Driver port | Snapshot / target | Drivers |
 | --- | --- | --- | --- |
-| `OsSurface` | `OsUiDriver` (`readScreen` / `focus` / `click` / `type`, `kind`) | screen texts, accessible-name `target` | `driver-windows` (UIA), `driver-macos` (AX), `driver-android`, `driver-iphone-mirroring`; fixtures via `DummyAdapter` |
-| `PageSurface` | `BrowserPageDriver` (`readPage` / `goto` / `click` / `fill` / `waitFor`) | url + page texts + locators, `locator` / `url` | `driver-playwright`; fixtures via `DummyPageAdapter` |
+| `OsSurface` | `OsUiDriver` (`readScreen` / `focus` / `click` / `type`, `kind`) | screen texts, accessible-name `target` | `ppomi-body-windows` (UIA), `ppomi-body-macos` (AX), `ppomi-body-android`, `ppomi-body-iphone-mirroring`; fixtures via `DummyAdapter` |
+| `PageSurface` | `BrowserPageDriver` (`readPage` / `goto` / `click` / `fill` / `waitFor`) | url + page texts + locators, `locator` / `url` | `ppomi-body-playwright`; fixtures via `DummyPageAdapter` |
 
 Every driver name is defined in `src/drivers.ts`. `OsAdapter`, `OsAdapterKind`, `BrowserPageAdapter`, `AdapterTimeoutError` and `StepAdapter` remain as deprecated aliases until the sibling packages rename. `PlaybookRuntime` and `PagePlaybookRuntime` remain as thin, deprecated, synchronous wrappers over the core so existing ports keep **compiling**; each sibling needs one line to keep **running** (see *Compatibility*).
 
@@ -40,20 +40,22 @@ Ppomi onboarding and playbook packages have **no device-approval or Mac-approver
 
 ## Loops
 
-`Runtime.run` awaits every driver call and works with sync and async drivers alike; live drivers bind to `Runtime` + a surface, never to a wrapper. `Runtime.runSync` is only the deprecated wrappers' engine: it never sleeps, so a playbook with `require.wait` is `invalid` (`wait_requires_run`) there, and a driver that returns a Promise is a programming error that throws `TypeError`. Poll sleeps are injectable (`RuntimeOptions.sleep` / `now`) so tests use a virtual clock. `runSync` is deleted together with the wrappers in the `driver-*` port slice.
+`Runtime.run` awaits every driver call and works with sync and async drivers alike; live drivers bind to `Runtime` + a surface, never to a wrapper. `Runtime.runSync` is only the deprecated wrappers' engine: it never sleeps, so a playbook with `require.wait` is `invalid` (`wait_requires_run`) there, and a driver that returns a Promise is a programming error that throws `TypeError`. Poll sleeps are injectable (`RuntimeOptions.sleep` / `now`) so tests use a virtual clock. `runSync` is deleted together with the wrappers in the `ppomi-body-*` port slice.
 
 ## Compatibility
 
-`PlaybookRuntime(port, gate)` and `PagePlaybookRuntime(port, gate)` call `runSync` and apply the same closed default as `Runtime`: a mutation without `effect` is handed off. Nothing auto-commits anywhere. A fixture that must keep running legacy playbooks opts in unmistakably with `{ legacy: { runUndeclaredMutations: true } }`; every mutation it executes without an effect is then marked `code: "undeclared_effect"` with a "legacy mode" note, and the `RunResult` carries `legacy: true`, so a dump can never pass an auto-commit off as a declared `effect: "input"` click. `Runtime` refuses that option (`invalid`, `legacy_not_allowed`); live drivers (#12 / #13 / #15) bind to `Runtime` + a surface, never to a wrapper. The option is deleted together with the wrappers and `runSync` in the `driver-*` port slice. New code uses `Runtime` directly and declares `effect` on every mutation (`focus` has an implied `navigate`). `waitFor` still works; prefer `read` with `require: { locators: [...], wait }`. `parseStepResult` accepts `adapter` as a deprecated alias of `driver`; dumps emit `driver` only.
+`PlaybookRuntime(port, gate)` and `PagePlaybookRuntime(port, gate)` call `runSync` and apply the same closed default as `Runtime`: a mutation without `effect` is handed off. Nothing auto-commits anywhere. A fixture that must keep running legacy playbooks opts in unmistakably with `{ legacy: { runUndeclaredMutations: true } }`; every mutation it executes without an effect is then marked `code: "undeclared_effect"` with a "legacy mode" note, and the `RunResult` carries `legacy: true`, so a dump can never pass an auto-commit off as a declared `effect: "input"` click. `Runtime` refuses that option (`invalid`, `legacy_not_allowed`); live drivers (#12 / #13 / #15) bind to `Runtime` + a surface, never to a wrapper. The option is deleted together with the wrappers and `runSync` in the `ppomi-body-*` port slice. New code uses `Runtime` directly and declares `effect` on every mutation (`focus` has an implied `navigate`). `waitFor` still works; prefer `read` with `require: { locators: [...], wait }`. `parseStepResult` accepts `adapter` as a deprecated alias of `driver`; dumps emit `driver` only.
 
 Every `StepResult` names its driver, and the runtime never guesses it: an `OsUiDriver` that does not declare `kind` makes each run `invalid` (`unknown_driver`) until one of these one-line changes lands in the sibling package —
 
 | Sibling | One-line change |
 | --- | --- |
-| `adapter-windows` (#7), `driver-windows` live (#15) | `readonly kind = "os-windows" as const;` on the port class, or `new PlaybookRuntime(port, gate, { driver: "os-windows" })` in the smoke test |
-| `adapter-macos` (#10) | `readonly kind = "os-macos" as const;`, or `{ driver: "os-macos" }` |
-| `adapter-android` (#20), `adapter-iphone-mirroring` (#21) | `"os-android"` / `"phone"` likewise |
-| `adapter-playwright` (#11 / #13) | nothing for `driver` (page runs are always `page`); `tsconfig.json` gains `"extends": "../tsconfig.base.json"` like every package here |
+| `ppomi-body-windows` (#31, renamed; was `adapter-windows` #7 / `driver-windows` #15) | `readonly kind = "os-windows" as const;` on the port class, or `new PlaybookRuntime(port, gate, { driver: "os-windows" })` in the smoke test |
+| `ppomi-body-macos` (#10, still `adapter-macos`) | `readonly kind = "os-macos" as const;`, or `{ driver: "os-macos" }` |
+| `ppomi-body-android` (#20), `ppomi-body-iphone-mirroring` (#21) | `"os-android"` / `"phone"` likewise |
+| `ppomi-body-playwright` (#11 / #13, still `adapter-playwright`) | nothing for `driver` (page runs are always `page`); `tsconfig.json` gains `"extends": "../tsconfig.base.json"` like every package here |
+
+Package names above are the final ones; `driver-*` / `adapter-*` are legacy and each sibling renames itself in place. Code symbols (`OsUiDriver`, `BrowserPageDriver`, `StepResult.driver`, `DriverTimeoutError`) keep their names.
 
 All siblings compile the core through relative imports, so they also need the `extends` line above to typecheck it (node types instead of the DOM lib). The base config's `typeRoots` points at `playbook-runtime/node_modules/@types`, so run `npm ci` in `packages/playbook-runtime` before `tsc` in any package.
 
