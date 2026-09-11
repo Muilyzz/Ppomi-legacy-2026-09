@@ -51,12 +51,17 @@ export function isPageAutomatableStep(step: PathStep): boolean {
   }
 }
 
-/** Automated page prefix. Stops before the first handoff. */
+/**
+ * Automated page prefix: the leading run of page-automatable steps. It ends at the
+ * first handoff *or* the first step a page cannot run (OS `focus` / `type`, a
+ * locator-less `click`, a bare `read`); nothing past that point is included, so a
+ * later page step never runs without the step it depends on.
+ */
 export function pageStepsUntilHandoff(document: PathDocument): readonly PathStep[] {
   const steps: PathStep[] = [];
   for (const step of document.steps) {
-    if (isHandoffStep(step)) break;
-    if (isPageAutomatableStep(step)) steps.push(step);
+    if (isHandoffStep(step) || !isPageAutomatableStep(step)) break;
+    steps.push(step);
   }
   return steps;
 }
