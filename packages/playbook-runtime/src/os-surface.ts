@@ -36,7 +36,11 @@ export class OsSurface implements UiDriver<ScreenSnapshot, OsRef, PlaybookStep> 
       : { kind: "none" };
   }
 
-  /** `focus` only foregrounds an app: it needs `ui.control` but has an implied `navigate` effect and is never gated. */
+  /**
+   * `focus` only foregrounds an already-running app by its accessible name: it needs
+   * `ui.control` but has an implied `navigate` effect and is never gated. It is never
+   * `browser_open({ url })` or an app launch.
+   */
   classify(step: PlaybookStep): StepClass {
     return { permission: defaultPermission(step.kind), mutation: step.kind === "click" || step.kind === "type" };
   }

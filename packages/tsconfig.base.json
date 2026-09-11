@@ -1,6 +1,7 @@
 {
   // Shared by every package under packages/. Node globals (URL, timers) come from
   // @types/node installed in playbook-runtime; no package relies on the DOM lib.
+  // typeRoots below resolves only after `npm ci` in packages/playbook-runtime.
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],

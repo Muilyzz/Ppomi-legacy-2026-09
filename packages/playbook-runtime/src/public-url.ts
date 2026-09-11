@@ -21,7 +21,11 @@ export function originOf(url: string): string {
   return parse(url)?.origin ?? "(invalid url)";
 }
 
-/** Replace every URL-shaped token in free text with its public form, and keep only the first line. */
+/**
+ * Replace every URL-shaped token in free text with its public form, and keep only the
+ * first line. This is URL-shaped redaction only: any other value a driver echoes in a
+ * message (typed text, element values) remains that driver's contract to keep out.
+ */
 export function redactText(text: string): string {
   const firstLine = text.split(/\r?\n/, 1)[0] ?? "";
   return firstLine.replace(/[a-z][a-z0-9+.-]*:\/\/[^\s"'<>)]+/gi, match => publicUrl(match));
