@@ -1,0 +1,6 @@
+{
+  "formatVersion": 1,
+  "endpoint": "https://updates.example.org/ppomi/preview/macos.json",
+  "publicKey": "REPLACE_WITH_YOUR_65_BYTE_P256_PUBLIC_KEY_BASE64",
+  "channel": "preview"
+}

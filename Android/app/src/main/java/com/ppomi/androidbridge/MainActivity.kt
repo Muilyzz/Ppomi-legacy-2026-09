@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.WindowManager
 import android.view.ViewGroup
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Canvas
@@ -24,16 +23,23 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.webkit.WebViewFeature
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +62,7 @@ class MainActivity : VoiceHostActivity() {
     private var requestedTask by mutableStateOf<String?>(null)
     private var requestedTaskRevision by mutableIntStateOf(0)
     private var requestedVoiceRevision by mutableIntStateOf(0)
+    @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -65,10 +73,22 @@ class MainActivity : VoiceHostActivity() {
             val supportedVoiceView = remember {
                 runCatching { WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) }.getOrDefault(false)
             }
-            var showVoice by rememberSaveable { mutableStateOf(requestedTask == null) }
-            var showControlApps by remember { mutableStateOf(false) }
-            LaunchedEffect(requestedTask, requestedTaskRevision) { if (requestedTask != null) showVoice = false }
-            LaunchedEffect(requestedVoiceRevision) { if (requestedVoiceRevision > 0) showVoice = true }
+            var showControl by rememberSaveable { mutableStateOf(false) }
+            var contentPresented by rememberSaveable { mutableStateOf(intent.getBooleanExtra("executor_settings", false) && intent.getIntExtra("executor_section", 1) == 1) }
+            var contentVisible by remember { mutableStateOf(false) }
+            var showSettings by rememberSaveable { mutableStateOf(intent.getBooleanExtra("executor_settings", false) && intent.getIntExtra("executor_section", 1) == 2) }
+            var showControlApps by remember { mutableStateOf(intent.getBooleanExtra("executor_control_apps", false)) }
+            var parkedPopup by rememberSaveable { mutableStateOf(false) }
+            val recordState = rememberSaveableStateHolder()
+            LaunchedEffect(requestedTask, requestedTaskRevision) {
+                if (requestedTask != null) {
+                    showSettings = false; showControlApps = false
+                    showControl = false; contentPresented = true
+                }
+            }
+            LaunchedEffect(requestedVoiceRevision) {
+                if (requestedVoiceRevision > 0) { showSettings = false; showControlApps = false; contentPresented = false }
+            }
             val runner = remember { LocalTaskRunner.get(applicationContext) }
             val settings = remember { AgentSettings.get(applicationContext) }
             val shared = remember { SharedTaskController.get(applicationContext) }
@@ -85,7 +105,6 @@ class MainActivity : VoiceHostActivity() {
                                 val service = BridgeAccessibilityService.getInstance()
                                 WorkbenchSnapshot(tasks, active, BridgeAccessibilityService.connected(),
                                     BridgeSession.supported(), AgentSettingsSnapshot.from(settings.snapshot()), SharedSnapshot.from(shared.snapshot()),
-                                    agentEndpoint = voiceHost.agentEndpoint,
                                     controlWindow = ControlWindowSnapshot.from(BridgeAccessibilityService.controlWindow()),
                                     chatControl = VoiceSessionHost.hasActiveControl(),
                                     lastOpened = BridgeAccessibilityService.lastOpenedPackage?.let { ControlAppSnapshot(it, service?.labelOf(it) ?: it) },
@@ -105,116 +124,141 @@ class MainActivity : VoiceHostActivity() {
             val reasonOf = { t: TaskSnapshot -> t.approvalTitle.ifBlank { t.summary.ifBlank { "승인 필요" } } }
             val onApprove: (String) -> Unit = { id -> if (act { runner.approve(id) }) snapshot.active?.let { voiceHost.note("승인 · ${reasonOf(it)}") } }
             val onCancel: (String) -> Unit = { id -> if (act { runner.cancel(id) }) snapshot.active?.let { voiceHost.note("취소 · ${reasonOf(it)}") } }
-            // The person's turn (docs/ui-tree.md): the only time the slot gets a border and the turn band exists.
-            val turn = snapshot.active?.takeIf { it.state == "waiting_approval" }   // the runner's owner is the only task that can wait
-            // A new turn rings the conversation like an incoming call (docs/ui-tree.md); the approval itself stays native.
-            // 사람 차례 → 비서의 단계(톡 → 재촉 → 전화)는 호스트가 밟는다. 작업 화면을 보고 있으면 차례가 이미 보이므로 세지 않는다.
-            LaunchedEffect(turn?.id, showVoice) { voiceHost.turn(if (showVoice) turn?.id else null, turn?.let { it.approvalTitle.ifBlank { it.summary.ifBlank { "승인 필요" } } } ?: "") }
-            // The control slot (docs/ui-structure.md): Ppomi's content leaves the target app's window alone.
-            // Records focus, as on the Mac: the workbench's data views take the whole screen and the target pop-up is
-            // minimized while they are open, then restored on the way back to the conversation.
-            val slot = if (showVoice) rememberControlSlot(snapshot) else null
-            LaunchedEffect(showVoice, snapshot.controlWindow?.packageName != null) {
-                val service = BridgeAccessibilityService.getInstance() ?: return@LaunchedEffect
-                if (!showVoice && snapshot.controlWindow != null) service.setControlWindowHidden(true)
-                if (showVoice && snapshot.controlWindow == null && snapshot.lastOpened != null) service.setControlWindowHidden(false)
+            val turn = snapshot.active?.takeIf { it.inProgress }
+            val approval = turn?.takeIf { it.state == "waiting_approval" }
+            val busy = snapshot.chatControl || turn != null
+            val controlActive = (snapshot.chatControl && snapshot.controlWindow != null) || turn?.state == "running"
+            LaunchedEffect(controlActive) { showControl = controlActive }
+            val latestApproval by rememberUpdatedState(approval)
+            val approvalSurfaceVisible by rememberUpdatedState(contentVisible && !showSettings && !showControlApps)
+            DisposableEffect(lifecycle) {
+                // A stopped window pauses recomposition; publish visibility from the lifecycle callback itself.
+                val observer = LifecycleEventObserver { _, _ ->
+                    val current = latestApproval
+                    voiceHost.turn(current?.id, current?.let(reasonOf) ?: "",
+                        lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && approvalSurfaceVisible)
+                }
+                lifecycle.addObserver(observer)
+                onDispose {
+                    lifecycle.removeObserver(observer)
+                    val current = latestApproval
+                    voiceHost.turn(current?.id, current?.let(reasonOf) ?: "", false)
+                }
             }
-            val rootView = LocalView.current
-            val density = LocalDensity.current.density
-            val statusBar = WindowInsets.statusBars.getTop(LocalDensity.current)
-            var dockedPackage by rememberSaveable { mutableStateOf<String?>(null) }   // survives rotation and fold changes
+            LaunchedEffect(approval, showSettings, showControlApps, contentVisible) {
+                voiceHost.turn(approval?.id, approval?.let(reasonOf) ?: "",
+                    lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && contentVisible && !showSettings && !showControlApps)
+            }
+            var controlArea by remember { mutableStateOf<android.graphics.Rect?>(null) }
+            var dockedPackage by remember { mutableStateOf<String?>(null) }
             val openPopup: (String) -> Unit = { packageName ->
                 dockedPackage = null
                 BridgeAccessibilityService.getInstance()?.openAsPopup(packageName)
             }
-            LaunchedEffect(snapshot.controlWindow?.packageName, slot?.window == null) {
-                val window = snapshot.controlWindow
-                if (window == null) { dockedPackage = null; return@LaunchedEffect }
-                // Only a pop-up overlapping this window is parked; split or full-screen targets are never dragged.
-                val overlap = slot?.window ?: return@LaunchedEffect
-                if (dockedPackage == window.packageName) return@LaunchedEffect
-                val service = BridgeAccessibilityService.getInstance() ?: return@LaunchedEffect
-                val location = IntArray(2).also { rootView.getLocationOnScreen(it) }
-                // Park a pop-up that is not already beside the content at the slot's top-right corner, once per appearance.
-                if (overlap.left < rootView.width * 0.5) {
-                    val margin = (16 * density).toInt()
-                    service.dockControlWindow(location[0] + rootView.width - window.bounds.width() - margin,
-                        location[1] + statusBar + margin)
+            val showRecords: () -> Unit = {
+                if (!busy && snapshot.controlWindow != null) {
+                    BridgeAccessibilityService.getInstance()?.setControlWindowHidden(true)
+                    parkedPopup = true
                 }
-                dockedPackage = window.packageName
+                showControl = false
             }
-            Box(Modifier.fillMaxSize().background(palette.bg)) {
-            Row(Modifier.fillMaxSize()) {
-            val controlColumn: @Composable () -> Unit = { ControlSlotColumn(slot!!, snapshot, turn, error, openPopup,
-                onPickApp = { showControlApps = true }, onRecords = { showVoice = false }, onApprove, onCancel) }
-            if (slot != null && !slot.onRight) controlColumn()
-            // Padding modifiers consume their insets: IME adds only the space left
-            // after the navigation bar, so the WebView shrinks above the keyboard once.
-            Column(Modifier.weight(1f).fillMaxHeight().statusBarsPadding().navigationBarsPadding().imePadding()) {
-            if (showVoice) {
-                // Narrow screens have no control column; the control header still needs a home.
-                if (slot == null) ControlHeader(snapshot, onPickApp = { showControlApps = true }, onRecords = { showVoice = false })
-                Box(Modifier.weight(1f).fillMaxWidth()) {
+            val openControl: () -> Unit = {
+                showControl = true
+                if (!busy && parkedPopup) {
+                    BridgeAccessibilityService.getInstance()?.setControlWindowHidden(false)
+                    parkedPopup = false
+                }
+            }
+            // Only an idle fitting popup may be aligned once. Its position never changes the frame's columns.
+            LaunchedEffect(snapshot.controlWindow?.packageName, controlArea, showControl, busy) {
+                val target = snapshot.controlWindow
+                if (target == null) { dockedPackage = null; return@LaunchedEffect }
+                val area = controlArea ?: return@LaunchedEffect
+                if (!showControl || busy || dockedPackage == target.packageName || area.isEmpty) return@LaunchedEffect
+                if (target.bounds.width() > area.width() || target.bounds.height() > area.height()) return@LaunchedEffect
+                if (!area.contains(target.bounds)) {
+                    BridgeAccessibilityService.getInstance()?.dockControlWindow(area.right - target.bounds.width(), area.top)
+                }
+                dockedPackage = target.packageName
+            }
+            // Insets are consumed once around the three-region frame, including the software keyboard.
+            Box(Modifier.fillMaxSize().background(palette.bg).statusBarsPadding().navigationBarsPadding().imePadding()) {
+                WorkbenchFrame(modifier = Modifier.fillMaxSize(), contentPresented = contentPresented,
+                    onContentPresentedChange = { contentPresented = it }, onContentVisibilityChange = { contentVisible = it },
+                    contentActionLabel = if (approval != null) "승인 요청" else "기록", topBar = {
+                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text("뽀미")
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = { showSettings = true }, modifier = Modifier.testTag("tab_settings")) { Text("설정") }
+                    }
+                }, conversation = {
                     key(voiceHost.viewGeneration) {
                         if (supportedVoiceView) AndroidView(factory = {
-                            voiceHost.obtainView().apply {
-                                // A WRAP_CONTENT WebView gives Chromium a zero CSS layout
-                                // viewport, even when Compose measures the native view larger.
+                            voiceHost.obtainView(this@MainActivity).apply {
                                 layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                             }
                         }, modifier = Modifier.fillMaxSize())
                         else Text("Android System WebView 업데이트 필요")
                     }
+                }, contentPane = {
+                    Column(Modifier.fillMaxSize()) {
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            if (showControl) {
+                                ControlSlotColumn(snapshot, error, openPopup, onPickApp = { showControlApps = true },
+                                    onRecords = showRecords, popupEnabled = !busy,
+                                    onControlArea = { controlArea = it })
+                            } else recordState.SaveableStateProvider("records") {
+                                PpomiWorkbench(snapshot = snapshot, requestedTaskId = requestedTask, requestedTaskRevision = requestedTaskRevision,
+                                    error = provisioningError ?: error,
+                                    onDismissError = { provisioningError = null; error = null },
+                                    onPermission = { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
+                                    onStart = { text, model -> act {
+                                        val task = if (model) runner.startModel(text) else runner.startBuiltin(text)
+                                        requestedTask = task.optString("id").takeIf { it.isNotEmpty() }
+                                        requestedTaskRevision++
+                                    } },
+                                    onControl = openControl,
+                                    onRefreshShared = { shared.refresh() }, onStartShared = { id -> shared.start(id) },
+                                    context = this@MainActivity)
+                            }
+                        }
+                        if (turn != null) TurnBand(turn, error, onApprove, onCancel)
+                    }
+                })
+            }
+            val closeSettings: () -> Unit = {
+                if (intent.getBooleanExtra("executor_settings", false)) finish()
+                else showSettings = false
+            }
+            if (showSettings) {
+                DisposableEffect(Unit) {
+                    window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    onDispose { window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
                 }
-                if (slot == null && turn != null) TurnBand(turn, error, onApprove, onCancel)
-            } else {
-            Box(Modifier.weight(1f)) {
-            PpomiWorkbench(snapshot = snapshot, requestedTaskId = requestedTask, requestedTaskRevision = requestedTaskRevision,
-                error = provisioningError ?: error,
-                onBack = { showVoice = true },
-                onDismissError = { provisioningError = null; error = null },
-                onPermission = { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
-                onStart = { text, model -> act {
-                    val task = if (model) runner.startModel(text) else runner.startBuiltin(text)
-                    requestedTask = task.optString("id").takeIf { it.isNotEmpty() }
-                    requestedTaskRevision++
-                } },
-                onApprove = onApprove,
-                onCancel = onCancel,
-                onSaveAgentEndpoint = { act { voiceHost.agentEndpoint = it } },
-                onSaveSettings = { endpoint, model, key -> act { settings.save(endpoint, model, key) } },
-                onClearSettings = { act { settings.clear() } },
-                onRefreshShared = { shared.refresh() },
-                onStartShared = { id -> shared.start(id) },
-                onConnectShared = { raw -> act { shared.configure(raw) } },
-                onSecretScreen = { secure ->
-                    if (secure) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                    else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                },
-                context = this@MainActivity, initialSection = 1)
-            }
-            }
-            }
-            if (slot != null && slot.onRight) controlColumn()
-            }
-            if (turn != null) slot?.window?.let { window ->
-                val ink = palette.turn
-                Canvas(Modifier.fillMaxSize()) {
-                    drawRect(ink, Offset(window.left - 3f, window.top - 3f),
-                        Size(window.width() + 6f, window.height() + 6f), style = Stroke(2f * density))
+                Dialog(onDismissRequest = closeSettings,
+                    properties = DialogProperties(usePlatformDefaultWidth = false, securePolicy = SecureFlagPolicy.SecureOn)) {
+                    Column(Modifier.fillMaxWidth(0.94f).widthIn(max = 720.dp).fillMaxHeight(0.92f).background(palette.bg)
+                        .semantics { testTagsAsResourceId = true }) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            TextButton(onClick = closeSettings, modifier = Modifier.testTag("close_settings")) { Text("닫기") }
+                        }
+                        Box(Modifier.weight(1f)) {
+                            WorkbenchSettings(snapshot, onPermission = { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+                                onControlApps = { if (!voiceHost.active && LocalTaskRunner.actionOwner() == null) showControlApps = true },
+                                context = this@MainActivity)
+                        }
+                    }
                 }
             }
-            }
-            if (showControlApps) ControlAppsDialog(this@MainActivity, voiceHost) {
-                showControlApps = false
-                if (!voiceHost.active) voiceHost.destroyHost() // Refresh bootstrap after native selection.
-            }
+            if (showControlApps) ControlAppsDialog(this@MainActivity, voiceHost,
+                onSaved = { voiceHost.refreshBootstrap(); showControlApps = false }, onClose = { showControlApps = false })
         } }
     }
 
     override fun onDestroy() {
         // Leaving the conversation ends it, unless an OS call is running: the call screen owns that session.
-        if (isFinishing && PpomiTelecom.connection == null) VoiceSessionHost.get(applicationContext).destroyHost()
+        if (isFinishing && PpomiTelecom.connection == null) VoiceSessionHost.get(applicationContext).destroyHost(this)
         super.onDestroy()
     }
 
@@ -244,66 +288,60 @@ class MainActivity : VoiceHostActivity() {
     }
 }
 
-/** The reserved rectangle beside Ppomi's content: placeholder while empty, the live window bounds while present. */
-private data class ControlSlot(val widthPx: Int, val onRight: Boolean, val window: android.graphics.Rect?)
-
+/** The content pane owns control geometry; an external window never reorders chat or changes its width. */
 @Composable
-private fun rememberControlSlot(snapshot: WorkbenchSnapshot): ControlSlot? {
-    if (LocalConfiguration.current.screenWidthDp < 720) return null   // narrow screens use the panel over the app instead
-    val view = LocalView.current
-    val rootWidth = view.width
-    val rootHeight = view.height
-    if (rootWidth <= 0 || rootHeight <= 0) return null
-    val location = IntArray(2).also { view.getLocationOnScreen(it) }
-    val overlap = snapshot.controlWindow?.bounds?.let { bounds ->
-        android.graphics.Rect(bounds.left - location[0], bounds.top - location[1], bounds.right - location[0], bounds.bottom - location[1])
-            .takeIf { it.intersect(0, 0, rootWidth, rootHeight) }
-    }
-    // A split-screen target sits beside this window (no overlap) and a full-screen one covers it: nothing to reserve.
-    if (snapshot.controlWindow != null && overlap == null) return null
-    if (overlap != null && overlap.width() > rootWidth * 0.85) return null
-    val onRight = overlap == null || overlap.centerX() >= rootWidth / 2
-    val width = when {
-        overlap == null -> (rootWidth * 0.42).toInt()
-        onRight -> rootWidth - overlap.left
-        else -> overlap.right
-    }
-    return ControlSlot(width.coerceIn(rootWidth / 5, rootWidth * 3 / 4), onRight, overlap)
-}
-
-/** 제어 열: 머리띠(대상 · 기록) + 자리 + 사람 차례일 때만 차례 띠. */
-@Composable
-private fun ControlSlotColumn(slot: ControlSlot, snapshot: WorkbenchSnapshot, turn: TaskSnapshot?, error: String?, onOpenPopup: (String) -> Unit,
-                              onPickApp: () -> Unit, onRecords: () -> Unit, onApprove: (String) -> Unit, onCancel: (String) -> Unit) {
-    val width = with(LocalDensity.current) { slot.widthPx.toDp() }
-    Column(Modifier.width(width).fillMaxHeight().statusBarsPadding().navigationBarsPadding()) {
+private fun ControlSlotColumn(snapshot: WorkbenchSnapshot, error: String?, onOpenPopup: (String) -> Unit,
+                              onPickApp: () -> Unit, onRecords: () -> Unit, popupEnabled: Boolean,
+                              onControlArea: (android.graphics.Rect?) -> Unit) {
+    var area by remember { mutableStateOf<android.graphics.Rect?>(null) }
+    val rootView = LocalView.current
+    val density = LocalDensity.current.density
+    DisposableEffect(Unit) { onDispose { onControlArea(null) } }
+    Column(Modifier.fillMaxSize()) {
         ControlHeader(snapshot, onPickApp, onRecords)
-        // Empty slot: one line, ink border on the person's turn. The docked pop-up covers this rectangle otherwise
-        // (its border is the Canvas over the window bounds).
-        Box(Modifier.weight(1f).fillMaxWidth().then(if (turn != null && slot.window == null) Modifier.border(2.dp, palette.turn) else Modifier),
-            contentAlignment = Alignment.Center) {
-            if (slot.window == null) {
+        Box(Modifier.weight(1f).fillMaxWidth().padding(12.dp).clipToBounds().onGloballyPositioned { coordinates ->
+            val bounds = coordinates.boundsInRoot()
+            val origin = IntArray(2).also { rootView.getLocationOnScreen(it) }
+            val measured = android.graphics.Rect(bounds.left.toInt() + origin[0], bounds.top.toInt() + origin[1],
+                bounds.right.toInt() + origin[0], bounds.bottom.toInt() + origin[1])
+            if (area != measured) { area = measured; onControlArea(measured) }
+        }, contentAlignment = Alignment.Center) {
+            val target = snapshot.controlWindow
+            val contained = target != null && area?.contains(target.bounds) == true
+            if (!contained) {
                 val app = snapshot.lastOpened
                 when {
+                    error != null -> SlotLine(error)
+                    target != null -> SlotLine("제어 자리 밖")
                     snapshot.popupStatus.isNotBlank() -> SlotLine(snapshot.popupStatus)
                     snapshot.chatControl || snapshot.active?.state == "running" -> SlotLine("뽀미 진행 중")
-                    app != null && snapshot.connected -> TextButton(onClick = { onOpenPopup(app.packageName) }) { Text("${app.label} 팝업") }
-                    else -> SlotLine(app?.label ?: "팝업 자리")
+                    app != null && snapshot.connected -> TextButton(onClick = { onOpenPopup(app.packageName) }, enabled = popupEnabled) { Text("${app.label} 팝업") }
+                    else -> SlotLine(app?.label ?: "제어할 앱을 선택하세요")
+                }
+            }
+            if (contained && snapshot.active?.state == "waiting_approval") {
+                val ink = palette.turn
+                Canvas(Modifier.fillMaxSize()) {
+                    val bounds = target!!.bounds
+                    val host = area!!
+                    drawRect(ink, Offset((bounds.left - host.left).toFloat(), (bounds.top - host.top).toFloat()),
+                        Size(bounds.width().toFloat(), bounds.height().toFloat()), style = Stroke(2f * density))
                 }
             }
         }
-        if (turn != null) TurnBand(turn, error, onApprove, onCancel)
     }
 }
 
 /** 차례 띠: 사람 차례일 때만 한 줄(승인 실패면 그 오류) + 승인 · 취소. */
 @Composable
 private fun TurnBand(turn: TaskSnapshot, error: String?, onApprove: (String) -> Unit, onCancel: (String) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        SlotLine(error ?: turn.approvalTitle.ifBlank { turn.summary.ifBlank { "승인 필요" } }, palette.fg, Modifier.weight(1f))
-        Button(onClick = { onApprove(turn.id) }, colors = accentButton, modifier = Modifier.testTag("approve_task")) { Text("승인") }
-        TextButton(onClick = { onCancel(turn.id) }, modifier = Modifier.testTag("cancel_task")) { Text("취소") }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        SlotLine(error ?: turn.approvalTitle.ifBlank { turn.summary.ifBlank { "진행 중" } }, palette.fg)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            if (turn.state == "waiting_approval") Button(onClick = { onApprove(turn.id) }, colors = accentButton,
+                modifier = Modifier.testTag("approve_task")) { Text("승인") }
+            TextButton(onClick = { onCancel(turn.id) }, modifier = Modifier.testTag("cancel_task")) { Text("중단") }
+        }
     }
 }
 
@@ -317,12 +355,12 @@ private fun ControlHeader(snapshot: WorkbenchSnapshot, onPickApp: () -> Unit, on
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = onPickApp, modifier = Modifier.semantics { contentDescription = "제어 앱" }) { Text(snapshot.lastOpened?.label ?: "제어 앱") }
         Spacer(Modifier.weight(1f))
-        TextButton(onClick = onRecords) { Text("기록") }
+        TextButton(onClick = onRecords, modifier = Modifier.testTag("show_records")) { Text("기록") }
     }
 }
 
 @Composable
-private fun ControlAppsDialog(activity: MainActivity, host: VoiceSessionHost, onClose: () -> Unit) {
+private fun ControlAppsDialog(activity: MainActivity, host: VoiceSessionHost, onSaved: () -> Unit, onClose: () -> Unit) {
     var ready by remember { mutableStateOf(!host.active && !host.hasPendingStart()) }
     var apps by remember { mutableStateOf<List<BridgeAccessPolicy.App>?>(null) }
     var defaults by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -368,7 +406,7 @@ private fun ControlAppsDialog(activity: MainActivity, host: VoiceSessionHost, on
         }
     }, confirmButton = {
         TextButton(enabled = apps != null, onClick = {
-            try { BridgeAccessPolicy.saveUserPackages(activity, selected); onClose() }
+            try { BridgeAccessPolicy.saveUserPackages(activity, selected); onSaved() }
             catch (_: Exception) { error = "작업 종료 뒤 저장" }
         }) { Text("저장") }
     }, dismissButton = { TextButton(onClick = onClose) { Text("취소") } })

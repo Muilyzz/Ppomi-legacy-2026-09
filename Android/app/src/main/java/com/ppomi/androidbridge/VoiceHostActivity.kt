@@ -8,7 +8,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 
 /** 음성 세션이 시작될 수 있는 화면(대화·통화). 보이는 동안 세션 호스트에 붙고, 마이크·알림 권한을 묻는다. */
-abstract class VoiceHostActivity : ComponentActivity() {
+abstract class VoiceHostActivity : ComponentActivity(), ForegroundHost {
+    override val executorActivity: android.app.Activity get() = this
     private var voicePermissionsResult: ((Boolean) -> Unit)? = null
     private val voicePermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         val callback = voicePermissionsResult
@@ -22,7 +23,7 @@ abstract class VoiceHostActivity : ComponentActivity() {
         arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS)
     else arrayOf(Manifest.permission.RECORD_AUDIO)
 
-    internal fun requestVoicePermissions(result: (Boolean) -> Unit) {
+    override fun requestVoicePermissions(result: (Boolean) -> Unit) {
         if (voicePermissionsResult != null) { result(false); return }
         val missing = voicePermissions().filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isEmpty()) result(true)
@@ -31,11 +32,11 @@ abstract class VoiceHostActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        VoiceSessionHost.get(applicationContext).attach(this)
+        AndroidExecutor.get(applicationContext).attach(this)
     }
 
     override fun onStop() {
-        VoiceSessionHost.get(applicationContext).detach(this)
+        AndroidExecutor.get(applicationContext).detach(this)
         super.onStop()
     }
 

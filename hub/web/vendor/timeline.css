@@ -1,0 +1,33 @@
+
+svg{display:block;width:100%} #eq{height:10rem}
+.charts{position:relative;margin:.5rem 0 .25rem;border:1px solid var(--line)}   /* 판 전체에 테두리 하나 더: 네모끼리 붙은 곳과 바깥이 다 두 줄 */
+.tile{position:absolute;box-sizing:border-box;margin:0;padding:0;border:1px solid var(--line);background:var(--surface);overflow:visible} .tile.on{border-color:var(--fg)}
+.hoverlay{position:absolute;inset:0;pointer-events:none;z-index:3}
+.hval,.hdate{position:absolute;white-space:nowrap;font-size:var(--fs-1);font-variant-numeric:tabular-nums;text-shadow:0 0 2px var(--surface),0 0 2px var(--surface),0 0 4px var(--surface)}   /* 배경 없이 보색(바탕색) 그림자로만 가독성 */
+.hval{color:var(--fg);transform:translate(4px,-50%)} .hval.flip{transform:translate(calc(-100% - 4px),-50%)}   /* 금액 글자의 가운데 선이 그 값의 높이 */
+.hdate{color:var(--fg-2);transform:translate(-50%,3px)}
+.tile figcaption{position:absolute;left:.5rem;right:.5rem;top:.35rem;z-index:1;display:flex;justify-content:space-between;gap:.5rem;font-size:var(--fs-2);white-space:nowrap}   /* 제목은 고정 크기 오버레이; 작은 칸에선 삐져나와도 그대로 */
+.tile svg{cursor:pointer;display:block}
+.tile figcaption.bare .n,.tile figcaption.bare .meta{display:none}   /* 한 줄에 안 들어가면 이름만(… 없이); 올리면 다 보임 */
+.tile.zoom{z-index:2;border-color:var(--fg-2);box-shadow:0 2px 12px color-mix(in srgb,var(--fg) 20%,transparent)} .tile figcaption{cursor:pointer}
+.grid{stroke:var(--line)} .axis{fill:var(--fg-2);font-size:var(--fs-1)} .zero{stroke:var(--line-2)}
+.area{fill:color-mix(in srgb,var(--fg) 22%,transparent);stroke:none}   /* 면적 그래프: 선 굵기가 없으니 칸이 작아져도 모양이 같다 */ .pin,.sel{fill:var(--accent-soft)} .hover{stroke:var(--line-2)}
+.obs{fill:var(--fg)} .exp{fill:var(--fg-2)} .res{fill:none;stroke:var(--fg);stroke-width:1} .dayhit{fill:transparent}
+.sec .r{min-width:0;overflow:hidden;padding:4px;margin:-4px} .sec .r>span{overflow:hidden;text-overflow:ellipsis}   /* 긴 '어디로' 목록은 … 로 (가로 스크롤 없음) */
+.timeline-section+.timeline-section{margin-top:2rem}
+.transaction{border:0;background:none;padding:0;color:inherit;font:inherit;text-align:inherit;cursor:pointer}
+body{max-width:none}   /* 판(그룹 다이어그램)은 제어 열 전부를 쓴다 */
+.board{--u:1.5rem;position:relative;margin:.75rem 0;user-select:none;-webkit-user-select:none;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface);
+  background-image:linear-gradient(color-mix(in srgb,var(--line) 55%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in srgb,var(--line) 55%,transparent) 1px,transparent 1px);background-size:var(--u) var(--u)}
+.node{position:absolute;box-sizing:border-box}
+.grp{width:calc(var(--u)*14);border:1px solid var(--line-2);border-radius:var(--r);background:var(--bg);padding:.5rem;display:flex;flex-direction:column;gap:.375rem}
+.grp.on{border-color:var(--fg)} .grp.over{background:var(--accent-soft)}
+.home{border:1px solid var(--line-2);border-radius:var(--r);padding:.5rem;background:transparent} .home.on{border-color:var(--fg)} .home>header{display:flex;justify-content:space-between;gap:.5rem;font-weight:500;cursor:pointer;user-select:none;-webkit-user-select:none}
+.ents{border-left:1px dashed var(--line-2);padding:.5rem;background:transparent} .ents>header{color:var(--fg-2)} .grp.ent{border-color:var(--fg-2)}
+.grp>header{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;font-weight:500;user-select:none;-webkit-user-select:none}
+.grp>header .n{font-variant-numeric:tabular-nums}
+.acct{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:.375rem .5rem;display:flex;justify-content:space-between;gap:.5rem;align-items:baseline;font-size:var(--fs-2);user-select:none;-webkit-user-select:none}
+.acct.free{width:calc(var(--u)*12)} .acct .who{min-width:0} .acct .who div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.native .acct,.native .grp>header{cursor:grab} .dragging{opacity:.9;z-index:2;pointer-events:none}
+.board .hint{position:absolute;right:.5rem;bottom:.25rem}
+.transaction:focus-visible,.nav button:focus-visible{outline:1px solid var(--fg);outline-offset:3px}

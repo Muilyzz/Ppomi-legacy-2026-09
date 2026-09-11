@@ -28,7 +28,7 @@ final class FootprintsTests: XCTestCase {
         for s in ["406,600원 결제하기", "송금", "이체하기", "충전 완료", "구독 진행", "결제|취소", "모든 객실 보기", "예약 조회"] {
             if Tools.isPayWord(s) { XCTAssertTrue(Footprint.isPayTarget(s), s) }
         }
-        XCTAssertTrue(Footprint.isPayTarget("결제|취소")); XCTAssertFalse(Footprint.isPayTarget("모든 객실 보기"))
+        XCTAssertTrue(Footprint.isPayTarget("결제|취소")); XCTAssertFalse(Footprint.isPayTarget("모든 객실 보기")); XCTAssertFalse(Footprint.isPayTarget("바로구매"))
         XCTAssertEqual(fp("⊙", "결제하기", [], []).handoff, "승인 필요 지점")
         XCTAssertEqual(fp("⌨", "송금", [], []).handoff, nil)
         XCTAssertEqual(fp("👤", "", [], []).handoff, "사용자 차례")

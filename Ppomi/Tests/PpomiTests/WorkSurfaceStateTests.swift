@@ -3,6 +3,8 @@ import XCTest
 @testable import Ppomi
 
 final class WorkSurfaceStateTests: XCTestCase {
+    /// setSize persists per surface (surfaceSize.<surface>); leave nothing behind for the next test or run.
+    override func tearDown() { ["iphone", "android", "windows"].forEach { UserDefaults.standard.removeObject(forKey: "surfaceSize." + $0) } }
     @MainActor func testSurfaceSizesRemainIndependentAfterAndroidResizeAndSelection() {
         let state = AppState()
         let phone = state.phoneSize, windows = state.windowsSize

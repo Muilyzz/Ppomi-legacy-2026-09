@@ -4,12 +4,13 @@ import Darwin
 import Foundation
 
 enum AgentNativeError: Error, LocalizedError, Equatable {
-    case invalidRequest, invalidEndpoint, inactive, unavailable, fileBoundary, fileSize, fileIO
+    case invalidRequest, invalidEndpoint, inactive, unavailable, fileBoundary, fileSize, fileIO, accountWindowOpen
     var errorDescription: String? {
         switch self {
         case .invalidRequest: return "허용되지 않은 에이전트 요청입니다."
         case .invalidEndpoint: return "인증 정보·쿼리·프래그먼트 없는 HTTPS 서버 주소가 필요합니다."
         case .inactive: return "음성 세션이 종료되어 실행하지 않았습니다."
+        case .accountWindowOpen: return "계정 창을 닫은 뒤 대화를 시작해 주세요."
         case .unavailable: return "음성 에이전트 파일을 찾지 못했습니다. 앱을 다시 빌드해 주세요."
         case .fileBoundary: return "뽀미 작업 폴더의 일반 파일만 사용할 수 있습니다."
         case .fileSize: return "UTF-8 파일은 128 KiB 이하여야 합니다."

@@ -7,6 +7,10 @@ final class SharedServerClient: @unchecked Sendable {
     static let shared = SharedServerClient()
 
     private let configuration: () throws -> SharedServerConfiguration?
+    private let currentSession: () -> MacSession?
+    private let currentDeviceID: () -> String
+    private let refreshSession: (String) throws -> SupabaseAuth.Tokens
+    private let saveSession: (MacSession) throws -> Void
     private let transport: Transport
     private let lock = NSLock()
     private var activeConfiguration: SharedServerConfiguration?
@@ -18,21 +22,34 @@ final class SharedServerClient: @unchecked Sendable {
     private enum Mode { case session, legacy }
     private struct Credentials { let url: String; let publishableKey: String; let deviceId: String; let mode: Mode }
 
-    init(configuration: @escaping () throws -> SharedServerConfiguration? = SharedServerConfiguration.load,
+    init(configuration: @escaping () throws -> SharedServerConfiguration? = { try SharedServerConfiguration.load(interactionAllowed: false) },
+         session: @escaping () -> MacSession? = { GoogleAccount.session },
+         deviceID: @escaping () -> String = { GoogleAccount.deviceID },
+         refreshSession: @escaping (String) throws -> SupabaseAuth.Tokens = SupabaseAuth.refresh,
+         saveSession: @escaping (MacSession) throws -> Void = GoogleAccount.save,
          transport: @escaping Transport = SharedServerClient.send) {
         self.configuration = configuration; self.transport = transport
+        self.currentSession = session; self.currentDeviceID = deviceID
+        self.refreshSession = refreshSession; self.saveSession = saveSession
     }
 
     /// 구글 세션이 있으면 그것, 없으면 옛 기기 계정. 둘 다 없으면 미설정.
-    var isConfigured: Bool { GoogleAccount.session != nil || (try? configuration()) != nil }
+    var isConfigured: Bool { currentSession() != nil || (try? configuration()) != nil }
+    /// The shared shell receives presentation state only, never account email or credentials.
+    var authentication: [String: Any] {
+        guard let session = currentSession() else { return ["method": "google", "signedIn": false] }
+        var result: [String: Any] = ["method": "google", "signedIn": true]
+        if let name = session.name, !name.isEmpty { result["displayName"] = name }
+        return result
+    }
     /// 세션·계정이 바뀌었다: 다음 요청에서 다시 붙는다.
     func invalidate() { lock.lock(); accessToken = nil; context = nil; mode = nil; expiresAt = .distantPast; lock.unlock() }
 
     func status() throws -> [String: Any] {
         lock.lock(); defer { lock.unlock() }
         var status: [String: Any]
-        if let s = GoogleAccount.session {
-            status = ["configured": true, "host": URL(string: PpomiServer.supabaseURL)?.host ?? "", "deviceId": GoogleAccount.deviceID, "authority": "server",
+        if let s = currentSession() {
+            status = ["configured": true, "host": URL(string: PpomiServer.supabaseURL)?.host ?? "", "deviceId": currentDeviceID(), "authority": "server",
                       "account": s.email, "localDataImported": SharedRecordVault.enabled, "recordsEncrypted": SharedRecordVault.enabled]
         } else {
             guard let config = try configuration() else { return ["configured": false, "connected": false, "localDataImported": false] }
@@ -100,17 +117,19 @@ final class SharedServerClient: @unchecked Sendable {
     }
 
     private func authenticate(legacy: Bool) throws -> Credentials {
-        if !legacy, var session = GoogleAccount.session {
-            if mode != .session { accessToken = nil; context = nil; expiresAt = .distantPast; activeConfiguration = nil; mode = .session }
-            let credentials = Credentials(url: PpomiServer.supabaseURL, publishableKey: PpomiServer.publishableKey, deviceId: GoogleAccount.deviceID, mode: .session)
+        if !legacy, var session = currentSession() {
+            // The account window and executor are separate processes. A new Keychain session must
+            // replace this process's cache immediately, including an account switch before expiry.
+            if mode != .session || accessToken != session.accessToken { accessToken = nil; context = nil; expiresAt = .distantPast; activeConfiguration = nil; mode = .session }
+            let credentials = Credentials(url: PpomiServer.supabaseURL, publishableKey: PpomiServer.publishableKey, deviceId: currentDeviceID(), mode: .session)
             if accessToken != nil, expiresAt.timeIntervalSinceNow > 30 { return credentials }
             if session.expiresAt.timeIntervalSinceNow <= 30 {
                 let tokens: SupabaseAuth.Tokens
-                do { tokens = try SupabaseAuth.refresh(session.refreshToken) }
+                do { tokens = try refreshSession(session.refreshToken) }
                 catch SupabaseAuth.Failure.connection { throw SharedServerError.connection }
                 catch { throw SharedServerError.authentication }
                 session.accessToken = tokens.access; session.refreshToken = tokens.refresh; session.expiresAt = tokens.expiresAt
-                try? GoogleAccount.save(session)
+                try saveSession(session)
             }
             accessToken = session.accessToken; expiresAt = session.expiresAt
             return credentials

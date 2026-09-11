@@ -52,7 +52,36 @@ final class AgentSidebar: WorkbenchSurface, ConversationHost {
     }
 }
 
-/// 제어 머리띠: the target picker and the 기록 button, nothing else.
+/// Account and app-level actions remain available above both workspace panes.
+struct WorkbenchTopBar: View {
+    @EnvironmentObject private var state: AppState
+    @State private var me = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("뽀미")
+            Spacer(minLength: 8)
+            if state.compactWorkbench {
+                Button(state.compactContentActionTitle, action: state.presentCompactContent)
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("compact-content-open")
+                    .help("기록과 승인 요청 보기")
+            }
+            Button { me = true } label: { AvatarView(session: GoogleAccount.session, size: 20) }
+                .buttonStyle(.plain)
+                .accessibilityLabel("나")
+                .accessibilityIdentifier("me-open")
+                .sheet(isPresented: $me) { MeSheet().environmentObject(state) }
+        }
+        .font(.ppomi(2))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .ppomiTheme()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("앱")
+    }
+}
+
+/// The wide record action parks native control windows inside the content pane.
 struct ControlTargetToolbar: View {
     @EnvironmentObject private var state: AppState
 
@@ -65,29 +94,12 @@ struct ControlTargetToolbar: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Picker("제어 화면", selection: Binding(get: { state.workSurface }, set: state.selectSurface)) {
-                ForEach(WorkSurface.allCases) { target in
-                    Text(target.displayName).tag(target)
-                }
-            }
-            .pickerStyle(.menu)       // a dropdown, like the Storybook <select>: the control column is only as wide as the target
-            .labelsHidden()
-            .font(.ppomi(2))
-            .controlSize(.ppomiSmall)
-            .fixedSize(horizontal: true, vertical: false)
-            .disabled(state.ask != nil)
-            .accessibilityIdentifier("workbench-control-target")
+            // 대상 선택기 없음: 어느 창을 데려올지는 도구 호출이 정한다(phone_*→iPhone, windows_*→Windows, android_*→Android)
             Spacer(minLength: 8)
             Button("기록", action: state.toggleRecordsFocus)
                 .controlSize(.ppomiSmall)
                 .disabled(!recordsAvailable)
                 .accessibilityIdentifier("records-open")
-            // 설정은 아이패드와 같은 자리의 톱니 하나. 메뉴에는 아무것도 더하지 않는다.
-            SettingsLink { Image(systemName: "gearshape") }
-                .buttonStyle(.plain)
-                .foregroundStyle(.fg2)
-                .accessibilityLabel("설정")
-                .accessibilityIdentifier("settings-open")
         }
         .font(.ppomi(2))
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -19,7 +19,7 @@ final class ScreenControlLease: @unchecked Sendable {
         }
     }
 
-    static let blockedMessage = "실행 안 함: 기록 집중 모드에서는 뽀미의 화면 제어·캡처가 일시정지됩니다. ‘작업으로 돌아가기’를 누른 뒤 다시 요청해 주세요."
+    static let blockedMessage = "실행 안 함: 기록 집중 모드에서는 뽀미의 화면 제어·캡처가 일시정지됩니다. ‘제어로 돌아가기’를 누른 뒤 다시 요청해 주세요."
 
     private static let visibleSurfacePrefixes = ["phone_", "windows_", "android_"]
     private static let visibleSurfaceTools: Set<String> = [

@@ -27,8 +27,9 @@ enum AppSettings {
         try? fm.createDirectory(at: app, withIntermediateDirectories: true)
         return app.appendingPathComponent("ledger.db").path
     }
-    /// Own name: deposits carrying it are transfers between own accounts. Until set in Settings, fall back to STYLE_ME from the
-    /// environment or the repo's .env next to data/, which is what am.py uses — so the app reads the ledger the same way.
+    /// Own name: deposits carrying it are transfers between own accounts. Not a settings field — written whenever the "나" profile
+    /// is saved (IdentityProfileStore.rememberOwnName: 예금주 캡처·profile_save), else STYLE_ME from the environment / .env (what am.py uses).
+    /// Kept outside the identity vault so the ledger loads without a fingerprint.
     static var me: String {
         get { d.string(forKey: "me").flatMap { $0.isEmpty ? nil : $0 } ?? env("STYLE_ME") ?? "" }
         set { d.set(newValue, forKey: "me") }
@@ -46,8 +47,6 @@ enum AppSettings {
         }
         return nil
     }
-    /// "뽀미야" 깨우기 말 듣기(설정에 저장). 예전엔 메뉴의 세션 스위치였다.
-    static var wakeWord: Bool { get { d.bool(forKey: "wakeWord") } set { d.set(newValue, forKey: "wakeWord") } }
     /// Whole-UI size (glyphs, spacing, controls) = the OS text size(시스템 설정 › 손쉬운 사용 › 디스플레이 › 텍스트 크기), like the iPad's Dynamic Type.
     /// Body 13pt is 1; clamped 0.75–3. No app-level picker.
     static var uiScale: Double { uiScaleOverride ?? min(3, max(0.75, NSFont.preferredFont(forTextStyle: .body).pointSize / 13)) }

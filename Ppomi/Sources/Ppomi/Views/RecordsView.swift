@@ -13,27 +13,38 @@ extension EnvironmentValues {
     }
 }
 
-/// 기록 페이지: it replaces the whole workspace. Header row = "← 대화" + the tabs; body = the tab's page.
+/// One records owner beside or over conversation; presentation and parked-window restoration are separate actions.
 struct RecordsView: View {
     @EnvironmentObject private var state: AppState
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Button("← 대화", action: state.toggleRecordsFocus)
-                    .buttonStyle(.plain)
-                    .font(.ppomi(2, weight: .medium))
-                    .help("Esc")
-                    .accessibilityLabel("대화로 돌아가기")
-                    .accessibilityIdentifier("records-back")
+            VStack(alignment: .leading, spacing: 8) {
+                if state.compactWorkbench {
+                    Button("대화로 돌아가기", action: state.dismissCompactContent)
+                        .buttonStyle(.plain)
+                        .font(.ppomi(2, weight: .medium))
+                        .help("Esc · 승인 요청과 제어 상태는 유지됩니다")
+                        .accessibilityIdentifier("compact-content-close")
+                }
+                if state.recordsFocused {
+                    Button("제어로 돌아가기", action: state.toggleRecordsFocus)
+                        .buttonStyle(.plain)
+                        .font(.ppomi(2, weight: .medium))
+                        .help("Esc")
+                        .accessibilityLabel("제어로 돌아가기")
+                        .accessibilityIdentifier("records-back")
+                }
                 RecordsNavigation(selection: state.tab, select: state.show)
                 if let message = state.recordsFocusMessage {
-                    Text(message).font(.ppomi(1)).foregroundStyle(.bad).lineLimit(1)
+                    Text(message).font(.ppomi(1)).foregroundStyle(.bad)
+                        .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("records-focus-message")
                 }
             }
             .padding(.horizontal, 20)
-            .frame(height: WorkbenchLayout.toolbarHeight)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, minHeight: WorkbenchLayout.toolbarHeight, alignment: .leading)
             Divider().overlay(Color.line)
             RecordsPages(state: state)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -48,19 +59,25 @@ private struct RecordsNavigation: View {
     let select: (AppState.Tab) -> Void
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            picker.pickerStyle(.segmented).fixedSize(horizontal: true, vertical: false)
+            picker.pickerStyle(.menu)
+        }
+        .labelsHidden()
+        .controlSize(.ppomiSmall)
+        .font(.ppomi(2))
+        .frame(maxWidth: 640, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("기록 보기")
+    }
+
+    private var picker: some View {
         Picker("기록 보기", selection: Binding(get: { selection }, set: select)) {
             ForEach(AppState.Tab.allCases, id: \.self) { tab in
                 Text(tab.title).tag(tab)
                     .accessibilityIdentifier("records-tab-\(tab.rawValue)")
             }
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.ppomiSmall)
-        .font(.ppomi(2))
-        .frame(maxWidth: 640)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("기록 보기")
     }
 }
 
@@ -105,7 +122,7 @@ private struct RecordsPage: View {
             case .health: HealthView()
             }
         }
-        .environment(\.recordsPageIsActive, state.recordsFocused && state.tab == tab)
+        .environment(\.recordsPageIsActive, state.recordsPageVisible && state.tab == tab)
         .ppomiTheme()
     }
 }

@@ -113,7 +113,7 @@ export const callApprovalProtocol = `
 
 export function voiceInstructions(bootstrap: Bootstrap, mode: "voice" | "text" = "voice"): string {
   const available = Object.keys(nativeSchemas).filter(name => bootstrap.tools.includes(name));
-  const platform = bootstrap.platform === "android" ? "Android" : "macOS";
+  const platform = { android: "Android", macos: "macOS", windows: "Windows" }[bootstrap.platform];
   const accessibility = typeof bootstrap.accessibility === "boolean"
     ? bootstrap.accessibility ? "켜짐" : "꺼짐: 다른 앱 제어 전에 사용자가 직접 켜야 함"
     : "device_status로 확인 필요";

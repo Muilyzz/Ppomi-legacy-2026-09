@@ -1,5 +1,11 @@
 # 뽀미 (Ppomi)
 
+> **새 앱 구조:** `shell/`에 **Tauri 2 + OS별 실행기**를 추가했습니다.
+> 공통 TypeScript UI를 macOS Swift·Windows C#·Android Kotlin 실행기에 연결합니다.
+> Windows와 Android는 각 기기에서 서버에 직접 연결하고, Parallels는 개발·시험용 VM으로만 사용합니다.
+> [빌드 방법·이전 범위·남은 제약](docs/tauri-executors.md)을 먼저 확인하세요.
+> 아래의 미러링·설치 설명은 기존 macOS 호환 앱 기준입니다.
+
 **뽀미는 당신 폰을 대신 만지는 손입니다. 돈 앞에서는 멈추고, 한 일은 증거를 남깁니다.**
 
 > **English.** Ppomi is a Mac app that drives your *locked* iPhone through iPhone Mirroring on behalf of an AI agent (Claude app, Claude Code, Codex, or any stdio MCP client). It reads the mirrored screen with on-device OCR, taps, types and scrolls, and stops at every pay button: money leaves only after you press one approval button, one approval per attempt, enforced in code. Everything it does lands in a local SQLite ledger with screenshots as evidence, and what it learns about each app is written to plain Markdown playbooks. Nothing leaves your Mac unless you plug in a brain. By Muilyzz.

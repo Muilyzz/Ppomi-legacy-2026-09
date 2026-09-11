@@ -2,3 +2,13 @@ test
 README.md
 node_modules
 .env.local
+
+.env
+.env.*
+*.log
+*.pem
+*.p12
+*.p8
+*.key
+*.jks
+*.keystore

@@ -1,134 +1,114 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" data-install-target="home">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ppomi — 당신 폰을 대신 만지는 손</title>
-<meta name="description" content="뽀미는 당신 폰을 대신 만지는 손입니다. 돈 앞에서는 멈추고, 한 일은 증거를 남깁니다.">
-<meta property="og:title" content="Ppomi">
-<meta property="og:description" content="뽀미는 당신 폰을 대신 만지는 손입니다. 돈 앞에서는 멈추고, 한 일은 증거를 남깁니다.">
-<meta property="og:image" content="https://ppomi.vercel.app/social-preview.png">
-<meta property="og:url" content="https://ppomi.vercel.app/">
-<link rel="icon" href="icon.png">
-<style>
-/* 검은 계기판(Web/theme.css)과 같은 토큰. 금색은 승인 버튼 하나에만. 외부 폰트·스크립트 없음. */
-:root{color-scheme:dark;--bg:#000;--card:#131313;--pick:rgba(255,255,255,.08);--line:rgba(255,255,255,.10);--line2:rgba(255,255,255,.25);--fg:#e6e6e3;--meta:#8a8a86;--go:#c7a300;--sans:-apple-system,'Apple SD Gothic Neo',sans-serif;--mono:ui-monospace,'SF Mono',Menlo,monospace;--r:6px;--rc:8px}
-*{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--fg)}
-body{font:15px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
-a{color:var(--fg);text-decoration:underline;text-decoration-color:var(--line2);text-underline-offset:3px}
-a:hover{text-decoration-color:var(--meta)}
-.wrap{max-width:760px;margin:0 auto;padding:0 20px}
-header{display:flex;align-items:center;justify-content:space-between;height:56px}
-.brand{display:flex;align-items:center;gap:8px;font-weight:600;text-decoration:none}
-.brand img{width:20px;height:20px}
-nav a{font-size:13px;color:var(--meta);text-decoration:none;margin-left:20px}
-nav a:hover{color:var(--fg)}
-
-/* ---- 링: 미러링 창 둘레의 검은 링, 2pt 금 림 = 뽀미가 폰을 잡고 있다 */
-.hero{padding:56px 0 64px;text-align:center}
-.ring{width:236px;height:236px;margin:0 auto 12px;border-radius:50%;border:2px solid var(--go);display:grid;place-items:center;box-shadow:0 0 80px rgba(199,163,0,.12),inset 0 0 40px rgba(0,0,0,.8)}
-.ring img{width:64px;height:64px;opacity:.9}
-.approve{display:inline-flex;align-items:center;height:36px;padding:0 18px;border-radius:var(--r);background:var(--go);color:#000;font:600 14px/1 var(--sans);font-variant-numeric:tabular-nums;white-space:nowrap}
-.hero h1{font-size:clamp(24px,4.5vw,36px);font-weight:600;letter-spacing:-.02em;line-height:1.3;margin:40px auto 12px;max-width:22em;word-break:keep-all}
-.hero p{color:var(--meta);margin:0 0 28px;word-break:keep-all}
-.cta{display:inline-flex;align-items:center;height:40px;padding:0 20px;border-radius:var(--r);border:1px solid var(--line2);color:var(--fg);text-decoration:none;font-size:14px;font-weight:500}
-.cta:hover{background:var(--pick)}
-.cta.primary{background:var(--fg);color:#000;border-color:transparent;font-weight:600}
-.hero .req{display:block;margin-top:12px;font-size:12px;color:var(--meta)}
-
-/* ---- 섹션 = 11px 라벨 + 헤어라인 */
-.sec{display:flex;align-items:center;gap:12px;margin:56px 0 16px;font-size:11px;color:var(--meta);white-space:nowrap}
-.sec::after{content:'';flex:1;height:1px;background:var(--line)}
-h2{font:inherit;margin:0}
-
-/* ---- 15초, 3컷 */
-.scenes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.scene{background:var(--card);border-radius:var(--rc);padding:16px;min-height:200px;display:flex;flex-direction:column}
-.scene .n{font:500 11px/1 var(--mono);color:var(--meta)}
-.scene .pic{flex:1;display:grid;place-items:center;padding:16px 0}
-.scene b{font-size:15px;font-weight:600;display:block;margin-bottom:4px;word-break:keep-all}
-.scene p{margin:0;font-size:13px;color:var(--meta);word-break:keep-all}
-.phone{width:36px;height:72px;border:1.5px solid var(--line2);border-radius:8px;position:relative}
-.phone::after{content:'';position:absolute;left:50%;top:5px;width:12px;height:3px;margin-left:-6px;border-radius:2px;background:var(--line2)}
-.say{font-size:14px;color:var(--fg);padding:6px 12px;border:1px solid var(--line2);border-radius:14px 14px 14px 4px;max-width:100%}
-.approve.small{height:30px;padding:0 14px;font-size:13px}
-
-/* ---- 코드 */
-pre{margin:0 0 12px;padding:14px 16px;background:var(--card);border-radius:var(--rc);font:12.5px/1.6 var(--mono);white-space:pre;overflow-x:auto}
-code{font:13px var(--mono);background:var(--card);padding:1px 5px;border-radius:4px}
-.lbl{font-size:12px;color:var(--meta);margin:16px 0 6px}
-.sub{color:var(--meta);margin:0 0 12px;word-break:keep-all}
-.tools{font:12px/1.8 var(--mono);color:var(--meta);word-break:break-word}
-
-/* ---- 요구사항 */
-.req3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 16px;margin:0}
-.req3 dt{font-size:12px;color:var(--meta)}
-.req3 dd{margin:0 0 8px;word-break:keep-all}
-
-/* ---- 하단 */
-.down{text-align:center;padding:56px 0 24px}
-.down .cta{margin:0 6px 8px}
-footer{margin-top:40px;padding:20px 0 40px;border-top:1px solid var(--line);font-size:12px;color:var(--meta);display:flex;gap:16px;flex-wrap:wrap}
-footer a{color:var(--meta);text-decoration:none}
-footer a:hover{color:var(--fg)}
-@media (max-width:640px){.scenes,.req3{grid-template-columns:1fr}.ring{width:200px;height:200px}}
-@media (prefers-reduced-motion:no-preference){.ring{animation:breathe 4s ease-in-out infinite}@keyframes breathe{50%{box-shadow:0 0 110px rgba(199,163,0,.2),inset 0 0 40px rgba(0,0,0,.8)}}}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>뽀미 — 내 기록</title>
+  <meta name="description" content="뽀미에 로그인하고 내 기록을 살펴보세요.">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#090909">
+  <meta property="og:title" content="뽀미">
+  <meta property="og:description" content="로그인하고 내 기록을 살펴보세요.">
+  <meta property="og:url" content="https://ppomi.muilyzz.com/">
+  <link rel="icon" href="/icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icon.png">
+  <meta name="apple-mobile-web-app-title" content="뽀미">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="/install-guide.css">
+  <script src="/install-guide.js" defer></script>
+  <link rel="stylesheet" href="/web/home.css">
+  <script type="module" src="/web/home.js"></script>
 </head>
 <body>
-<div class="wrap">
-<header>
-  <a class="brand" href="/"><img src="paw.svg" alt="">Ppomi</a>
-  <nav><a href="#hand">연결</a><a href="#req">요구사항</a><a href="/privacy">개인정보</a></nav>
-</header>
+  <a class="skip-link" href="#main">본문으로 바로 가기</a>
+  <div class="home-wrap">
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="뽀미 홈"><img src="/paw.svg" alt="" width="26" height="26"><span>Ppomi</span></a>
+      <nav class="site-nav" aria-label="사이트 메뉴"><a href="/download">다운로드</a><a href="/privacy">개인정보</a></nav>
+    </header>
 
-<section class="hero">
-  <div class="ring"><img src="paw.svg" alt="뽀미"></div>
-  <span class="approve">결제 승인 406,600원</span>
-  <h1>뽀미는 당신 폰을 대신 만지는 손입니다.<br>돈 앞에서는 멈추고, 한 일은 증거를 남깁니다.</h1>
-  <p>잠긴 아이폰을 iPhone 미러링으로 조작하는 Mac 앱. 두뇌는 당신의 AI, 마지막 버튼은 당신.</p>
-  <a class="cta primary" href="https://github.com/Muilyzz/Ppomi/releases">Mac 용 다운로드</a>
-  <span class="req">macOS 26 · v0.1.0 테스트 버전 · Apple 공증 준비 중</span>
-</section>
+    <main id="main" class="home-main" tabindex="-1">
+      <p id="auth-status" class="auth-status" role="status" aria-live="polite">로그인 상태를 확인하고 있습니다.</p>
 
-<div class="sec"><h2>15초</h2></div>
-<div class="scenes">
-  <div class="scene"><span class="n">1</span><div class="pic"><div class="phone"></div></div><b>폰을 내려놓는다</b><p>잠근 채 Mac 옆에. 뽀미는 미러링 창을 읽고 탭합니다.</p></div>
-  <div class="scene"><span class="n">2</span><div class="pic"><span class="say">타니베이 9/5~9/8 3박 예약해줘</span></div><b>말한다</b><p>목적만. 앱을 열고 날짜를 넣고 객실을 고르는 건 뽀미.</p></div>
-  <div class="scene"><span class="n">3</span><div class="pic"><span class="approve small">결제 승인 406,600원</span></div><b>승인 버튼 하나</b><p>결제 화면에서 멈춥니다. 누르기 전엔 돈이 안 나갑니다. 코드가 막습니다.</p></div>
-</div>
+      <aside class="ipad-prompt" id="ipad-prompt" aria-label="홈 화면 추가 안내" hidden>
+        <div><strong>홈 화면에서 뽀미를 바로 열어요</strong><p>아이콘을 한 번 추가하면 다음부터 여기로 바로 올 수 있어요.</p></div>
+        <button class="guide-button" type="button" data-open-install-guide hidden>추가 방법 보기 <span aria-hidden="true">↗</span></button>
+      </aside>
 
-<div class="sec" id="hand"><h2>네 AI에 손을 달아 줘</h2></div>
-<p class="sub">뽀미는 MCP 서버입니다. Claude 앱, Claude Code, Codex — stdio MCP 를 받는 곳이면 어디든 같은 형식으로 붙습니다.</p>
-<div class="lbl">Claude Code</div>
-<pre>claude mcp add ppomi -- /Applications/Ppomi.app/Contents/MacOS/Ppomi --mcp</pre>
-<div class="lbl">Claude 앱 · claude_desktop_config.json</div>
-<pre>{
-  "mcpServers": {
-    "ppomi": {
-      "command": "/Applications/Ppomi.app/Contents/MacOS/Ppomi",
-      "args": ["--mcp"]
-    }
-  }
-}</pre>
-<p class="tools">phone_screen · phone_tap · phone_type · phone_scroll · phone_open · confirm_payment · record_spend · balances · transactions · sql · read_playbook · note_footprint</p>
+      <section id="sign-in-panel" class="sign-in-panel" aria-labelledby="sign-in-title">
+        <div class="sign-in-card">
+          <img class="sign-in-mark" src="/paw.svg" alt="" width="44" height="44">
+          <h1 id="sign-in-title">뽀미에 로그인하세요</h1>
+          <p class="sign-in-description">사용하던 계정으로 시작하세요.</p>
+          <button id="sign-in" class="button primary sign-in-button" type="button" disabled>
+            <span>Google 계정으로 계속</span><span aria-hidden="true">→</span>
+          </button>
+          <button class="install-home-link" type="button" data-open-install-guide hidden>iPad 홈 화면에 추가하기</button>
+          <p class="sign-in-note">설치한 뽀미 앱에서 사용하는<br>Google 계정으로 로그인해 주세요.</p>
+        </div>
+        <noscript><p class="no-script">로그인하려면 브라우저에서 JavaScript를 켜 주세요.</p></noscript>
+      </section>
 
-<div class="sec" id="req"><h2>요구사항</h2></div>
-<dl class="req3">
-  <div><dt>Mac</dt><dd>Apple 실리콘, macOS 26</dd></div>
-  <div><dt>iPhone 미러링</dt><dd>되는 지역·같은 Apple 계정. Wi‑Fi·Bluetooth 켜짐</dd></div>
-  <div><dt>아이폰</dt><dd>잠근 채 옆에. 들면 미러링이 끊기고 뽀미는 멈춥니다</dd></div>
-</dl>
-<p class="sub" style="margin-top:16px">권한 셋: 손쉬운 사용(탭·입력) · 화면 기록(읽기) · 마이크(음성을 쓸 때만). 첫 실행 설정 창에서 안내합니다.</p>
+      <section id="app-shell" class="app-shell" aria-label="내 기록" hidden>
+        <aside class="workspace-sidebar" aria-label="계정과 기록 탐색">
+          <div class="sidebar-heading"><h1>내 뽀미</h1><button id="sign-out" class="button quiet" type="button">로그아웃</button></div>
+          <section class="account-card" aria-labelledby="account-title">
+            <div class="account-mark" aria-hidden="true"><img src="/paw.svg" alt="" width="28" height="28"></div>
+            <div class="account-details"><h2 id="account-title">로그인 계정</h2><strong id="user-name"></strong><span id="user-email"></span></div>
+          </section>
+          <section class="connection-card" aria-labelledby="connection-title">
+            <h2 id="connection-title">기록 연결</h2>
+            <dl class="connection-status"><div><dt>계정</dt><dd id="workspace-status">확인 중</dd></div><div><dt>이 기기</dt><dd id="device-status">확인 중</dd></div></dl>
+            <p id="sync-status" class="connection-note" role="status" aria-live="polite">기록을 읽을 수 있는지 확인하고 있습니다.</p>
+          </section>
+          <div class="record-navigation">
+            <h2 id="records-nav-title">내 기록</h2>
+            <div class="record-tabs" role="tablist" aria-labelledby="records-nav-title" aria-orientation="vertical">
+              <button id="tab-timeline" type="button" role="tab" data-record-view="timeline" aria-selected="true" aria-controls="main-content" tabindex="0"><span>타임라인</span><span aria-hidden="true">↗</span></button>
+              <button id="tab-evidence" type="button" role="tab" data-record-view="evidence" aria-selected="false" aria-controls="main-content" tabindex="-1"><span>증빙·전표</span><span aria-hidden="true">↗</span></button>
+              <button id="tab-accounting" type="button" role="tab" data-record-view="accounting" aria-selected="false" aria-controls="main-content" tabindex="-1"><span>분개장</span><span aria-hidden="true">↗</span></button>
+              <button id="tab-playbooks" type="button" role="tab" data-record-view="playbooks" aria-selected="false" aria-controls="main-content" tabindex="-1"><span>플레이북</span><span aria-hidden="true">↗</span></button>
+              <button id="tab-health" type="button" role="tab" data-record-view="health" aria-selected="false" aria-controls="main-content" tabindex="-1"><span>건강</span><span aria-hidden="true">↗</span></button>
+              <button id="tab-spatial" type="button" role="tab" data-record-view="spatial" aria-selected="false" aria-controls="main-content" tabindex="-1"><span>건축물 3D</span><span aria-hidden="true">↗</span></button>
+            </div>
+          </div>
+          <div class="native-note"><p>대화와 기기 제어는<br>설치한 뽀미 앱에서 이용하세요.</p><a href="/download">앱 설치 안내 <span aria-hidden="true">↗</span></a></div>
+        </aside>
+        <section class="record-panel" aria-labelledby="record-title">
+          <header class="record-panel-heading"><div><p class="eyebrow">내 기록</p><h2 id="record-title">타임라인</h2></div><button id="refresh-records" class="button quiet" type="button" disabled>새로고침</button></header>
+          <div class="record-panel-meta"><p id="record-status" role="status" aria-live="polite">기록 연결을 확인하고 있습니다.</p><span id="record-version"></span></div>
+          <div id="main-content" class="main-content" role="tabpanel" aria-labelledby="tab-timeline" tabindex="0">
+            <div class="record-empty"><span class="empty-symbol" aria-hidden="true">⌁</span><h3>기록을 불러올 준비를 하고 있어요</h3><p>왼쪽에서 보고 싶은 기록을 선택하세요.</p></div>
+          </div>
+        </section>
+      </section>
+    </main>
 
-<div class="down">
-  <a class="cta primary" href="https://github.com/Muilyzz/Ppomi/releases">Mac 용 다운로드</a>
-  <a class="cta" href="/privacy">개인정보</a>
-  <span class="req" style="display:block;margin-top:12px">장부·화면·발자국은 당신 Mac 안에 있고 밖으로 나가지 않습니다.</span>
-</div>
-
-<footer><span>Muilyzz</span><a href="https://muilyzz.com">muilyzz.com</a><a href="https://github.com/Muilyzz/Ppomi">GitHub</a><a href="/privacy">개인정보</a><span>MIT · 무료</span></footer>
-</div>
+    <div class="install-footer"><button class="install-home-link" type="button" data-open-install-guide hidden>iPad 홈 화면 추가 도움말</button></div>
+    <footer class="site-footer"><span>Ppomi</span><span><a href="/download">기기에 설치하기</a><a href="/privacy">개인정보 처리방침</a></span></footer>
+  </div>
+  <dialog class="install-guide" id="install-guide" aria-labelledby="install-guide-title" aria-describedby="install-guide-description">
+    <div class="guide-heading"><p class="eyebrow">iPad · 홈 화면에 추가</p><button class="guide-close" type="button" data-close-install-guide aria-label="설치 안내 닫기" autofocus>×</button></div>
+    <h2 id="install-guide-title">홈 화면에서 바로 열어요</h2>
+    <p class="guide-description" id="install-guide-description">지금 이 웹 앱 홈을 Safari에서 열고, 아래 순서대로 한 번만 추가해 주세요. 다음부터 뽀미 아이콘으로 시작할 수 있어요.</p>
+    <p class="guide-context" id="install-guide-context">iPad의 Safari에서 사용하는 방법입니다. iPadOS 버전에 따라 메뉴 모양과 위치가 조금 다를 수 있어요.</p>
+    <ol class="install-steps">
+      <li>
+        <div class="guide-illustration" aria-hidden="true"><span class="safari-bar"><span class="safari-address">웹 앱 주소</span><svg viewBox="0 0 32 32" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 12H6v16h20V12h-5M16 20V3m-6 6 6-6 6 6"/></svg></span></div>
+        <span class="step-number" aria-hidden="true">01</span><h3>공유 버튼 누르기</h3><p>Safari 도구 막대에서 네모 위로 화살표가 올라가는 버튼을 눌러 주세요.</p>
+      </li>
+      <li>
+        <div class="guide-illustration" aria-hidden="true"><span class="safari-menu"><span>··· 더 보기</span><strong><span class="home-plus">＋</span> 홈 화면에 추가</strong></span></div>
+        <span class="step-number" aria-hidden="true">02</span><h3>홈 화면에 추가 선택</h3><p>공유 메뉴에서 ‘홈 화면에 추가’를 찾으세요. 보이지 않으면 ‘더 보기’를 누르거나 목록을 내려 보세요.</p>
+      </li>
+      <li>
+        <div class="guide-illustration" aria-hidden="true"><span class="safari-confirm"><span>웹 앱으로 열기 <span class="switch-example"></span></span><strong>추가</strong></span></div>
+        <span class="step-number" aria-hidden="true">03</span><h3>추가하면 끝</h3><p>‘웹 앱으로 열기’가 보이면 켜고 ‘추가’를 누르세요. 다음부터 홈 화면 아이콘으로 열 수 있어요.</p>
+      </li>
+    </ol>
+    <p class="guide-footnote">위 그림은 버튼을 찾기 위한 예시예요. 실제 추가는 Safari 메뉴에서 직접 진행해 주세요.</p>
+    <div class="guide-actions"><a href="https://support.apple.com/ko-kr/guide/ipad/ipad8f1f7a29/ipados" target="_blank" rel="noopener noreferrer">Apple 안내 보기 ↗</a><button class="guide-button" type="button" data-close-install-guide>안내 닫기</button></div>
+  </dialog>
 </body>
 </html>

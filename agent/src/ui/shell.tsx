@@ -17,13 +17,18 @@ import { Suggestion } from "@/components/ai-elements/suggestion";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { Workbench, type WorkbenchProps } from "./workbench";
+import "./workbench.css";
 
-export type ShellProps = { platform?: string; error?: ReactNode; conversation: ReactNode };
-/** main.agent-shell: 한 열. 오류 띠 위, 대화 아래. */
+export type ShellFrameSlots = Omit<WorkbenchProps, "conversation">;
+export type ShellProps = { platform?: string; error?: ReactNode; conversation: ReactNode } & Partial<ShellFrameSlots>;
+/** Native frames embed one chat column; Tauri supplies the slots of the shared frame. */
 export function Shell(p: ShellProps) {
-  return <main className={"agent-shell" + (p.platform ? " " + p.platform : "")}>
+  const conversation = <main className={"agent-shell" + (p.platform ? " " + p.platform : "")}>
     {p.error}{p.conversation}
   </main>;
+  return p.topBar === undefined ? conversation : <Workbench topBar={p.topBar} conversation={conversation}
+    contentPane={p.contentPane} contentLabel={p.contentLabel} contentActionLabel={p.contentActionLabel} />;
 }
 
 export function ErrorBanner({ children, onClose }: { children: ReactNode; onClose?: () => void }) {

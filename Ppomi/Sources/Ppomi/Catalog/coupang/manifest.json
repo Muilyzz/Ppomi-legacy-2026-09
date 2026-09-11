@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "id": "coupang",
+  "name": "쿠팡",
+  "version": "0.1.0",
+  "aliases": [
+    "COUPANG",
+    "Coupang"
+  ],
+  "launch": {
+    "search": "쿠팡"
+  },
+  "capabilities": [
+    {
+      "id": "order",
+      "title": "상품 검색 · 비교 · 주문 준비",
+      "description": "검색어로 상품을 찾아 로켓배송과 가격을 비교하고 주문서를 준비합니다. 최종 결제는 사용자의 승인 뒤 한 번만 시도하고, 쿠페이 인증은 당사자가 합니다. 2026-09-11 화면 라벨은 미검증입니다.",
+      "inputs": [
+        {
+          "name": "item",
+          "label": "상품명 또는 검색어",
+          "required": true
+        },
+        {
+          "name": "quantity",
+          "label": "수량(없으면 1)",
+          "required": false
+        },
+        {
+          "name": "option",
+          "label": "옵션·규격(없으면 가장 싼 기본형)",
+          "required": false
+        }
+      ],
+      "steps": [
+        { "id": "step-1", "title": "▶쿠팡", "kind": "open" },
+        { "id": "step-2", "title": "⊙검색", "kind": "tap" },
+        { "id": "step-3", "title": "⌨상품명", "kind": "input" },
+        { "id": "step-4", "title": "상품 고르기: 지정한 상품 › 없으면 로켓배송 중 최저가", "kind": "choice" },
+        { "id": "step-5", "title": "⊙바로구매", "kind": "tap" },
+        { "id": "step-6", "title": "⊙옵션·수량 › 바로구매(시트가 뜨면)", "kind": "choice" },
+        { "id": "step-7", "title": "👤로그인(있으면)", "kind": "human" },
+        { "id": "step-8", "title": "phone_screen 배송지·배송요청사항·배송비", "kind": "read" },
+        { "id": "step-9", "title": "🎟쿠폰·할인 적용", "kind": "coupon" },
+        { "id": "step-10", "title": "🔍결제수단", "kind": "payment-method" },
+        { "id": "step-11", "title": "✋승인", "kind": "human" },
+        { "id": "step-12", "title": "⊙결제하기", "kind": "payment" },
+        { "id": "step-13", "title": "👤쿠페이 비밀번호·생체인증", "kind": "human" },
+        { "id": "step-14", "title": "📝주문번호·도착 예정일 → record_spend", "kind": "read" }
+      ]
+    }
+  ],
+  "humanSteps": [
+    "로그인·쿠페이 비밀번호·생체인증은 직접 진행합니다. 자격 증명과 카드번호는 뽀미가 입력하지 않습니다.",
+    "최종 결제는 사람이 승인한 뒤 한 번만 탭합니다. 와우 멤버십 가입·구독 버튼은 누르지 않습니다."
+  ],
+  "guide": "guide.md",
+  "iconSource": "https://apps.apple.com/kr/app/id454434967"
+}

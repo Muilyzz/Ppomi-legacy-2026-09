@@ -7,7 +7,8 @@
   "scripts": {
     "test": "node --test",
     "sync:catalog": "node ../scripts/sync-catalog.mjs",
-    "deploy": "npm run sync:catalog && vercel deploy --prod --yes --scope muilyzz"
+    "prepare:downloads": "node ../scripts/prepare-downloads.mjs",
+    "deploy": "npm run sync:catalog && npm run prepare:downloads && vercel deploy --prod --yes --scope muilyzz"
   },
   "dependencies": { "@vercel/kv": "^3.0.0" }
 }

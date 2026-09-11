@@ -69,9 +69,14 @@ struct SharedServerConfiguration: Codable, Equatable, CustomStringConvertible, C
     }
 
     static func load() throws -> Self? {
+        try load(interactionAllowed: true)
+    }
+
+    static func load(interactionAllowed: Bool) throws -> Self? {
         var query = keychainQuery
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
+        if !interactionAllowed { query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail }
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }

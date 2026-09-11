@@ -18,6 +18,7 @@ struct WebPage: NSViewRepresentable {
         let v = WorkbenchWebView(frame: .zero, configuration: cfg)
         v.underPageBackgroundColor = Palette.bg
         v.navigationDelegate = context.coordinator
+        v.uiDelegate = context.coordinator
         return v
     }
     func updateNSView(_ v: WKWebView, context: Context) {
@@ -37,13 +38,25 @@ struct WebPage: NSViewRepresentable {
     }
     static func dismantleNSView(_ v: WKWebView, coordinator: Coordinator) {
         v.configuration.userContentController.removeScriptMessageHandler(forName: "ppomi")
+        v.uiDelegate = nil
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler, WKUIDelegate {
         var html = "", focus: String?, loaded = false, applied: String? = nil
         var updateScript: String?, appliedUpdateScript: String?
         var onMessage: ((Any) -> Void)?
         var onReady: ((WKWebView) -> Void)?
+        /// JavaScript prompt() (예: 타임라인 '+ 그룹'): WKWebView 는 이 델리게이트 없이는 조용히 null 을 돌려준다. 시트 한 장; 테스트는 바꿔 끼운다.
+        var prompt: (_ message: String, _ defaultText: String?, _ window: NSWindow?) -> String? = { message, defaultText, window in
+            let alert = NSAlert(); alert.messageText = message; alert.addButton(withTitle: "확인"); alert.addButton(withTitle: "취소")
+            let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24)); field.stringValue = defaultText ?? ""
+            alert.accessoryView = field; alert.window.initialFirstResponder = field
+            return alert.runModal() == .alertFirstButtonReturn ? field.stringValue : nil
+        }
+        func webView(_ v: WKWebView, runJavaScriptTextInputPanelWithPrompt message: String, defaultText: String?, initiatedByFrame: WKFrameInfo,
+                     completionHandler: @escaping (String?) -> Void) {
+            completionHandler(prompt(message, defaultText, v.window))
+        }
         private var scaleObserver: NSObjectProtocol?
         /// The page's whole UI follows the app's 글자 크기: set once per load and again whenever the setting changes.
         func applyScale(_ v: WKWebView) {
@@ -82,10 +95,14 @@ struct WebPage: NSViewRepresentable {
 final class WebFiles: NSObject, WKURLSchemeHandler {
     static let scheme = "ppomi-web"
     static let base = URL(string: "\(scheme)://web/")!
+    private let directory = Web.directory.standardizedFileURL
     func webView(_ v: WKWebView, start task: WKURLSchemeTask) {
-        guard let url = task.request.url else { return }
-        let file = Web.directory.appendingPathComponent(url.path).standardizedFileURL
-        guard file.path.hasPrefix(Web.directory.standardizedFileURL.path), let data = try? Data(contentsOf: file) else {
+        guard let url = task.request.url, url.scheme == Self.scheme, url.host == "web",
+              url.query == nil, url.fragment == nil, !url.absoluteString.contains("%"),
+              FamilyUpdatePackage.safePath(String(url.path.dropFirst())) else { task.didFailWithError(URLError(.badURL)); return }
+        let file = directory.appendingPathComponent(String(url.path.dropFirst())).standardizedFileURL
+        guard file.path.hasPrefix(directory.path + "/"), file.resolvingSymlinksInPath().path == file.path,
+              let data = try? Data(contentsOf: file) else {
             task.didFailWithError(URLError(.fileDoesNotExist)); return
         }
         let mime = UTType(filenameExtension: file.pathExtension)?.preferredMIMEType

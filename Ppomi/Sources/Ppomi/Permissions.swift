@@ -50,7 +50,7 @@ enum Permissions {
             Item(id: "screen", name: "화면 기록", ok: screenCapture, note: "미러링 창을 읽는 눈 · 필수 · 켠 뒤에는 뽀미를 다시 실행해야 반영돼요", button: "설정 열기") {
                 if !CGRequestScreenCaptureAccess() { pane("Privacy_ScreenCapture") }
             },
-            Item(id: "mic", name: "마이크", ok: microphone, note: "\"뽀미야\" 음성에만 · 선택", button: mic == .notDetermined ? "허용 요청" : "설정 열기") {
+            Item(id: "mic", name: "마이크", ok: microphone, note: "통화(음성 대화)에만 · 선택", button: mic == .notDetermined ? "허용 요청" : "설정 열기") {
                 if mic == .notDetermined { AVCaptureDevice.requestAccess(for: .audio) { _ in } } else { pane("Privacy_Microphone") }
             },
             Item(id: "mirror", name: "iPhone 미러링", ok: mirroringInstalled && mirroringRunning,

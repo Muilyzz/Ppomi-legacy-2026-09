@@ -101,7 +101,7 @@ class PpomiConnectionService : ConnectionService() {
     override fun onCreateOutgoingConnection(account: PhoneAccountHandle?, request: ConnectionRequest?): Connection {
         val connection = PpomiConnection(applicationContext, "")
         // placeCall is asynchronous: if the session already ended, do not leave an orphan call in Telecom.
-        if (!VoiceSessionHost.get(applicationContext).active) {
+        if (!AndroidExecutor.get(applicationContext).active) {
             connection.setDisconnected(DisconnectCause(DisconnectCause.CANCELED)); connection.destroy(); return connection
         }
         PpomiTelecom.attach(connection); connection.activate()
@@ -124,7 +124,7 @@ internal class PpomiConnection(val context: Context, val reason: String) : Conne
     fun answer() {
         activate()
         IncomingCallNotifier.cancel(context)
-        VoiceSessionHost.get(context).answerIncoming(reason)
+        AndroidExecutor.get(context).answerIncoming(reason)
     }
     /** 통화가 살아났다(받았거나 걸었다): OS에 활성으로 알리고 전화 모드 화면을 연다. */
     fun activate() {
@@ -142,17 +142,17 @@ internal class PpomiConnection(val context: Context, val reason: String) : Conne
     override fun onReject() = reject()
     override fun onReject(rejectReason: Int) = reject()
     fun reject() {
-        VoiceSessionHost.get(context).incomingDismissed()
+        AndroidExecutor.get(context).incomingDismissed()
         PpomiTelecom.callEnded(DisconnectCause.REJECTED)
     }
     /** OS 통화 UI나 다른 전화가 끊었다: 세션도 끝난다. */
     override fun onDisconnect() {
         PpomiTelecom.callEnded(DisconnectCause.LOCAL)
-        VoiceSessionHost.get(context).stopVoice()
+        AndroidExecutor.get(context).stopVoice()
     }
     override fun onAbort() { PpomiTelecom.callEnded(DisconnectCause.CANCELED) }
     /** Another real call took over: ours ends rather than waiting on hold. */
-    override fun onHold() { PpomiTelecom.callEnded(DisconnectCause.LOCAL); VoiceSessionHost.get(context).stopVoice() }
+    override fun onHold() { PpomiTelecom.callEnded(DisconnectCause.LOCAL); AndroidExecutor.get(context).stopVoice() }
 }
 
 internal object IncomingCallNotifier {

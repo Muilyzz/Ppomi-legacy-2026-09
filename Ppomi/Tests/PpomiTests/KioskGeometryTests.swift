@@ -29,7 +29,7 @@ final class KioskGeometryTests: XCTestCase {
         let panel = makePanel(content)
         defer { panel.close() }
         let workbench = NSView(frame: .zero)
-        content.workbenchArea.mount(workbench)
+        content.conversationArea.mount(workbench)
 
         let display = CGRect(x: 40, y: 30, width: 1440, height: 980)
         KioskController.fitMain(panel, content: content, phoneSize: CGSize(width: 348, height: 540), in: display, initial: true)
@@ -38,10 +38,16 @@ final class KioskGeometryTests: XCTestCase {
         XCTAssertEqual(panel.contentMinSize, WorkbenchLayout.minimumContentSize)
         XCTAssertGreaterThan(panel.contentMaxSize.width, display.width)
         XCTAssertEqual(content.phoneSlot.bounds.size, CGSize(width: 348, height: 540))
-        XCTAssertEqual(workbench.frame.width, 1440 - (348 + 24) - 24)
+        XCTAssertEqual(workbench.frame.width, WorkbenchLayout.conversationWidth - 24, "대화 열은 폰 폭으로 고정")
         XCTAssertGreaterThan(workbench.frame.height, 400)
         XCTAssertTrue(content.band.isHidden, "No footer without a question")
-        XCTAssertFalse(content.phoneSlot.frame.intersects(content.workbenchArea.frame))
+        let slot = content.phoneSlot.convert(content.phoneSlot.bounds, to: content)
+        let conversation = content.conversationArea.convert(content.conversationArea.bounds, to: content)
+        let topBar = content.topBarArea.convert(content.topBarArea.bounds, to: content)
+        XCTAssertFalse(slot.intersects(conversation))
+        XCTAssertFalse(slot.intersects(topBar))
+        XCTAssertEqual(topBar.maxY, content.bounds.maxY - WorkbenchLayout.normalTop)
+        XCTAssertLessThanOrEqual(conversation.maxY, topBar.minY)
 
         // The person shrank and moved the workbench: a later fit keeps that frame and the layout follows it.
         let chosen = CGRect(x: 200, y: 60, width: 1100, height: 920)
@@ -50,11 +56,11 @@ final class KioskGeometryTests: XCTestCase {
         XCTAssertEqual(panel.frame, chosen)
         XCTAssertEqual(content.phoneSlot.bounds.size, CGSize(width: 300, height: 520))
         XCTAssertGreaterThan(workbench.frame.height, 300)
-        XCTAssertEqual(workbench.frame.width, 1100 - (300 + 24) - 24)
-        XCTAssertTrue(content.bounds.contains(content.phoneSlot.frame))
+        XCTAssertEqual(workbench.frame.width, WorkbenchLayout.conversationWidth - 24)
+        XCTAssertTrue(content.bounds.contains(content.phoneSlot.convert(content.phoneSlot.bounds, to: content)))
     }
 
-    /// A wide target pushes the window minimum out so the shell keeps `minimumConversationWidth` beside it.
+    /// A wide target pushes the window minimum out so the shell keeps `conversationWidth` beside it.
     @MainActor func testMinimumWidthFollowsAWideControlColumn() {
         _ = NSApplication.shared
         let content = WorkbenchContent(frame: .zero)
@@ -62,7 +68,7 @@ final class KioskGeometryTests: XCTestCase {
         defer { panel.close() }
         let display = CGRect(x: 0, y: 0, width: 1920, height: 1080)
         KioskController.fitMain(panel, content: content, phoneSize: CGSize(width: 900, height: 620), in: display, initial: true)
-        XCTAssertEqual(panel.contentMinSize.width, 900 + 24 + WorkbenchLayout.minimumConversationWidth)
+        XCTAssertEqual(panel.contentMinSize.width, 900 + 24 + WorkbenchLayout.conversationWidth)
         XCTAssertEqual(panel.contentMinSize.height, WorkbenchLayout.minimumContentSize.height)
         KioskController.fitMain(panel, content: content, phoneSize: CGSize(width: 348, height: 540), in: display)
         XCTAssertEqual(panel.contentMinSize, WorkbenchLayout.minimumContentSize)
@@ -90,7 +96,7 @@ final class KioskGeometryTests: XCTestCase {
         let panel = makePanel(content)
         defer { panel.close() }
         let workbench = NSView(frame: .zero)
-        content.workbenchArea.mount(workbench)
+        content.conversationArea.mount(workbench)
         let phone = CGSize(width: 446, height: 978)
         let large = CGRect(x: 0, y: 30, width: 1440, height: 1000)
         KioskController.fitMain(panel, content: content, phoneSize: phone, in: large, initial: true)
@@ -106,7 +112,7 @@ final class KioskGeometryTests: XCTestCase {
         XCTAssertEqual(panel.level, .normal)
         XCTAssertEqual(ObjectIdentifier(panel), panelIdentity)
         XCTAssertTrue(panel.contentView === content)
-        XCTAssertTrue(workbench.superview === content.workbenchArea)
+        XCTAssertTrue(workbench.superview === content.conversationArea)
         XCTAssertFalse(panel.isVisible)
 
         // Back on the large display the frame grows only to the minimum; the display is not forced again.
@@ -116,7 +122,7 @@ final class KioskGeometryTests: XCTestCase {
         XCTAssertEqual(panel.contentMinSize, WorkbenchLayout.minimumContentSize)
         XCTAssertEqual(ObjectIdentifier(panel), panelIdentity)
         XCTAssertTrue(panel.contentView === content)
-        XCTAssertTrue(workbench.superview === content.workbenchArea)
+        XCTAssertTrue(workbench.superview === content.conversationArea)
         XCTAssertFalse(panel.isVisible)
     }
 
@@ -135,9 +141,11 @@ final class KioskGeometryTests: XCTestCase {
         KioskController.fitMain(panel, content: content, phoneSize: content.phoneSize, in: CGRect(x: 0, y: 0, width: 1280, height: 720))
         XCTAssertFalse(content.nativeControlFits)
         XCTAssertFalse(content.band.isHidden)
-        XCTAssertTrue(content.bounds.contains(content.band.frame))
-        XCTAssertFalse(content.band.frame.intersects(content.phoneSlot.frame))
-        XCTAssertFalse(content.band.frame.intersects(content.workbenchArea.frame))
+        let band = content.band.convert(content.band.bounds, to: content)
+        XCTAssertTrue(content.bounds.contains(band))
+        XCTAssertFalse(band.intersects(content.phoneSlot.convert(content.phoneSlot.bounds, to: content)))
+        XCTAssertFalse(band.intersects(content.conversationArea.convert(content.conversationArea.bounds, to: content)))
+        XCTAssertFalse(band.intersects(content.topBarArea.convert(content.topBarArea.bounds, to: content)))
         let buttons = descendants(of: content.band).compactMap { $0 as? NSButton }
         XCTAssertEqual(Set(buttons.map(\.title)), ["결제 승인", "취소"])
         for button in buttons {
@@ -155,17 +163,23 @@ final class KioskGeometryTests: XCTestCase {
         defer { panel.close() }
         content.phoneSize = CGSize(width: 348, height: 620)
         KioskController.fitMain(panel, content: content, phoneSize: content.phoneSize, in: CGRect(x: 0, y: 0, width: 1280, height: 760), initial: true)
-        let originalSidebar = content.workbenchArea.frame
-        let originalToolbar = content.controlToolbarArea.frame
-        let movedPhone = CGRect(x: 24, y: 64, width: 348, height: 620)
+        let originalSidebar = content.conversationArea.convert(content.conversationArea.bounds, to: content)
+        let originalToolbar = content.controlToolbarArea.convert(content.controlToolbarArea.bounds, to: content)
+        let originalTopBar = content.topBarArea.convert(content.topBarArea.bounds, to: content)
+        let movedPhone = CGRect(x: originalSidebar.minX + 12, y: 64, width: 348, height: 620)
         content.followedPhone = movedPhone
         content.layoutSubtreeIfNeeded()
-        XCTAssertNotEqual(content.phoneSlot.frame, movedPhone)
-        XCTAssertTrue(content.controlAvailableArea.contains(content.phoneSlot.frame))
-        XCTAssertEqual(content.workbenchArea.frame, originalSidebar)
-        XCTAssertEqual(content.controlToolbarArea.frame, originalToolbar)
-        XCTAssertTrue(content.bounds.contains(content.workbenchArea.frame))
-        XCTAssertEqual(content.workbenchArea.frame.width, 1280 - (348 + 24) - 24)
+        let slot = content.phoneSlot.convert(content.phoneSlot.bounds, to: content)
+        let conversation = content.conversationArea.convert(content.conversationArea.bounds, to: content)
+        XCTAssertNotEqual(slot, movedPhone)
+        XCTAssertTrue(content.controlAvailableArea.contains(slot))
+        XCTAssertEqual(conversation, originalSidebar)
+        XCTAssertEqual(content.controlToolbarArea.convert(content.controlToolbarArea.bounds, to: content), originalToolbar)
+        XCTAssertEqual(content.topBarArea.convert(content.topBarArea.bounds, to: content), originalTopBar)
+        XCTAssertTrue(content.bounds.contains(conversation))
+        XCTAssertEqual(conversation.width, WorkbenchLayout.conversationWidth - 24)
+        XCTAssertFalse(slot.intersects(conversation))
+        XCTAssertFalse(slot.intersects(originalTopBar))
         XCTAssertFalse(panel.isVisible)
     }
 

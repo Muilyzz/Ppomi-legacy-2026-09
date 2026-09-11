@@ -1,0 +1,21 @@
+.executor-panel { width: 100%; min-width: 0; }
+.executor-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+.executor-toolbar-account { display: flex; align-items: center; flex-wrap: wrap; gap: .375rem; margin-left: auto; }
+.executor-nav-button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 2.75rem; padding: .5rem .75rem; border: 0; border-radius: var(--rc); color: var(--fg); background: transparent; cursor: pointer; font: inherit; white-space: nowrap; }
+.executor-nav-button svg { width: 1.25rem; height: 1.25rem; flex-shrink: 0; }
+.executor-icon-button { min-width: 2.75rem; padding: .5rem; }
+.executor-nav-button:hover:not(:disabled) { background: var(--surface-2); }
+.executor-panel button, .executor-settings button, .executor-approval button { cursor: pointer; font: inherit; color: inherit; }
+.executor-approval button, .executor-setting-actions button, .executor-settings fieldset button { padding: .5rem .75rem; min-height: 2.75rem; border: 1px solid var(--line); border-radius: var(--rc); background: transparent; }
+.executor-panel button:disabled, .executor-approval button:disabled { opacity: .45; cursor: default; }
+.executor-panel button:focus-visible, .executor-settings button:focus-visible, .executor-settings input:focus-visible, .executor-approval button:focus-visible { outline: 2px solid var(--accent-fg); outline-offset: 2px; }
+.executor-settings { max-height: 80dvh; overflow: auto; color: var(--fg); }
+.executor-sheet-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.executor-setting-actions, .executor-approval > div { display: flex; gap: 8px; flex-wrap: wrap; }
+.executor-settings fieldset { border: 1px solid var(--line); padding: .75rem; }
+.executor-app-list { display: grid; gap: 8px; max-height: 180px; overflow: auto; margin-bottom: 10px; }
+.executor-app-list label { display: flex; align-items: center; gap: 8px; }
+.executor-approval { margin-top: 10px; border: 2px solid currentColor; border-radius: 8px; padding: 10px; }
+.executor-approval p { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.executor-error { display: flex; justify-content: space-between; align-items: center; gap: .5rem; color: var(--bad); }
+.executor-hint { margin: 0; opacity: .7; font-size: .9em; }

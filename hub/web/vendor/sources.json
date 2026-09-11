@@ -1,0 +1,10 @@
+{
+  "source": "Ppomi/Sources/Ppomi/Web",
+  "sha256": {
+    "journal.js": "c6791d5044aaeea2169e1f75af001e1a580a4ee6470a68da370a57148204dc47",
+    "playbook.js": "63e886eacf2a32d4c818fce6aeaf2b0bfa478375c7af1779513ec96e44b91fd1",
+    "tokens.css": "55aec89ef535b655a92927940e356d324614c96852ee2e6247841bdf9c38585e",
+    "theme.css": "6ee7de045bf46411453b2082445594003d2647127db22aea9ef2c94a9f27899d",
+    "timeline.html": "1e7c0028f868a471c41f2d84e564888bfd020e40f729a7fba4ad45056c457038"
+  }
+}

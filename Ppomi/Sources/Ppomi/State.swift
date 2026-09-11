@@ -28,12 +28,27 @@ final class AppState: ObservableObject {
     @Published var androidLaunchError: String?
     @Published var windowsSize = AppState.storedSize("windows") ?? CGSize(width: 900, height: 620) { didSet { AppState.store(windowsSize, "windows") } }
     @Published var windowsWindowVisible = false
-    /// The records page is showing (the control window is parked). Only the controller flips it.
+    /// Explicit parking holds the screen-control lease until every parked window is restored.
+    /// Ordinary record navigation does not change this state; only the controller flips it.
     @Published private(set) var recordsFocused = false
+    /// The records pane is visible, independently of whether control windows are parked.
+    @Published var recordsOnScreen = false
+    @Published private(set) var compactWorkbench = false
+    @Published private(set) var compactContentPresented = false
+    var compactContentActionTitle: String { ask == nil ? "기록" : "승인 요청" }
+    var recordsPageVisible: Bool { recordsOnScreen || (recordsFocused && !compactWorkbench) }
+    func setCompactWorkbench(_ compact: Bool) {
+        guard compactWorkbench != compact else { return }
+        compactWorkbench = compact
+        if !compact { dismissCompactContent() }
+    }
+    /// Presentation only: never acquire/release the screen lease or answer a pending question.
+    func presentCompactContent() { if !compactContentPresented { compactContentPresented = true } }
+    func dismissCompactContent() { if compactContentPresented { compactContentPresented = false } }
     @Published private(set) var recordsFocusRequest = 0
     @Published var recordsFocusMessage: String?
 
-    /// Asks the controller to open the records page (or return to the conversation).
+    /// Asks the controller to park control windows or restore them for screen control.
     func toggleRecordsFocus() { recordsFocusRequest += 1 }
     /// Called only after the controller owns the screen lease and has parked every selected window.
     func beginRecordsFocus() {
@@ -47,7 +62,7 @@ final class AppState: ObservableObject {
     func reveal() { shown += 1 }
     @Published private(set) var chatOpen = 0
     /// Conversation navigation must not trigger device window placement.
-    func openChat() { chatOpen += 1 }
+    func openChat() { dismissCompactContent(); chatOpen += 1 }
     @Published private(set) var workbenchShown = 0
     /// The embedded conversation asks for its window without reopening the chat (⌥Space, wake word, arrival).
     func showWorkbench() { workbenchShown += 1 }
@@ -94,7 +109,6 @@ final class AppState: ObservableObject {
     @Published var evidenceFocus: EvidenceFocus? = nil   // the 증빙·전표 window; nil until first open
     enum Tab: String, CaseIterable { case timeline, evidence, accounting, playbooks, health, spatial }
     @Published var tab: Tab = .timeline                  // what the workbench shows in either size mode
-    @Published var voiceOn = AppSettings.wakeWord        // the "뽀미야" listener (설정 › 음성, saved)
     @Published var listening = false                     // a voice conversation is open (after 뽀미야, until 그만 or 25 s quiet)
     /// A question from another process (the MCP server) or the voice session's tools, waiting for a workbench button.
     @Published var ask: (id: String, text: String, options: [String])? = nil
@@ -105,7 +119,6 @@ final class AppState: ObservableObject {
     @Published var voiceOpen = 0                         // bumps: open it (`Ppomi --voice` left "voice:open" in the state table)
 
     func talk() { voiceToggle += 1 }
-    func toggleGreet() { greetOnArrival.toggle(); try? askDB?.setState("greet:on", greetOnArrival ? "1" : "0") }
 
     /// Poll the state table every second (Tools.askViaDB leaves questions there, `--voice` its trigger); a new question
     /// highlights the approval area and shows the workbench in its current size mode.
@@ -154,15 +167,15 @@ final class AppState: ObservableObject {
         if case .humanTurn = phase { phase = .idle }
     }
 
-    /// Switch to a records tab, opening the page (증빙 goes through showEvidence so it lands on a day that has 전표).
+    /// Select content without parking control windows or interrupting the conversation.
+    /// 증빙 goes through showEvidence so it lands on a day that has 전표.
     func show(_ t: Tab) {
-        if t == .evidence { showEvidence() } else { tab = t; openRecords() }
+        if compactWorkbench { presentCompactContent() }
+        if t == .evidence { showEvidence() } else { tab = t }
     }
 
-    private func openRecords() { if !recordsFocused { toggleRecordsFocus() } }
-
     func showEvidence(day: Date? = nil, uid: String? = nil) {
-        openRecords()
+        if compactWorkbench { presentCompactContent() }
         // No day named: the timeline's day, unless it has no 전표 (today, usually) — then the newest day that has some.
         var d = day ?? selectedDay
         if day == nil, let L = ledger, !L.lines.contains(where: { (d..<KST.day(d, 1)).contains($0.ts) }),
@@ -188,7 +201,7 @@ final class AppState: ObservableObject {
     private func requireRestoredWindowsForSettings() throws {
         guard !recordsFocused else {
             throw NSError(domain: "Ppomi.RecordsFocus", code: 1, userInfo: [NSLocalizedDescriptionKey:
-                "원장 설정은 ← 대화로 창을 복원한 뒤 바꿀 수 있습니다."])
+                "원장 설정은 ‘제어로 돌아가기’로 창을 복원한 뒤 바꿀 수 있습니다."])
         }
     }
 
@@ -219,7 +232,7 @@ final class AppState: ObservableObject {
     func reloadLedger() {
         if SharedRecordVault.enabled {
             if sharedRecordsMonitor == nil { watchLedger() }
-            else { sharedRecordsMonitor?.request() }
+            else { sharedRecordsMonitor?.request(only: ["ledger"]) }   // 방금 고친 건 장부(그룹·자리)뿐: 한 기록만 왕복
             return
         }
         do {
@@ -271,7 +284,6 @@ final class AppState: ObservableObject {
     var statusLine: String {
         if listening { return "대화 중 · " + phaseLine }
         if case .idle = phase, !Permissions.ready { return "손과 눈 권한이 아직 없어요 · 설정 › 시작하기" }
-        if case .idle = phase, voiceOn { return phaseLine + " · 뽀미야 라고 부르면 들음" }
         return phaseLine
     }
 

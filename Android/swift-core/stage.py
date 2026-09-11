@@ -10,8 +10,9 @@ SOURCES = [
     "Ppomi/Sources/Ppomi/Accounting/AccountingModel.swift",
     "Ppomi/Sources/Ppomi/Accounting/AccountingEngine.swift",
     "Ppomi/Sources/Ppomi/Records/RecordScope.swift",
-    # AccountingEngine uses LifeJSON timestamp validation; reuse the whole canonical file.
+    # AccountingEngine and the archive bridge reuse canonical models and timestamp validation.
     "Ppomi/Sources/Ppomi/Records/LifeModel.swift",
+    "Ppomi/Sources/Ppomi/Records/LifeJSON.swift",
 ]
 
 

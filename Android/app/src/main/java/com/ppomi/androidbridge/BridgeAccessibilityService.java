@@ -360,7 +360,7 @@ public final class BridgeAccessibilityService extends AccessibilityService {
             case "store_search": {
                 // This operation belongs only to an active in-app conversation. The common
                 // executeLocal gate also rejects competing MCP/local-task owners and gestures.
-                if (!VoiceSessionHost.isControlOwner(ownerId)) throw new VoiceToolErrors.Failure("protected_action");
+                if (!AndroidExecutor.isControlOwner(ownerId)) throw new VoiceToolErrors.Failure("protected_action");
                 Object raw = args.opt("query");
                 if (!(raw instanceof String)) throw new IllegalArgumentException("Invalid store search");
                 Intent search = storeSearchIntent((String) raw);
@@ -483,7 +483,7 @@ public final class BridgeAccessibilityService extends AccessibilityService {
         AccessibilityNodeInfo root = allowedRoot();
         try {
             AccessibilityNodeInfo node = freshNode(args.getString("nodeId"), root);
-            if (VoiceSessionHost.isControlOwner(ownerId)) requireVoiceSafeNode(node, 0, new int[] {0});
+            if (AndroidExecutor.isControlOwner(ownerId)) requireVoiceSafeNode(node, 0, new int[] {0});
             boolean performed;
             if (type) {
                 if (!node.isEditable()) throw new IllegalArgumentException("Node is not editable");
@@ -828,8 +828,8 @@ public final class BridgeAccessibilityService extends AccessibilityService {
 
     private void requireOwner(String ownerId) {
         if (!BridgeSession.supported()) throw new IllegalStateException("A supported Ppomi debug install is required");
-        if (VoiceSessionHost.hasActiveControl()) {
-            if (!VoiceSessionHost.isControlOwner(ownerId) || LocalTaskRunner.actionOwner() != null)
+        if (AndroidExecutor.hasActiveControl()) {
+            if (!AndroidExecutor.isControlOwner(ownerId) || LocalTaskRunner.actionOwner() != null)
                 throw new IllegalStateException("An active voice session owns control");
             return;
         }
@@ -863,12 +863,12 @@ public final class BridgeAccessibilityService extends AccessibilityService {
             // Which global actions this system actually offers (Samsung may not register the split toggle).
             if (Build.VERSION.SDK_INT >= 30) android.util.Log.i("PpomiSplit", "system actions: " + getSystemActions());
             // Already split by the user (taskbar drag, recents): the adjacent flag puts the workbench in the other half.
-            startActivity(new Intent(this, MainActivity.class).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            startActivity(ExecutorNavigation.conversation(this).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT));
             return;
         }
         main.postDelayed(() -> {
-            Intent intent = new Intent(this, MainActivity.class)
+            Intent intent = ExecutorNavigation.conversation(this)
                 .setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT);
             startActivity(intent);
@@ -876,7 +876,7 @@ public final class BridgeAccessibilityService extends AccessibilityService {
     }
 
     public void openWorkbench() {
-        Intent intent = new Intent(this, MainActivity.class)
+        Intent intent = ExecutorNavigation.conversation(this)
             .setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         String taskId = LocalTaskRunner.actionOwner();
@@ -996,7 +996,7 @@ public final class BridgeAccessibilityService extends AccessibilityService {
                 root.recycle();
             }
             // A chat turn that is driving another app shows the panel too, without a stop button (the chat owns it).
-            boolean chat = task == null && VoiceSessionHost.hasActiveControl();
+            boolean chat = task == null && AndroidExecutor.hasActiveControl();
             if ((task == null && !chat) || capturing || workbench) { removeOverlay(); return; }
             if (overlay == null) {
                 // A bottom panel over the target app: the app keeps the rest of the screen and its touches.

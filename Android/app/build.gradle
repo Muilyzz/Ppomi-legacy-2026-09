@@ -21,6 +21,7 @@ android {
     }
     sourceSets.main.jniLibs.srcDirs += ['../swift-core/build/jniLibs']
     sourceSets.main.assets.srcDirs += ['../swift-core/build/assets']
+    sourceSets.main.assets.srcDirs += [layout.buildDirectory.dir('generated/familyUpdatesAssets')]
     buildFeatures { buildConfig true; compose true }
     kotlinOptions { jvmTarget = '17' }
     compileOptions {
@@ -49,3 +50,24 @@ tasks.register('buildSharedAccounting', Exec) {
     commandLine 'bash', file('../swift-core/build.sh').absolutePath, 'android'
 }
 tasks.named('preBuild').configure { dependsOn tasks.named('buildSharedAccounting') }
+
+// Optional offline trust configuration. A missing property produces no Updates.json and no update network requests.
+// Pass -PfamilyUpdatesConfig=/absolute/path/Updates.json when building a family APK.
+tasks.register('prepareFamilyUpdatesAssets') {
+    def suppliedConfig = providers.gradleProperty('familyUpdatesConfig')
+    def generatedAssets = layout.buildDirectory.dir('generated/familyUpdatesAssets')
+    inputs.property('configPath', suppliedConfig.orElse(''))
+    if (suppliedConfig.isPresent()) inputs.file(suppliedConfig.map { file(it) })
+    outputs.dir(generatedAssets)
+    doLast {
+        // Always clear stale trust configuration when returning to a build without the property.
+        delete(generatedAssets)
+        generatedAssets.get().asFile.mkdirs()
+        if (suppliedConfig.isPresent()) copy {
+            from(file(suppliedConfig.get()))
+            into(generatedAssets)
+            rename { 'Updates.json' }
+        }
+    }
+}
+tasks.named('preBuild').configure { dependsOn tasks.named('prepareFamilyUpdatesAssets') }

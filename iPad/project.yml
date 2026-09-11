@@ -25,10 +25,12 @@ targets:
         buildPhase: resources
       - path: ../Ppomi/Sources/Ppomi/Web/journal.js
         buildPhase: resources
+      - ../Ppomi/Sources/Ppomi/Updates
       - ../Ppomi/Sources/Ppomi/Ledger/Model.swift
       - ../Ppomi/Sources/Ppomi/Ledger/Ledger.swift
       - ../Ppomi/Sources/Ppomi/Ledger/Rules.swift
       - ../Ppomi/Sources/Ppomi/Ledger/LedgerPage.swift
+      - ../Ppomi/Sources/Ppomi/Ledger/LensStore.swift
       - ../Ppomi/Sources/Ppomi/Accounting/LegacyAccountingRules.swift
       - ../Ppomi/Sources/Ppomi/Accounting/AccountingModel.swift
       - ../Ppomi/Sources/Ppomi/Records/RecordScope.swift
@@ -36,6 +38,18 @@ targets:
       - ../Ppomi/Sources/Ppomi/Shared/SharedRecordCrypto.swift
       - ../Ppomi/Sources/Ppomi/Shared/SupabaseAuth.swift
       - ../Ppomi/Sources/Ppomi/Shared/SharedLedgerArchive.swift
+    postBuildScripts:
+      - name: Include family update configuration when configured
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eu
+          update_source="$SRCROOT/Updates.json"
+          update_target="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/Updates.json"
+          if [ -f "$update_source" ]; then
+            /bin/cp "$update_source" "$update_target"
+          else
+            /bin/rm -f "$update_target"
+          fi
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.muilyzz.ppomi.pad

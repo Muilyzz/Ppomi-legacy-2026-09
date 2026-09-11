@@ -1,0 +1,4 @@
+html{color-scheme:light dark} body{min-width:0} [hidden]{display:none!important}
+#source-note{padding:.65rem .8rem;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);line-height:1.6;margin-bottom:1.25rem}
+#source-transactions{margin-top:2rem} .source-scroll{overflow:auto} .source-scroll table{min-width:36rem} #source-transactions button{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:.5rem .75rem;margin-top:.75rem;cursor:pointer}
+@media(max-width:700px){body{padding:.75rem}.board{overflow-x:auto;min-height:18rem}.nav{flex-wrap:wrap;gap:.75rem}.sec{white-space:normal}.disp{font-size:2rem}}

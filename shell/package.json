@@ -1,0 +1,17 @@
+{
+  "name": "ppomi-shell",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "node scripts/prepare.mjs debug && tauri dev",
+    "build": "node scripts/prepare.mjs release && tauri build",
+    "frontend": "npm --prefix ../agent run build:shell",
+    "check": "cargo check --manifest-path src-tauri/Cargo.toml",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "android": "tauri android",
+    "android:init": "node scripts/android-init.mjs"
+  },
+  "devDependencies": { "@tauri-apps/cli": "^2.11.0" }
+}

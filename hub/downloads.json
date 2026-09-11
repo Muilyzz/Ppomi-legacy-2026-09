@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "releases": [
+    {
+      "platform": "macos",
+      "version": "0.2.1",
+      "label": "Mac 테스트 버전",
+      "filename": "Ppomi-0.2.1-macos-arm64-preview.zip",
+      "url": "/releases/Ppomi-0.2.1-macos-arm64-preview.zip",
+      "bytes": 8780946,
+      "sha256": "b14cc3556d61d522df67f272713ce808d15192005672fcde622ae35d184cc358",
+      "requirements": "Apple Silicon · macOS 26 이상",
+      "notice": "개발 서명된 공증 전 테스트 버전입니다. 첫 실행 때 macOS의 확인이 필요할 수 있습니다. 자동 웹 업데이트는 아직 활성화되지 않았습니다."
+    },
+    {
+      "platform": "android",
+      "version": "0.6.6",
+      "label": "Android 테스트 APK",
+      "filename": "ppomi-android-0.6.6-arm64-qa.apk",
+      "url": "/releases/ppomi-android-0.6.6-arm64-qa.apk",
+      "bytes": 92243514,
+      "sha256": "bc4bfccca3a4e0904e3b8b571c5d7c5734c116684fba0c85ff9c3ae1198e9146",
+      "requirements": "ARM64 · Android 9 이상",
+      "notice": "QA 테스트 버전입니다. 기존 앱과 서명이 다르면 덮어설치할 수 없으니 설치 담당자와 확인해 주세요. Mac·iPad와 기록을 동기화하는 기능은 아직 지원하지 않습니다."
+    }
+  ]
+}

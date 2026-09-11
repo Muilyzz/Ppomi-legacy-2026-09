@@ -186,7 +186,7 @@ final class IdentityProfileStore {
     static let maximumEncodedBytes = 16_384
 
     enum Failure: Error, LocalizedError {
-        case keychain(OSStatus), corrupt, tooLarge, bankFields, bankAlreadyRegistered
+        case keychain(OSStatus), corrupt, tooLarge, bankFields, bankAlreadyRegistered, locked
         var errorDescription: String? {
             switch self {
             case .keychain(let status):
@@ -195,6 +195,7 @@ final class IdentityProfileStore {
                 }
                 return "개인정보 키체인 작업에 실패했습니다(OSStatus \(status)). 다른 저장소로 우회하지 않았습니다."
             case .corrupt: return "키체인의 프로필 데이터를 읽지 못했습니다. 프로필을 확인해 다시 저장하세요."
+            case .locked: return "개인정보는 지문(또는 Mac 암호) 확인 뒤에 읽습니다. Mac 에서 확인해 주세요."
             case .tooLarge: return "프로필 정보가 저장 가능한 크기를 넘었습니다. 일부 내용을 줄여 다시 저장하세요."
             case .bankFields: return "이 입력창에는 은행 고객명과 출금계좌번호만 저장할 수 있습니다."
             case .bankAlreadyRegistered: return "일부 항목이 이미 등록되어 변경하지 않았습니다. 입력창을 새로 열어 필요한 항목을 확인하세요."
@@ -238,6 +239,18 @@ final class IdentityProfileStore {
         let data = try Self.encoded(value)
         lock.lock(); defer { lock.unlock() }
         try storage.write(value.id, data)
+        rememberOwnName(value)
+    }
+    /// 장부의 "내 이름"(본인 명의 입금 = 이체)은 지문 없이도 필요한 값: 저장 때 따로 적어 둔다(AppSettings.me).
+    /// 앱의 금고(shared)만 적는다 — 테스트의 메모리 저장소가 UserDefaults 를 오염시켜 장부 테스트의 이름을 바꿔 놓았던 적이 있다.
+    private func rememberOwnName(_ value: IdentityProfile) {
+        guard self === Self.shared, value.id == "self", let name = value.name?.trimmingCharacters(in: .whitespaces), !name.isEmpty else { return }
+        UserDefaults.standard.set(name, forKey: "me")
+    }
+    /// 잠금 해제 뒤 한 번: 예전 평문 항목을 금고 형식으로 다시 저장한다.
+    func migrateToVault() throws {
+        guard IdentityVault.shared.isAvailable else { return }
+        for profile in try list() { try save(profile) }
     }
 
     /// The native collection card passes its values directly here, without routing them through agent tool arguments.
@@ -268,6 +281,7 @@ final class IdentityProfileStore {
         }
         let value = try profile.validated()
         try storage.write(account, Self.encoded(value))
+        rememberOwnName(value)
         return value
     }
 
@@ -278,7 +292,14 @@ final class IdentityProfileStore {
     }
 
     private func decode(_ data: Data, account: String) throws -> IdentityProfile {
-        guard data.count <= Self.maximumEncodedBytes, let decoded = try? JSONDecoder().decode(IdentityProfile.self, from: data),
+        guard data.count <= Self.maximumEncodedBytes + 128 else { throw Failure.corrupt }
+        var plain = data
+        if IdentityVault.isSealed(data) {   // 금고 형식: SE 비밀키 — 지문 뒤에서만
+            do { plain = try IdentityVault.shared.open(data) }
+            catch IdentityVault.Failure.locked { throw Failure.locked }
+            catch { throw Failure.corrupt }
+        }
+        guard let decoded = try? JSONDecoder().decode(IdentityProfile.self, from: plain),
               let value = try? decoded.validated(), value.id == account else { throw Failure.corrupt }
         return value
     }
@@ -287,7 +308,8 @@ final class IdentityProfileStore {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(value)
         guard data.count <= Self.maximumEncodedBytes else { throw Failure.tooLarge }
-        return data
+        guard IdentityVault.shared.isAvailable else { return data }   // SE 없는 Mac·테스트: 예전처럼 평문
+        return try IdentityVault.shared.seal(data)
     }
 
     // Injection at the Security boundary allows tests to verify the real queries without touching a user's Keychain.

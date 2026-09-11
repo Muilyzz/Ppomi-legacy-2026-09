@@ -1,9 +1,16 @@
+import { isTauriHost, tauriTransport } from "./tauri-host";
+
 export type Bootstrap = {
-  platform: "macos" | "android";
+  platform: "macos" | "android" | "windows";
   deviceLabel: string;
   configured: boolean;
   endpoint: string;
   tools: string[];
+  /** Omitted by older app binaries. When present, all update compatibility fields are required. */
+  nativeBuild?: number;
+  bridgeVersion?: number;
+  webRelease?: string;
+  capabilities?: string[];
   accessibility?: boolean;
   controlApps?: { label: string; packageName: string }[];
   bankProfileSupported?: boolean;
@@ -17,7 +24,34 @@ export type Bootstrap = {
   dark?: boolean;
   /** Android only: the OS call UI was answered before the page was ready; start the call about this reason once. */
   answerCall?: string | null;
+  /** Mutable OS executor observations, separate from the immutable update capabilities above. */
+  executor?: Record<string, unknown>;
+  /** Only the native account reports sign-in; device configuration alone is not a Google login. */
+  authentication?: { method?: string; signedIn?: boolean; displayName?: string; googleSignIn?: boolean; developerOnly?: boolean };
 };
+
+export class UpdateCompatibilityError extends Error {
+  constructor() { super("앱 업데이트 필요"); this.name = "UpdateCompatibilityError"; }
+}
+
+/** Check before exposing bootstrap to any session controller, including OS-answered calls. */
+export function validateBootstrap(value: unknown): Bootstrap {
+  const b = value as Bootstrap | null;
+  if (!b || typeof b !== "object" || !["macos", "android", "windows"].includes(b.platform) ||
+      typeof b.deviceLabel !== "string" || typeof b.configured !== "boolean" ||
+      typeof b.endpoint !== "string" || !Array.isArray(b.tools) || b.tools.some(tool => typeof tool !== "string")) {
+    throw new UpdateCompatibilityError();
+  }
+  const fields = [b.nativeBuild, b.bridgeVersion, b.webRelease, b.capabilities];
+  if (fields.some(field => field !== undefined) && (
+      !Number.isInteger(b.nativeBuild) || b.nativeBuild! < 1 || b.bridgeVersion !== 1 ||
+      typeof b.webRelease !== "string" || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(b.webRelease) ||
+      !Array.isArray(b.capabilities) || !b.capabilities.includes("agent.v1") ||
+      b.capabilities.some(capability => typeof capability !== "string") || new Set(b.capabilities).size !== b.capabilities.length)) {
+    throw new UpdateCompatibilityError();
+  }
+  return b;
+}
 
 const nativeFailures = {
   accessibility_required: {
@@ -76,13 +110,17 @@ const nativeFailures = {
     message: "대화 종료",
     recovery: "현재 세션에서 도구 실행을 계속하거나 다음 세션으로 넘기지 마세요.",
   },
+  account_window_open: {
+    message: "계정 창을 닫은 뒤 대화를 시작해 주세요.",
+    recovery: "계정 변경 중에는 새 대화를 시작하지 마세요. 사용자가 계정 창을 닫은 뒤 연결 상태를 다시 확인하세요.",
+  },
   native_unavailable: {
     message: "뽀미 앱에서 열기",
     recovery: "네이티브 연결을 사용할 수 없습니다. 실행했다고 보고하지 마세요.",
   },
   server_unconfigured: {
-    message: "설정에서 서버 주소",
-    recovery: "사용자가 뽀미의 서버 연결 설정을 확인해야 합니다.",
+    message: "계정·기기 연결을 확인해 주세요.",
+    recovery: "사용자가 뽀미의 로그인 또는 기기 연결 상태를 확인해야 합니다. 서버 주소를 직접 입력하도록 안내하지 마세요.",
   },
   invalid_request: {
     message: "요청 형식 오류",
@@ -132,6 +170,7 @@ export type Reply = {
 };
 export type Method =
   | "bootstrap"
+  | "updateReady"
   | "declineCall"
   | "heard"
   | "request"
@@ -211,12 +250,15 @@ export class NativeBridge {
   }
 }
 export function createBridge() {
+  let sendTauri: ((message: string) => void) | undefined;
   const bridge = new NativeBridge((message) => {
+    if (sendTauri) { sendTauri(message); return; }
     const host =
       window.webkit?.messageHandlers?.ppomiAgent ?? window.ppomiAgentNative;
     if (!host) throw new Error("native host unavailable");
     host.postMessage(message);
   });
+  if (isTauriHost()) sendTauri = tauriTransport((reply) => bridge.receive(reply));
   window.ppomiAgentReceive = (reply) => bridge.receive(reply);
   return bridge;
 }

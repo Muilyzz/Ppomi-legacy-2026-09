@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>뽀미 다운로드 — 기기에 설치하기</title>
+  <meta name="description" content="Mac과 Android용 뽀미 설치 파일, iPad 웹 앱의 홈 화면 추가 방법을 확인하세요.">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="/icon.png">
+  <link rel="stylesheet" href="/download.css">
+  <link rel="stylesheet" href="/install-guide.css">
+  <script src="/download.js" defer></script>
+  <script src="/install-guide.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">설치 파일로 바로 가기</a>
+  <div class="wrap">
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="뽀미 홈"><img src="/paw.svg" alt="" width="24" height="24">Ppomi</a>
+      <a class="header-link" href="/privacy">개인정보 처리방침</a>
+    </header>
+
+    <main id="main">
+      <div class="intro">
+        <p class="eyebrow">기기에 설치하기</p>
+        <h1>뽀미를 기기에 설치하세요</h1>
+        <p class="intro-text">사용할 기기에 맞는 설치 파일을 받아 주세요.</p>
+      </div>
+
+      <aside class="ipad-prompt" id="ipad-prompt" aria-label="iPad 웹 앱 안내" hidden>
+        <div><strong>iPad에서는 홈 화면 아이콘으로</strong><p>웹 앱 홈에서 로그인하고, 홈 화면에 뽀미 아이콘을 추가해 보세요.</p></div>
+        <a class="guide-button" href="/?install=1">웹 앱에서 추가하기 <span aria-hidden="true">↗</span></a>
+      </aside>
+
+      <div class="download-status">
+        <p id="download-status" role="status" aria-live="polite">설치 파일 정보를 확인하고 있습니다.</p>
+        <button id="retry-downloads" type="button" hidden>다시 확인</button>
+      </div>
+      <noscript><p class="notice">설치 파일을 확인하려면 브라우저에서 JavaScript를 켜 주세요.</p></noscript>
+
+      <section class="platforms" aria-label="기기별 설치" aria-busy="true" id="platforms">
+        <article class="mac-card" aria-labelledby="mac-title">
+          <div class="mac-description">
+            <p class="card-label">Mac</p>
+            <h2 id="mac-title">Mac에서 시작하기</h2>
+            <p class="platform-description">컴퓨터에서 뽀미를 사용하고<br class="desktop-break">내 기기와 연결하세요.</p>
+            <p class="requirements" id="macos-requirements">Apple Silicon · macOS 26 이상</p>
+          </div>
+          <div class="mac-download">
+            <p class="release-label" id="macos-label">테스트 버전</p>
+            <a class="download-link primary" id="macos-download" role="link" aria-disabled="true" tabindex="-1" aria-describedby="macos-notice">
+              <span data-button-label>다운로드 확인 중</span><span aria-hidden="true">↓</span>
+            </a>
+            <p class="release-meta" id="macos-meta">파일 정보 확인 중</p>
+            <p class="release-notice" id="macos-notice">개발 서명으로 만든 테스트 버전입니다. Apple 공증 전입니다.</p>
+            <details class="file-details" id="macos-details" hidden>
+              <summary>파일 정보와 해시 확인</summary>
+              <dl><dt>파일명</dt><dd id="macos-filename"></dd><dt>SHA-256</dt><dd><code id="macos-hash"></code></dd></dl>
+            </details>
+          </div>
+        </article>
+
+        <div class="secondary-platforms">
+          <article class="secondary-card" aria-labelledby="android-title">
+            <div class="card-topline"><h2 id="android-title">Android</h2><span class="tag" id="android-label">QA 테스트</span></div>
+            <p class="platform-description">Android 기기에서 사용을 확인하는<br>테스트용 설치 파일입니다.</p>
+            <p class="requirements" id="android-requirements">설치 파일의 지원 버전을 확인해 주세요.</p>
+            <a class="download-link secondary" id="android-download" role="link" aria-disabled="true" tabindex="-1" aria-describedby="android-notice">
+              <span data-button-label>다운로드 확인 중</span><span aria-hidden="true">↓</span>
+            </a>
+            <p class="release-meta" id="android-meta">파일 정보 확인 중</p>
+            <p class="release-notice" id="android-notice">QA 테스트 버전입니다. 설치 담당자와 함께 처음 설정을 확인해 주세요.</p>
+            <details class="file-details" id="android-details" hidden>
+              <summary>파일 정보와 해시 확인</summary>
+              <dl><dt>파일명</dt><dd id="android-filename"></dd><dt>SHA-256</dt><dd><code id="android-hash"></code></dd></dl>
+            </details>
+          </article>
+
+          <article class="secondary-card ipad-card" aria-labelledby="ipad-title">
+            <div class="card-topline"><h2 id="ipad-title">iPad</h2><span class="tag">웹 앱 홈</span></div>
+            <p class="platform-description">웹 앱 홈에서 Google 계정으로 로그인하세요.<br>홈 화면에 뽀미 아이콘을 추가할 수 있어요.</p>
+            <p class="requirements">현재 웹 앱은 계정 로그인을 지원합니다. 기록·대화는 준비 중입니다.</p>
+            <a class="download-link secondary" href="/">웹 앱 열기 <span aria-hidden="true">↗</span></a>
+            <a class="install-home-link" href="/?install=1">홈 화면 추가 도움말</a>
+            <noscript><p class="release-notice"><a href="https://support.apple.com/ko-kr/guide/ipad/ipad8f1f7a29/ipados">Apple의 홈 화면 추가 안내 보기</a></p></noscript>
+            <p class="release-notice">지금 이 다운로드 페이지를 홈 화면에 추가해도 기록·대화 기능은 사용할 수 없습니다.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="installation" aria-labelledby="installation-title">
+        <div class="section-heading"><h2 id="installation-title">Mac·Android 설치는 이렇게 진행해요</h2></div>
+        <ol class="steps">
+          <li><span class="step-number" aria-hidden="true">01</span><h3>파일 받기</h3><p>설치할 기기에서 위의 다운로드 버튼을 눌러 주세요.</p></li>
+          <li><span class="step-number" aria-hidden="true">02</span><h3>앱 설치하기</h3><p>Mac은 압축을 풀어 앱을 응용 프로그램 폴더로 옮기세요. Android는 받은 APK를 열어 설치하세요.</p></li>
+          <li><span class="step-number" aria-hidden="true">03</span><h3>처음 설정 확인하기</h3><p>뽀미를 열고 설치 담당자와 계정·기기 연결을 확인하세요. 설치가 막히면 담당자에게 알려 주세요.</p></li>
+        </ol>
+      </section>
+
+      <aside class="update-note" aria-labelledby="update-title">
+        <h2 id="update-title">업데이트 안내</h2>
+        <p>현재 설치 파일에는 자동 업데이트가 연결되어 있지 않습니다. 새 버전은 이 페이지에서 다시 받을 수 있습니다.</p>
+      </aside>
+    </main>
+
+    <footer class="site-footer"><a href="/">Ppomi</a><a href="/privacy">개인정보 처리방침</a></footer>
+  </div>
+
+
+</body>
+</html>

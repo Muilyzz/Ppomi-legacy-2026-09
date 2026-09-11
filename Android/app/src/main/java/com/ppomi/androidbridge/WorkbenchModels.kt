@@ -9,7 +9,6 @@ internal data class WorkbenchSnapshot(
     val supported: Boolean = true,
     val settings: AgentSettingsSnapshot = AgentSettingsSnapshot(),
     val shared: SharedSnapshot = SharedSnapshot(),
-    val agentEndpoint: String = "",
     val controlWindow: ControlWindowSnapshot? = null,
     val chatControl: Boolean = false,
     val lastOpened: ControlAppSnapshot? = null,

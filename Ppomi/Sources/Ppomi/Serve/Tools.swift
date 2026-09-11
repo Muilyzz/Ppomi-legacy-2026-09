@@ -50,8 +50,8 @@ final class Tools {
     /// Test hook, a fake phone: `screen` replaces Phone.screen, `hand` swallows tap/key/type/scroll/open, the gate skips the mirror check.
     static var fake: (screen: () throws -> [OCR.Word], hand: ([String]) throws -> Void)? = nil
     /// Buttons that move money: a tap on one of these needs an unused approval, whatever the prompt says.
-    static let payWords = "결제|구매|주문|송금|이체|입금|충전|구독|가입"                    // the one list; Footprint.isPayTarget uses it unanchored
-    static let payWord = Re(#"("# + payWords + #")\s*(하기|완료|진행)?\s*$"#)   // a button's text ("406,600원 결제하기"), not any line mentioning 결제
+    static let payWords = "결제|구매|주문|송금|이체|입금|충전|구독|가입"                    // the one list; Footprint.isPayTarget uses it unanchored. 매수|매도 stay out: mPOP's order tabs carry the same word, so that button is a 👤 step
+    static let payWord = Re(#"(?<!바로)("# + payWords + #")\s*(하기|완료|진행)?\s*$"#)   // a button's text ("406,600원 결제하기"), not any line mentioning 결제; 쿠팡's 바로구매 only opens the order sheet
     static func isPayWord(_ t: String) -> Bool { payWord.search(t) != nil }
 
     init(db: DB) throws {

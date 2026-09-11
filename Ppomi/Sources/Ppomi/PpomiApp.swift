@@ -19,6 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ note: Notification) {
         state = Self.pendingState
         NSApp.setActivationPolicy(.regular)
+        FamilyUpdateRuntime.shared.checkInBackground()
+        GoogleAccount.shared.startSharing()
         // 손·눈 권한이 없어 폰 도구가 거부되면(state.setupNeeded) 그때 설정 › 시작하기를 연다 — 시작 때가 아니라 첫 도구 때.
         setupWatch = state?.$setupNeeded.dropFirst().receive(on: RunLoop.main).sink { _ in
             NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
@@ -28,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var setupWatch: AnyCancellable?
     /// OS 텍스트 크기가 바뀌었으면(설정 앱에 다녀온 뒤) 모든 글자·여백·웹 페이지가 따라간다.
     func applicationDidBecomeActive(_ notification: Notification) {
+        Task.detached { guard GoogleAccount.session != nil else { return }; try? GoogleAccount.exchangeKeys() }   // 기다리는 기기에 키를
         let scale = AppSettings.uiScale
         guard Fonts.scale.value != scale else { return }
         Fonts.scale.value = scale
@@ -36,7 +39,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 }
 
+/// Executor dispatch happens before SwiftUI constructs AppDelegate or any GUI state.
 @main
+enum PpomiEntry {
+    @MainActor static func main() {
+        if CommandLine.arguments.contains("--executor") { AgentExecutorStdio.run() }
+        if CommandLine.arguments.contains("--legacy-account") { PpomiAccountApp.main(); return }
+        PpomiApp.main()
+    }
+}
+
 struct PpomiApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var state: AppState
@@ -106,7 +118,11 @@ struct PpomiApp: App {
         watcher.start()
         AppDelegate.pendingState = s
         // Ordinary launch opens chat. Explicit kiosk launch keeps its existing workbench route.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { s.openInitialScreen(kiosk: CommandLine.arguments.contains("--kiosk")) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            if CommandLine.arguments.contains("--legacy-settings") { s.setupNeeded += 1 }
+            else if CommandLine.arguments.contains("--legacy-records") { s.show(.timeline); s.reveal() }
+            else { s.openInitialScreen(kiosk: CommandLine.arguments.contains("--kiosk")) }
+        }
         // `--snapshot [APP …]`: collect and exit, no UI (launchd / cron / a terminal). Default: every app.
         if let i = CommandLine.arguments.firstIndex(of: "--snapshot") {
             let keys = Array(CommandLine.arguments[(i + 1)...])
@@ -116,12 +132,16 @@ struct PpomiApp: App {
     }
 
     /// `swift run Ppomi` while the app is up: quit the old GUI instance first, so there is one window, not two.
-    /// Only GUI instances (.regular) are touched — a `--snapshot` job in flight is left alone.
+    /// Only GUI instances of this executable (.regular) are touched; another host or background job is left alone.
     private static func replaceRunningInstance() {
         guard !CommandLine.arguments.contains("--snapshot") else { return }
         let me = ProcessInfo.processInfo.processIdentifier
+        let executable = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
         let old = NSWorkspace.shared.runningApplications.filter {
-            $0.processIdentifier != me && $0.executableURL?.lastPathComponent == "Ppomi" && $0.activationPolicy == .regular
+            // A packaged Tauri executor may be renamed. Only regular GUI instances qualify;
+            // the --executor child never becomes regular and cannot be replaced here.
+            $0.processIdentifier != me && $0.activationPolicy == .regular &&
+            $0.executableURL?.standardizedFileURL == executable
         }
         guard !old.isEmpty else { return }
         old.forEach { $0.terminate() }

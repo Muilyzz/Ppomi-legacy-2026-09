@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>NSMicrophoneUsageDescription</key><string>뽀미와 음성으로 대화할 때 마이크를 사용합니다.</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>CFBundleURLTypes</key><array><dict>
+    <key>CFBundleURLName</key><string>com.ppomi.shell.auth</string>
+    <key>CFBundleURLSchemes</key><array><string>ppomi</string></array>
+  </dict></array>
+</dict></plist>

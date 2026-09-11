@@ -1,6 +1,7 @@
 # secrets and local state
 .env
 data/ledger.db*
+data/lenses.json
 data/shots/
 data/*.log
 data/telemetry.jsonl
@@ -33,6 +34,16 @@ data/chats/
 .ppomi/
 .venv/
 node_modules/
+agent/dist-shell/
+shell/src-tauri/target/
+shell/src-tauri/gen/
+shell/src-tauri/resources/executor/
+shell/src-tauri/resources/*.bundle/
+!shell/src-tauri/icons/icon.icns
+shell/plugins/**/target/
+shell/plugins/**/android/.tauri/
+executors/windows/**/bin/
+executors/windows/**/obj/
 hub/.env.local
 .env.local
 # real-ledger parity oracles (owner-only; tests XCTSkip without them)
@@ -41,5 +52,13 @@ Ppomi/Tests/PpomiTests/column-parity.json
 Ppomi/Tests/PpomiTests/timeline-parity.json
 Ppomi/Tests/PpomiTests/stitch-parity.json
 storybook/storybook-static/
+storybook/debug-storybook.log
 iPad/build/
 iPad/PpomiPad.xcodeproj/
+# Native update configuration is supplied when signing a device-specific preview/family build.
+iPad/Updates.json
+updates/*.pem
+updates/Updates.json
+
+# Download artifacts are published by Vercel, never committed.
+hub/releases/

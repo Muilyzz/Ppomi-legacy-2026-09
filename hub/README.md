@@ -1,10 +1,10 @@
 # ppomi-hub
 
-뽀미 플레이북 카탈로그와 발자국(앱별 절차의 한 걸음) 공유 허브. Vercel 서버리스 + KV. Node 24, 의존성은 `@vercel/kv` 하나.
+뽀미 로그인 웹 홈·앱 다운로드·공개 플레이북 카탈로그와 발자국 공유 API. Vercel 정적 파일 + 서버리스 + KV로 구성하며 런타임·명령은 [package.json](package.json), 라우팅·보안 헤더는 [vercel.json](vercel.json)에서 관리한다.
 
-랜딩(`index.html`, `privacy.html`, 아이콘·소셜 이미지)도 여기 산다 — Vercel 배포 루트 하나가 https://ppomi.vercel.app 정적 페이지와 `/api/*` 를 같이 낸다(`cleanUrls` 로 `/privacy`).
+[운영 웹 홈](https://ppomi.muilyzz.com/)의 로그인은 적용되어 있다. 이 워크트리의 새 기록 화면·Mac 바이너리 배포는 보류 중이며, 공통 UI가 main에 통합된 뒤 연결한다. 로컬 구현을 운영 적용 상태로 간주하지 않는다.
 
-## 엔드포인트 (응답은 전부 JSON, 오류는 4xx + `{ reasons: [...] }`)
+## 카탈로그·발자국 API
 
 | 메서드 | 경로 | 역할 |
 |---|---|---|
@@ -21,7 +21,7 @@
 
 원본은 `Ppomi/Sources/Ppomi/Catalog/<id>/`의 `manifest.json`, 안내 Markdown, 공식 아이콘이다. 공통 안전 절차는 같은 카탈로그의 `common.md`에 있다. [패키지 명세](../docs/playbook-format.md)에 데이터 구조와 로컬 가져오기 방법을 설명한다.
 
-`npm run sync:catalog`는 이 원본을 검증한 뒤 `hub/catalog/`에 참조된 파일만 바이트 그대로 복사한다. 이 디렉터리는 생성물이라 gitignore이며 직접 수정하지 않는다. `npm run deploy`가 복사를 먼저 실행하므로 배포용 별도 앱 목록을 관리할 필요가 없다. 잘못된 버전, 경로 이동, 심볼릭 링크, 겹치는 앱 별칭은 배포 전에 거부한다. Vercel 함수에는 `catalog/**`를 포함하고, 같은 파일을 `/catalog/<id>/…` 정적 경로로 제공한다. API의 `assets`가 이 상대 URL을 알려 준다.
+`npm run sync:catalog`는 [생성 스크립트](../scripts/sync-catalog.mjs)로 원본을 검증하고 `hub/catalog/`를 만든다. 생성물을 직접 수정하지 않는다. `npm run deploy`도 이 단계를 실행하므로 원본에 공개할 패키지만 포함되어 있는지 먼저 검토한다.
 
 카탈로그 API는 읽기 전용이다. 공개 카탈로그는 검토한 원본만 배포하며, 로컬에서 가져온 패키지를 자동 게시하지 않는다. 실제 실행 성공·실패, 화면 지문, 개인별 입력은 이 응답에 섞지 않는다. 기존 `/api/footprints`의 명시적인 공유·검증 흐름은 별도로 유지한다.
 
@@ -46,22 +46,43 @@
 - 서명 대상: `sig`·`verified`·`tier`·`quarantined` 를 뺀 나머지를 키 정렬 JSON 으로 직렬화한 바이트. 클라이언트가 보낸 `verified`/`tier`/`quarantined` 는 무시하고 서버가 채운다.
 - `tier: "verified"` 는 환경변수 `VERIFIED_PUBLISHERS`(공개키 콤마 목록)에 있는 publisher 에만 붙는다. 없으면 전부 community.
 
-## 게시 거부 규칙 (`lib/validate.js`)
+## 검증과 저장
 
-개인정보(금액 `\d{1,3}(,\d{3})+원|₩`, 계좌·카드 `\d{4}-\d{4}`, 전화번호, 이메일, URL, 2~4자 한글 이름+님 — 고객님·회원님 등 UI 단어는 허용), 결제 단어(결제|송금|이체|구매|주문|입금|충전)를 target 으로 쓰는 탭(⊙·↓), 허용 외 기호, note 140자 초과, 지문 단어 3~8개·각 24자 이하 위반, ⊙의 target 정규식이 fingerprintBefore 에 안 맞음, 탭(⊙·↓) target 정규식에 수량자(`* + ? {`)가 있거나 `|` 택일이 8개 초과(백트래킹 폭주 방지 — target 은 탭할 글자이지 프로그램이 아니다), 정의된 필드 외의 키, 서명 불일치, 같은 publisher 분당 10건 초과. 결제 단어 검사는 target 문자열뿐 아니라 정규식이 실제로 맞추는 글자(결제 단어 자체, 그리고 fingerprintBefore 의 결제 단어가 든 낱말)에도 건다 — `.`·`[결]제`·`하기`(→"결제하기") 같은 우회를 막는다. 승인(✋) 뒤의 결제 탭은 허브에 올리지 않는다 — export 콤보는 `✋승인` 에서 끝나고 마지막 걸음은 뽀미가 붙인다.
+게시 자료에 개인정보나 결제 실행 단계를 포함하지 않는 것이 원칙이다. 허용 필드·정규식·길이 제한·서명 검사는 [validate.js](lib/validate.js)와 [검증 사례](test/validate.test.js), 승인에서 끝나는 내보내기는 [export.js](lib/export.js)를 기준으로 한다.
 
-## KV 키
-
-`fp:<app>:<id>` 레코드 · `idx:<app>` id 집합 · `app:<id>` id→app · `pub:<publisher>:rate` 분당 카운트(TTL 60) · `rep:<id>` 신고 수 · `ver:<id>:<publisher>` 하루 1회 검증 잠금(TTL 86400) · `tm:<event>:<name|tool>:<ok|fail>` 텔레메트리 카운터
-
-`KV_REST_API_URL` 이 없으면 메모리 Map 으로 동작한다(테스트). Vercel 위(`VERCEL` env)에서 KV env 가 없으면 기동을 거부한다 — 인스턴스마다 데이터가 증발하는 조용한 실패 방지.
+저장 키·중복·호출 제한은 [store.js](lib/store.js)에서 관리한다. 로컬 테스트는 메모리 저장소를 쓸 수 있지만, 운영 Vercel에는 `KV_REST_API_URL`과 `KV_REST_API_TOKEN`이 필요하다. 운영에서 메모리 저장소로 대체하면 인스턴스마다 기록이 유실되므로 시작을 거부한다.
 
 ## 실행
 
-```
+```sh
 npm install && npm test        # node --test
 npm run sync:catalog           # 개발용 정적 카탈로그 생성
-npm run deploy                 # 원본 검증·복사 후 기존 ppomi 프로젝트 / muilyzz 팀에 배포
+npm run prepare:downloads -- --offline  # 현재 Mac/Android 다운로드 파일의 크기·SHA-256 검증
+npm run deploy                 # 카탈로그 복사·다운로드 파일 준비 후 기존 ppomi 프로젝트 / muilyzz 팀에 배포
 ```
 
-배포는 `hub/`에서 `npm run deploy`로 한다 — 프로젝트 `ppomi`의 git 자동 배포는 끊어 두었다. 환경변수는 `KV_REST_API_URL`, `KV_REST_API_TOKEN`, 선택적으로 `VERIFIED_PUBLISHERS`다. `.vercelignore`는 `test`, `README.md`, `node_modules`, `.env.local`을 빼며 생성한 `catalog/`는 업로드한다.
+위 명령은 `hub/`에서 실행한다. 배포 대상은 기존 `ppomi` 프로젝트·`muilyzz` 팀이며 git 자동 배포는 꺼져 있다. 선택 환경변수 `VERIFIED_PUBLISHERS`는 공식 게시자 공개키 목록이다. 배포 제외 파일은 [.vercelignore](.vercelignore)에서 관리한다. 현재처럼 배포를 보류한 작업 사본에서는 배포 명령을 실행하지 않는다.
+
+[downloads.json](downloads.json)이 배포할 바이너리의 파일명·크기·해시를 정한다. [준비 스크립트](../scripts/prepare-downloads.mjs)는 누락된 파일을 운영 사이트에서 받으므로, 아직 공개하지 않은 새 바이너리는 `hub/releases/`에 직접 준비해야 한다. `--offline`으로 다운로드 없이 준비 상태를 검증한다. 이 과정은 바이너리를 빌드하거나 설치하지 않는다.
+
+
+## 로그인 웹 홈
+
+`/`는 로그인과 계정 홈, `/download`는 설치 파일 안내다. 구현과 사용 예시는 다음을 기준으로 한다.
+
+| 책임 | 구현 | 검증 사례 |
+|---|---|---|
+| 로그인·공개 설정 | [auth.js](web/auth.js), [config.js](web/config.js) | [인증](test/web-auth.test.js) |
+| 로그인 서버·응답 검증 | [auth-client.js](web/auth-client.js) | [토큰·사용자·통신](test/web-auth-client.test.js) |
+| 기기 키 저장·기록 읽기 | [device-store.js](web/device-store.js), [records.js](web/records.js) | [기록](test/web-records.test.js), [조건부 조회](test/web-records-conditional.test.js) |
+| 인증된 기록 통신 | [record-rpc.js](web/record-rpc.js) | [통신·취소·응답 제한](test/web-record-rpc.test.js) |
+| 기록 응답·소유 범위 검증 | [record-protocol.js](web/record-protocol.js) | [메타데이터·버전·청크](test/web-record-protocol.test.js) |
+| 연결·갱신·계정 정리 | [record-session.js](web/record-session.js) | [세션](test/web-record-session.test.js), [화면 연동](test/web-home-lifecycle.test.js) |
+| 복호화·압축 해제 | [record-crypto.js](web/record-crypto.js), [lzfse.js](web/lzfse.js) | [암호화](test/web-records-crypto.test.js) |
+| UI 연결·격리 렌더링 | [home.js](web/home.js), [record-views.js](web/record-views.js) | [화면 연동](test/web-home-lifecycle.test.js) |
+
+브라우저는 Mac의 키체인을 읽지 않고 독립된 기기 키를 사용한다. 렌더링 프레임에는 인증 토큰과 기기 키를 넘기지 않으며, 공개 앱 캐시에 개인 기록을 저장하지 않는다. 계정 전환 때 기다려야 하는 정리와 렌더러의 버퍼 수명 계약은 `record-session.js`의 주석과 사용 예시를 따른다.
+
+웹 기기용 [서버 마이그레이션](../supabase/migrations/20260911020000_web_record_devices.sql)은 아직 운영에 적용하지 않았다. 이 권한 구분은 기존 계정 JWT와 기기 헤더에 기반하며, 기기 소유 증명을 추가하는 변경은 아니다. 위 검증은 `npm test`로 실행하며 로컬 테스트 통과와 운영 적용을 구분한다.
+
+렌더러 생성은 저장소 루트의 `node scripts/sync-web-records.mjs`, LZFSE 재빌드는 `sh scripts/build-web-lzfse.sh`로 한다. 출처·버전은 각 스크립트와 [생성 출처 목록](web/vendor/sources.json)을 따른다. 정적 앱 파일을 바꿀 때는 [service-worker.js](service-worker.js)의 캐시 버전을 올린다. 로그인은 온라인 검증이 필요하며 새 worker는 기존 앱 창을 닫은 뒤 활성화된다.

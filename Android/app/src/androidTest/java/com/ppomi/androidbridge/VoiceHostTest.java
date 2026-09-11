@@ -369,7 +369,7 @@ public final class VoiceHostTest extends InstrumentationTestCase {
         Bundle arguments = new Bundle(); arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, prompt);
         assertTrue(input.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)); input.recycle();
         waitFor(() -> Boolean.TRUE.equals(evaluate("document.querySelector('#chat-input')?.value.length > 0")), 5000, "Native text input did not reach the actual chat field");
-        waitFor(() -> Boolean.TRUE.equals(evaluate("document.querySelector('button[aria-label=\\"메시지 보내기\\"]')?.disabled === false")), 5000, "UI send button did not enable");
+        waitFor(() -> Boolean.TRUE.equals(evaluate("document.querySelector('button[aria-label=\"메시지 보내기\"]')?.disabled === false")), 5000, "UI send button did not enable");
         clickNativeText("메시지 보내기");
         waitFor(() -> host.getActive() && "text".equals(host.getMode()) && serviceRunning(), 15000, "Text foreground session did not start");
         assertEquals(audioMode, context.getSystemService(AudioManager.class).getMode());

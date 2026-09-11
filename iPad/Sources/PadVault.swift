@@ -1,13 +1,16 @@
-// Mac 이 Supabase 에 올린 암호화 기록(ledger·evidence)을 이 기기가 직접 읽는다. 기록 키는 작업 공간의 것(ppomi_key_get, Mac 이 올림)을 받아 키체인에 둔다. 쓰기 없음.
+// Mac 이 Supabase 에 올린 암호화 기록(ledger·evidence·accounting)을 이 기기가 직접 읽는다.
+// 기록 키는 서버에 평문으로 없다: 이 기기의 X25519 공개키를 등록해 두면 Mac 이 그 공개키로 감싼 사본을 올리고(ppomi_key_get), 여기서 비밀키로 푼다. 쓰기 없음.
 import Foundation
 
 enum PadVault {
     static var key: SharedRecordKey? { Keychain.load(SharedRecordKey.self, account: "vault") }
+    private static let service = "com.muilyzz.ppomi.pad"
 
-    /// 로그인 뒤: 이 기기를 등록하고(초대 없음 — 구글 계정이 곧 구성원), 작업 공간의 기록 키가 있으면 받아 둔다. 키는 Mac 이 "구글 계정 연결"을 누르면 생긴다.
+    /// 로그인 뒤: 이 기기를 공개키와 함께 등록하고(초대 없음 — 구글 계정이 곧 구성원), Mac 이 감싸 준 키가 있으면 받아 둔다.
     static func enroll() throws {
         let reply = try PadServerClient.shared.rpc("ppomi_register_device",
-                                                   ["p_device_id": PadSettings.deviceID, "p_label": PadSettings.deviceLabel, "p_platform": "ios"])
+                                                   ["p_device_id": PadSettings.deviceID, "p_label": PadSettings.deviceLabel, "p_platform": "ios",
+                                                    "p_public_key": try DeviceKey.publicKeyBase64(service: service)])
         guard let workspace = (reply as? [String: Any])?["workspace"] as? [String: Any], let id = workspace["id"] as? String, UUID(uuidString: id) != nil
         else { throw SharedRecordError.invalid }
         guard var session = Session.load() else { throw PadServerClient.Failure.unconfigured }
@@ -15,14 +18,15 @@ enum PadVault {
         _ = try? fetchKey()
     }
 
-    /// 작업 공간의 기록 키. 아직 없으면 nil(Mac 이 연결 전).
+    /// Mac 이 이 기기의 공개키로 감싸 올린 기록 키. 아직 없으면 nil(Mac 이 켜지면 몇 초 안에 올린다).
     @discardableResult static func fetchKey() throws -> SharedRecordKey? {
         guard let reply = try PadServerClient.shared.rpc("ppomi_key_get", [:]) as? [String: Any] else { throw SharedRecordError.invalid }
         guard reply["found"] as? Bool == true else { return nil }
         guard let workspaceID = reply["workspace_id"] as? String, UUID(uuidString: workspaceID) != nil,
               let keyID = reply["key_id"] as? String, UUID(uuidString: keyID) != nil,
-              let text = reply["key"] as? String, let key = Data(base64Encoded: text), key.count == 32,
+              let text = reply["wrapped"] as? String, let blob = Data(base64Encoded: text),
               let records = reply["records"] as? [String: String], !records.isEmpty else { throw SharedRecordError.invalid }
+        let key = try KeyWrap.unwrap(blob, with: DeviceKey.privateKey(service: service), workspaceID: workspaceID, keyID: keyID)
         let value = SharedRecordKey(workspaceID: workspaceID, deviceID: PadSettings.deviceID, keyID: keyID, key: key, records: records, sourcePath: "")
         try Keychain.save(value, account: "vault")
         return value

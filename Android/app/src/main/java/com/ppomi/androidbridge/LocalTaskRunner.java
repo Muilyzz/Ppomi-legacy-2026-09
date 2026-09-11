@@ -58,7 +58,7 @@ public final class LocalTaskRunner {
     }
     /** Persists the no-replay guard before requesting the server claim. This never starts execution. */
     synchronized JSONObject prepareSharedBuiltin(JSONObject run) throws Exception {
-        if (VoiceSessionHost.hasActiveControl()) throw new IllegalStateException("음성 대화를 종료한 뒤 별도 작업을 시작해 주세요.");
+        if (AndroidExecutor.hasActiveControl()) throw new IllegalStateException("음성 대화를 종료한 뒤 별도 작업을 시작해 주세요.");
         if (owner != null) throw new IllegalStateException("진행 중인 작업을 먼저 완료하거나 중지해 주세요.");
         if (BridgeAccessibilityService.getInstance() == null) throw new IllegalStateException("Android 접근성 설정에서 뽀미 서비스를 먼저 켜 주세요.");
         if (!"queued".equals(run.optString("state")) || !"builtin".equals(run.optString("mode")))
@@ -74,7 +74,7 @@ public final class LocalTaskRunner {
         JSONObject task = store.get(id), shared = task.optJSONObject("shared");
         if (shared == null || !"claiming".equals(shared.optString("phase"))) throw new IllegalStateException("이미 처리한 공유 작업입니다.");
         TaskStore.put(shared, "phase", "active"); TaskStore.put(shared, "serverVersion", version); TaskStore.put(shared, "nextVersion", version);
-        if (owner != null || VoiceSessionHost.hasActiveControl() || BridgeAccessibilityService.getInstance() == null) {
+        if (owner != null || AndroidExecutor.hasActiveControl() || BridgeAccessibilityService.getInstance() == null) {
             TaskStore.put(task, "state", "interrupted");
             store.event(task, "interrupted", "실행 준비 중 기기 연결 또는 작업 상태가 변경됐습니다.", new JSONObject());
             return task;
@@ -99,7 +99,7 @@ public final class LocalTaskRunner {
         }
     }
     private JSONObject start(String request, String mode, JSONArray steps) {
-        if (VoiceSessionHost.hasActiveControl()) throw new IllegalStateException("음성 대화를 종료한 뒤 별도 작업을 시작해 주세요.");
+        if (AndroidExecutor.hasActiveControl()) throw new IllegalStateException("음성 대화를 종료한 뒤 별도 작업을 시작해 주세요.");
         if (owner != null) throw new IllegalStateException("진행 중인 작업을 먼저 완료하거나 중지해 주세요.");
         if (BridgeAccessibilityService.getInstance() == null) throw new IllegalStateException("Android 접근성 설정에서 뽀미 서비스를 먼저 켜 주세요.");
         JSONObject task = store.create(request, mode, steps);
@@ -132,7 +132,7 @@ public final class LocalTaskRunner {
     }
 
     public synchronized JSONObject resume(String id) {
-        if (VoiceSessionHost.hasActiveControl()) throw new IllegalStateException("음성 대화를 종료한 뒤 별도 작업을 시작해 주세요.");
+        if (AndroidExecutor.hasActiveControl()) throw new IllegalStateException("음성 대화를 종료한 뒤 별도 작업을 시작해 주세요.");
         if (owner != null) throw new IllegalStateException("진행 중인 작업을 먼저 중지해 주세요.");
         JSONObject task = store.get(id);
         if (task.has("shared")) throw new IllegalStateException("공유 작업은 새 작업으로 다시 요청해 주세요. 중단된 동작을 자동으로 반복하지 않습니다.");

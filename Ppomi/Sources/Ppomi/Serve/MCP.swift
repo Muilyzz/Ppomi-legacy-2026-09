@@ -5,6 +5,8 @@
 import Foundation
 
 final class MCPServer {
+    /// A trusted native host may supply its own approval UI. Never exposed as a model tool.
+    var approvalHandler: ((String, [String]) -> String?)?
     private let db: DB, ro: DB                     // ro: the read-only handle the sql tool uses (WITH … DELETE would pass a prefix check)
     private let tools: Tools
     /// Live tool progress (fixed vocabulary) for a host UI; the runtime store stays the record.
@@ -104,6 +106,7 @@ final class MCPServer {
 
     /// The owner's answer to a question with buttons: an elicitation, or the 뽀미 window. Only a person answers; nil = 취소/무응답.
     private func ask(_ html: String, _ options: [String]) -> String? {
+        if let approvalHandler { return approvalHandler(html, options) }
         guard elicitation else { return Tools.askViaDB(db, html, options) }
         let schema: [String: Any] = ["type": "object", "required": ["choice"],
                                      "properties": ["choice": ["type": "string", "title": "선택", "enum": options, "enumNames": options]]]

@@ -46,19 +46,20 @@ export const composer = (disabled = false, waiting = false) =>
 export const callBar = (word = "듣는 중") => <CallBar word={word} onEnd={() => {}} />;
 export const incoming = <IncomingCall reason="62,000원 결제 승인" onAccept={() => {}} onLater={() => {}} />;
 
-/** 작업대 스토리가 왼쪽 열에 꽂는 대화 하나. */
+/** 작업대 스토리의 대화. 넓을 때 오른쪽, 좁을 때 기본 화면 전체를 쓴다. */
 export const conversation = <Shell conversation={
   <Pane log={<Log>{messages}</Log>} composer={composer()} />} />;
 
-export const controlHeader = <ControlHeader
-  target={<select aria-label="대상"><option>iPhone</option><option>Android</option><option>Windows</option></select>}
-  actions={<button className="text">기록</button>} />;
+export const topBar = <><strong>뽀미</strong><button className="text" aria-label="내 계정">나</button></>;
 
-export const turn = <><span>62,000원 결제</span><button className="send">승인</button><button className="text">취소</button></>;
+export const controlHeader = <ControlHeader
+  target={<span>iPhone</span>} />;
+
+export const turn = <div className="turn-actions" role="group" aria-label="사람 차례"><span>62,000원 결제</span><button className="send">승인</button><button className="text">취소</button></div>;
 
 export const recordTabs = ["타임라인", "증빙", "분개", "절차", "건강", "3D"];
 export const records = <>
-  <RecordsHeader onBack={() => {}}>
+  <RecordsHeader>
     <div role="tablist" aria-label="기록 종류">
       {recordTabs.map((tab, i) => <button key={tab} role="tab" aria-selected={i === 0}>{tab}</button>)}
     </div>

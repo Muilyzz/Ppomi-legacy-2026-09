@@ -92,8 +92,9 @@ enum SessionStore {
             guard SecItemAdd(q as CFDictionary, nil) == errSecSuccess else { throw SupabaseAuth.Failure.connection }
         } else if status != errSecSuccess { throw SupabaseAuth.Failure.connection }
     }
-    static func load<T: Decodable>(_ type: T.Type, service: String, account: String) -> T? {
+    static func load<T: Decodable>(_ type: T.Type, service: String, account: String, interactionAllowed: Bool = true) -> T? {
         var q = query(service, account); q[kSecReturnData as String] = true; q[kSecMatchLimit as String] = kSecMatchLimitOne
+        if !interactionAllowed { q[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail }
         var result: CFTypeRef?
         guard SecItemCopyMatching(q as CFDictionary, &result) == errSecSuccess, let data = result as? Data, data.count <= 16_384 else { return nil }
         return try? JSONDecoder().decode(type, from: data)

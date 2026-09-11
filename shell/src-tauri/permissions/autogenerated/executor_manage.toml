@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-executor-manage"
+description = "Enables the executor_manage command without any pre-configured scope."
+commands.allow = ["executor_manage"]
+
+[[permission]]
+identifier = "deny-executor-manage"
+description = "Denies the executor_manage command without any pre-configured scope."
+commands.deny = ["executor_manage"]

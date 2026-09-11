@@ -8,4 +8,6 @@
   };
   tabs.forEach((t) => t.addEventListener('click', () => { page = t.dataset.page; show(); }));
   show();
+  // Installed once for this document, after the tab shell and initial records frame are initialized.
+  window.webkit?.messageHandlers?.ppomiUpdateReady?.postMessage({ bridgeVersion: 1 });
 })();

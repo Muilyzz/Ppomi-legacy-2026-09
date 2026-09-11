@@ -1,5 +1,10 @@
 # Ppomi Android standalone prototype
 
+This source tree also supplies the native executor to the Tauri 2 shell. The
+WebView-independent `AndroidExecutor` is shared with the compatibility host; see
+[Android executor and Tauri integration](../docs/android-executor.md) for the
+protocol, lifecycle boundaries, and reproducible shell build.
+
 A native Kotlin/Compose workbench and an independent test APK demonstrate on-device task execution:
 
 - `app` / `com.ppomi.androidbridge`: local task UI, explicit approvals, persistent records, native screenshot evidence, `AccessibilityService`, and optional authenticated local MCP endpoint.
@@ -18,12 +23,20 @@ WebView requests allowed are OpenAI's Realtime WebRTC signaling POST and its
 OPTIONS preflight at the exact `/v1/realtime/calls` endpoint, plus text WebSocket at `wss://api.openai.com/v1/realtime`; permanent
 Supabase credentials stay in the native HTTPS proxy.
 
-Configure an HTTPS agent-server endpoint in the conversation UI and connect the existing
-device-specific Supabase configuration under **기록·설정 → 설정**. Debug builds also
-accept setup extras through `.DebugProvisioningActivity`, protected by
+The agent-server endpoint is fixed to `https://ppomi-agent.vercel.app`, matching
+`PpomiServer.agentEndpoint`. Settings no longer expose agent-server addresses,
+Supabase connection JSON, or direct model API addresses/keys. Android does not yet
+implement the Google PKCE login and callback used by Mac/iPad, so a new installation
+cannot complete normal account onboarding yet. Existing device credentials remain
+in Android Keystore-backed storage; they are not migrated to Google sessions here.
+
+Debug builds accept provisioning extras through `.DebugProvisioningActivity`, protected by
 `android.permission.DUMP` for ADB shell/privileged callers. The ordinary launcher
 activity ignores provisioning extras. Setup is rejected while voice or local
-work is active. There is no default agent-server endpoint.
+work is active. A debug `configure_agent_endpoint` extra writes an `endpoint_override`;
+old user-entered `endpoint` preferences are ignored, and release uses only the product
+constant. The Tauri debug APK includes the same gated provisioning activity under
+`com.ppomi.androidbridge.DebugProvisioningActivity`; it is absent from release.
 
 From 0.6.2, **채팅** provides a temporary input/response log and safe tool status. Sending starts a text-only WebSocket session without requesting microphone or notification permission, microphone capture, or audio focus. A `specialUse` foreground service retains the host during other-app control. App opening waits for the target foreground to settle before the next screen read, with a bounded deadline and cancellation checks.
 
@@ -78,6 +91,31 @@ task removal and process restart still require separate device verification.
 
 ## Build and checks
 
+### Family web updates
+
+The APK can optionally stage signed shared web releases from a family HTTPS endpoint.
+Pass `-PfamilyUpdatesConfig=/absolute/path/Updates.json` to Gradle when building the APK.
+The configuration is copied into generated assets; leaving the property out removes
+the generated configuration and disables all updater networking. Keep real configuration
+outside the repository. Never package a private signing key. The common format and
+publisher are documented in [family updates](../docs/family-updates.md).
+
+The native host checks once per process in the background. A verified release becomes
+eligible only on the next cold process launch, and its asset root remains fixed for that
+process, including activity recreation and active calls. `updateReady` acknowledges a
+successful shared-page initialization. An unconfirmed trial rolls back at the next cold
+launch; a failed 30-second startup also shows a native recovery notice. Rollback retains
+the highest accepted sequence, so republishing requires a new sequence even when the
+content is an older good version. Neither updates nor rollback replay device actions.
+The updater lives under `noBackupFilesDir` and never touches accounting or agent workspace data.
+
+`./tests/run-protocol-tests.sh` verifies ECDSA signatures, package bounds and paths,
+cross-platform fixtures, staging, readiness, corruption fallback, and rollback entirely
+on the host JVM. A compile-only check that does not build the shared accounting runtime is
+`./gradlew --offline :app:compileDebugKotlin :app:compileDebugJavaWithJavac -x buildSharedAccounting`.
+Real device restart, WebView startup timing, and HTTPS delivery still need device validation
+before a signed family rollout.
+
 Requires Android SDK platform 35, build tools 34.0.0 and JDK 17 or newer. Android Studio includes a compatible JDK. Gradle 8.11.1 and AGP 8.7.3 are pinned; Kotlin/Compose UI dependencies are pinned in Gradle. The shared Swift accounting library builds from the canonical Mac source; see [shared-core setup](../docs/android-shared-core.md).
 
 ```sh
@@ -104,7 +142,7 @@ The **작업** tab accepts text for an explicitly labelled built-in test procedu
 
 Task records are atomic JSON files under Android app-private `files/tasks/`; screenshots and observed trees sit beside each task. These are operational records, not financial journal postings. Process death or accessibility disconnection marks unfinished work interrupted; uncertain actions are never replayed automatically. A task owns the control channel, and every non-status external MCP call is rejected while it runs or waits for approval. Approval/settings UI is user-only, including for the local agent.
 
-The built-in procedure is **not an AI model** and makes no network request. **설정** optionally accepts an HTTPS chat-completions-compatible endpoint/model/key; the key is encrypted with Android Keystore and excluded from task records and screenshots. Model mode sends the user's request and current allowed app's accessibility text to that configured provider, proposes one action per approval, and stops at 24 decisions. No provider is configured by default, no Mac key is imported, and the initial standalone proof does not require or exercise a paid model request.
+The built-in procedure is **not an AI model** and makes no network request. Previously saved developer model settings remain usable by the native workbench, but product settings no longer collect an API address, model ID, or key. Existing keys remain encrypted with Android Keystore and excluded from task records and screenshots. Model mode sends the user's request and current allowed app's accessibility text to that configured provider, proposes one action per approval, and stops at 24 decisions. No direct provider is configured by default, no Mac key is imported, and the initial standalone proof does not require or exercise a paid model request.
 
 Run the real UI tests from the repository root:
 

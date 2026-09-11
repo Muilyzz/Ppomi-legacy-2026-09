@@ -133,6 +133,7 @@ enum DockChange: Equatable {
 @MainActor
 final class KioskController {
     private let state: AppState
+    private let topBar: NSView
     private let records: NSView
     private let controlToolbar: NSView
     private let sidebar: AgentSidebar
@@ -187,6 +188,7 @@ final class KioskController {
 
     init(state: AppState, conversation: AgentVoicePanel? = nil) {
         self.state = state
+        topBar = WorkbenchHostingView(rootView: WorkbenchTopBar().environmentObject(state))
         let rootView = RecordsView().environmentObject(state)
         records = WindowDiagnostics.enabled ? DiagnosticHostingView(rootView: rootView) : WorkbenchHostingView(rootView: rootView)
         records.autoresizingMask = [.width, .height]
@@ -261,6 +263,11 @@ final class KioskController {
             },
             NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
                 guard let self else { return e }
+                if self.state.compactWorkbench, self.state.compactContentPresented, e.keyCode == 53,
+                   e.window === self.main || self.immersive?.contains(e.window) == true {
+                    if !e.isARepeat { self.state.dismissCompactContent() }
+                    return nil
+                }
                 if self.state.recordsFocused, e.keyCode == 53,
                    e.window === self.main || self.immersive?.contains(e.window) == true {
                     if !e.isARepeat { self.state.toggleRecordsFocus() }
@@ -336,7 +343,7 @@ final class KioskController {
                 MainActor.assumeIsolated {
                     // Only a live, buried control window is raised; a Stage Manager thumbnail belongs to another stage.
                     // Another Ppomi window (settings, a picker) that was activated keeps its key status.
-                    guard let self, !self.up, !self.state.recordsFocused, !self.revealingOnActivate, NSApp.isActive,
+                    guard let self, !self.up, !self.state.compactWorkbench, !self.state.recordsFocused, !self.revealingOnActivate, NSApp.isActive, self.controlWanted,
                           let p = self.main, p.isVisible, NSApp.keyWindow == nil || NSApp.keyWindow === p, Permissions.accessibility,
                           let phone = self.surface.liveWindow(), !self.isSurfacePresented(phone.id),
                           self.activateRevealFailedFor != phone.id else { return }
@@ -376,6 +383,7 @@ final class KioskController {
     }
 
     private func sync() {
+        defer { syncCompactPresentation() }
         if lastFocusRequest != state.recordsFocusRequest {
             lastFocusRequest = state.recordsFocusRequest
             if state.recordsFocused { leaveRecordsFocus() } else { enterRecordsFocus() }
@@ -386,10 +394,10 @@ final class KioskController {
             leaveRecordsFocus()
         }
         if state.recordsFocused {
-            // A chat request while reviewing records ends the review instead of firing later as a surprise activation.
+            // Chat stays available while control windows are parked; revealing it does not restore those windows.
             if lastChatOpen != state.chatOpen || lastWorkbenchShown != state.workbenchShown {
                 lastChatOpen = state.chatOpen; lastWorkbenchShown = state.workbenchShown
-                leaveRecordsFocus()
+                showMain(stage: false)
             }
             content?.phase = state.phase
             content?.band.sync()
@@ -404,7 +412,7 @@ final class KioskController {
             if !up {
                 // A live control window buried under other apps comes up with the chat; a Stage Manager thumbnail
                 // (another stage) is left alone, the slot explains how to bring it over.
-                if Permissions.accessibility, let phone = surface.liveWindow(), !isSurfacePresented(phone.id) {
+                if !state.compactWorkbench, controlWanted, Permissions.accessibility, let phone = surface.liveWindow(), !isSurfacePresented(phone.id) {
                     _ = surface.revealWindow()
                 }
                 NSApp.activateFront(); main?.makeKey(); main?.orderFront(nil)
@@ -416,6 +424,12 @@ final class KioskController {
         content?.band.sync()
         if state.shown != lastShown || switched { lastShown = state.shown; showMain() }
         if state.kioskOn != up { setExpanded(state.kioskOn) }
+    }
+
+    private func syncCompactPresentation() {
+        guard let content, content.compactContentPresented != state.compactContentPresented else { return }
+        content.compactContentPresented = state.compactContentPresented
+        if up { updateImmersive() } else { content.layoutSubtreeIfNeeded() }
     }
 
     /// The 기록 button is disabled during a question or agent work; the remaining refusals simply keep the conversation.
@@ -556,9 +570,19 @@ final class KioskController {
                                 size: NSScreen.main?.visibleFrame.size ?? CGSize(width: 1440, height: 900)))
         c.surface = surface
         c.recordsFocused = state.recordsFocused
+        c.compactContentPresented = state.compactContentPresented
+        c.onCompactLayout = { [weak self] compact in
+            guard let self, !self.up else { return }
+            self.state.setCompactWorkbench(compact)
+            if compact { self.main?.phoneID = nil }
+        }
+        c.onRecordsVisibility = { [weak self] visible in
+            guard let self, !self.up else { return }
+            self.updateRecordsVisibility(visible)
+        }
         c.phoneSize = surfaceSize
         c.phase = state.phase; c.band.state = state; c.band.sync()
-        c.mount(sidebar: sidebar, records: records, controlToolbar: controlToolbar)
+        c.mount(topBar: topBar, sidebar: sidebar, records: records, controlToolbar: controlToolbar)
         // An ordinary window: it has its own Stage Manager stage, leaves with its app, and activates on click.
         let p = MainPanel(contentRect: c.frame,
                           styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
@@ -617,7 +641,7 @@ final class KioskController {
                 surfaceFit = SurfaceFit()
                 placementRequested = true
                 NSApp.unhideWithoutActivation()
-                if Permissions.accessibility { _ = surface.revealWindow() }
+                if controlWanted, Permissions.accessibility { _ = surface.revealWindow() }
                 NSApp.activateFront()
             }
             updateImmersive()
@@ -639,7 +663,7 @@ final class KioskController {
             // A window parked on another stage cannot be revealed: activating its app would hand the stage over.
             // The docking tick's thumbnail pull brings it here instead.
             let parked = surface.liveWindow() == nil && surfaceThumbnail != nil
-            let presented = Permissions.accessibility && !parked && surface.revealWindow()
+            let presented = controlWanted && Permissions.accessibility && !parked && surface.revealWindow()
             p.surfacePID = surface.processIdentifier
             awaitingPresentedPhone = !presented
             if !presented { lastDock = nil }
@@ -649,6 +673,7 @@ final class KioskController {
             // Without accessibility nothing can raise a buried control window, so the panel must not tuck itself under it.
             p.phoneID = Permissions.accessibility ? surface.liveWindow()?.id : nil
         }
+        if c.dashboard.isCompact { p.phoneID = nil }
         c.layoutSubtreeIfNeeded()
         p.orderFront(nil)
         // 사람이 뽀미를 불렀다(실행·Dock·메뉴): 미러링 창을 앞세우느라 넘어간 활성을 되찾아 메뉴 막대와 타자가 뽀미에 남게 한다.
@@ -665,19 +690,22 @@ final class KioskController {
             savedFrame = p.frame
             p.orderOut(nil)
             up = true
+            state.setCompactWorkbench(screen.frame.width < WorkbenchLayout.compactWidth)
             if immersive == nil {
-                immersive = ImmersiveKiosk(workbench: sidebar, records: records, controlToolbar: controlToolbar, controlPlaceholder: c.phoneSlot, band: c.band) { [weak self] in
+                immersive = ImmersiveKiosk(topBar: topBar, workbench: sidebar, records: records, controlToolbar: controlToolbar, controlPlaceholder: c.phoneSlot, band: c.band) { [weak self] in
                     guard let self, self.state.kioskOn else { return }
                     self.state.toggleKiosk()
                 }
+                immersive?.onRecordsVisibility = { [weak self] visible in self?.updateRecordsVisibility(visible) }
             }
             if !state.recordsFocused {
-                if Permissions.accessibility { _ = surface.revealWindow() }
+                if !state.compactWorkbench, controlWanted, Permissions.accessibility { _ = surface.revealWindow() }
                 surfaceFit = SurfaceFit()
                 placementRequested = true
             }
-            immersive?.show(on: screen, phone: immersivePhoneFrame(), controlWidth: surfaceSize.width,
-                            recordsFocused: state.recordsFocused)
+            immersive?.show(on: screen, phone: immersivePhoneFrame(),
+                            showsRecords: state.recordsFocused || !controlWanted,
+                            compactContentPresented: state.compactContentPresented)
             WindowDiagnostics.panel("immersive.enter", p)
         } else {
             immersive?.hide()
@@ -701,7 +729,7 @@ final class KioskController {
 
     /// The opening is only for a visible phone, never a different app that has covered it.
     private func immersivePhoneFrame() -> CGRect? {
-        guard !state.recordsFocused, Permissions.accessibility, let phone = surface.liveWindow(),
+        guard !state.compactWorkbench, controlWanted, !state.recordsFocused, Permissions.accessibility, let phone = surface.liveWindow(),
               isSurfacePresented(phone.id),
               let frame = surface.axFrame(), DockChange.near(frame, phone.rect) else { return nil }
         return cgRect(frame)
@@ -710,17 +738,18 @@ final class KioskController {
     private func updateImmersive() {
         checkFocusedWindows()
         guard up, !NSApp.isHidden, let screen = immersive?.screenFrame, let c = content else { return }
-        if state.recordsFocused {
-            immersive?.update(phone: nil, controlWidth: surfaceSize.width, recordsFocused: true)
+        state.setCompactWorkbench(screen.width < WorkbenchLayout.compactWidth)
+        if state.compactWorkbench {
+            immersive?.update(phone: nil, compactContentPresented: state.compactContentPresented)
             return
         }
-        // The control column follows the surface width, which the compact-size request may change.
-        let currentControlArea = { () -> CGRect in
-            ImmersiveKiosk.layout(screen: screen, phone: nil, controlWidth: self.surfaceSize.width,
-                                  footerHeight: self.immersiveFooterHeight(screen: screen, content: c)).controlArea
+        if state.recordsFocused || !controlWanted {
+            immersive?.update(phone: nil, showsRecords: true)
+            return
         }
-        let fitReady = finishSurfaceFit(available: currentControlArea())
-        let controlArea = currentControlArea()
+        let controlArea = ImmersiveKiosk.layout(screen: screen, phone: nil,
+            footerHeight: immersiveFooterHeight(screen: screen, content: c)).controlArea
+        let fitReady = finishSurfaceFit(available: controlArea)
         if fitReady, placementRequested, let frame = surface.axFrame() {
             if frame.width <= controlArea.width, frame.height <= controlArea.height {
                 surface.place(cgRect(WorkbenchLayout.topAlignedWindow(size: frame.size, in: controlArea)).origin)
@@ -736,12 +765,16 @@ final class KioskController {
         } else if phone != nil {
             c.phoneSlot.hint = ""
         }
-        immersive?.update(phone: phone, controlWidth: surfaceSize.width)
+        immersive?.update(phone: phone)
     }
 
     private func immersiveFooterHeight(screen: CGRect, content c: WorkbenchContent) -> CGFloat {
-        let column = WorkbenchLayout.dashboard(in: screen, controlWidth: surfaceSize.width, topInset: 0).controlColumn
+        let column = WorkbenchLayout.dashboard(in: screen, topInset: 0).contentColumn
         return c.band.preferredHeight(for: max(0, column.width - WorkbenchLayout.horizontalInset * 2))
+    }
+
+    private func updateRecordsVisibility(_ visible: Bool) {
+        if state.recordsOnScreen != visible { state.recordsOnScreen = visible }
     }
 
     /// Clicks over the hole belong to the native window showing through it, even while this window is above it.
@@ -749,7 +782,7 @@ final class KioskController {
     private func updateHoleClickThrough() {
         guard let p = main, let c = content else { return }
         let pointer = p.convertPoint(fromScreen: NSEvent.mouseLocation)
-        let overHole = !up && c.dockedPhone && c.phoneSlot.frame.contains(c.convert(pointer, from: nil))
+        let overHole = !up && c.nativeHoleRect?.contains(c.convert(pointer, from: nil)) == true
         if p.ignoresMouseEvents != overHole { p.ignoresMouseEvents = overHole }
     }
 
@@ -839,7 +872,7 @@ final class KioskController {
         guard let full = visible ?? (p.screen ?? NSScreen.main)?.visibleFrame else { return }
         let display = usable(full, stageManager: visible == nil && stageManagerActive)
         var minimum = WorkbenchLayout.minimumContentSize
-        minimum.width = max(minimum.width, phoneSize.width + WorkbenchLayout.horizontalInset * 2 + WorkbenchLayout.minimumConversationWidth)
+        minimum.width = max(minimum.width, phoneSize.width + WorkbenchLayout.horizontalInset * 2 + WorkbenchLayout.conversationWidth)
         let displayContent = p.contentRect(forFrameRect: display).size
         p.contentMinSize = CGSize(width: min(minimum.width, displayContent.width), height: min(minimum.height, displayContent.height))
         p.contentMaxSize = CGSize(width: 10000, height: 10000)
@@ -871,8 +904,10 @@ final class KioskController {
             var room = available.size
             if surface == .windows, let full = (main?.screen ?? NSScreen.main)?.visibleFrame {
                 let usable = Self.usable(full, stageManager: Self.stageManagerActive)
-                room.width = max(room.width, usable.width - WorkbenchLayout.horizontalInset * 2 - WorkbenchLayout.minimumConversationWidth)
-                room.height = max(room.height, usable.height - WorkbenchLayout.normalTop - WorkbenchLayout.toolbarHeight - WorkbenchLayout.contentGap * 2 - 60)
+                let column = WorkbenchLayout.dashboard(in: usable).contentColumn
+                let capacity = WorkbenchLayout.pane(in: column, footerHeight: max(content?.footerHeight ?? 0, 60)).available.size
+                room.width = max(room.width, capacity.width)
+                room.height = max(room.height, capacity.height)
             }
             let accepted = surface.requestCompactSize(available: room)
             if let panel = main {
@@ -933,6 +968,15 @@ final class KioskController {
     }
 
     /// Maintain relative order without raising/activating the phone. Ignore transient Stage Manager animation frames.
+    /// 폰·Windows 창은 도구가 만질 때(뽀미 진행 중), 사람 차례일 때, 사람이 큰 화면으로 쓰겠다고 했을 때만 데려온다. 평상시엔 제어 열이 상태 뷰다.
+    private var controlWanted: Bool {
+        switch state.phase {
+        case .idle: return false
+        case .agent, .humanTurn: return true
+        case .humanUse(let onScreen): return onScreen
+        }
+    }
+
     private func dock() {
         checkFocusedWindows()
         guard wantMain, let p = main, let c = content else { return }
@@ -941,9 +985,24 @@ final class KioskController {
             c.dockedPhone = p.phoneID != nil
             updateHoleClickThrough()
         }
+        if c.dashboard.isCompact {
+            p.phoneID = nil
+            c.layoutSubtreeIfNeeded()
+            return
+        }
         if state.recordsFocused {
             p.phoneID = nil
             c.layoutSubtreeIfNeeded()
+            return
+        }
+        if !controlWanted {   // 평상시: 창을 데려오지도, 끌어오지도 않는다. 자리는 상태 뷰, 힌트 한 줄만 위에
+            p.phoneID = nil; lastDock = nil; placedDesktopID = nil
+            c.followedPhone = nil
+            awaitingPresentedPhone = false
+            let present = surface == .iphone ? state.mirror == .connected : surface.liveWindow() != nil
+            c.phoneSlot.hint = present ? "\(surface.displayName) · 대기 · 뽀미가 만질 때 데려옴" : state.connectionHint(for: surface)
+            c.layoutSubtreeIfNeeded()
+            if !p.isVisible { p.orderFront(nil) }
             return
         }
         guard Permissions.accessibility else {

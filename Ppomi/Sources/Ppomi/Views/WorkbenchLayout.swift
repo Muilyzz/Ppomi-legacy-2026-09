@@ -1,7 +1,7 @@
 import AppKit
 
-/// The workbench tree (docs/ui-tree.md): 대화 takes the remaining width, 제어 the target window's width; the 차례 띠
-/// exists only while a question is pending. Records replace the whole workspace as a page.
+/// A spanning top bar, records/control on the left, and persistent conversation on the right.
+/// Native target dimensions affect whether the control fits, never the ownership of these regions.
 enum WorkbenchLayout {
     static let horizontalInset: CGFloat = 12
     static let approvalBottom: CGFloat = 8
@@ -11,26 +11,41 @@ enum WorkbenchLayout {
     /// Text-bearing heights follow the app's 글자 크기 (AppSettings.uiScale) so nothing overlaps at 2–3×.
     static var scale: CGFloat { CGFloat(AppSettings.uiScale) }
     static var toolbarHeight: CGFloat { 40 * scale }
-    /// The small iPhone mirror (232×515) with its insets: the control column never gets narrower.
-    static let minimumControlWidth: CGFloat = 232 + horizontalInset * 2
-    /// Height: normalTop + immersiveTop + toolbar + gap + 515 + approvalBottom = 615, rounded up.
-    static let minimumContentSize = CGSize(width: 1040, height: 640)
-    /// A wide target (Windows) pushes the window minimum out so the shell keeps a usable width beside it.
-    static let minimumConversationWidth: CGFloat = 400
+    /// Space for the titlebar, top bar, control header and the smallest 515-point mirror, rounded up.
+    static let minimumContentSize = CGSize(width: 1040, height: 680)
+    /// 대화 열 폭(폰 스타일, 고정): 셸 388 + 여백. A wide target (Windows) pushes the window minimum out beside it.
+    static let conversationWidth: CGFloat = 412
+    static let compactWidth: CGFloat = 600
 
     struct Dashboard {
+        let topBar: CGRect
         let workspace: CGRect
         let conversationColumn: CGRect
-        let controlColumn: CGRect
+        let contentColumn: CGRect
+        let isCompact: Bool
     }
 
-    static func dashboard(in bounds: CGRect, controlWidth: CGFloat,
+    static func dashboard(in bounds: CGRect,
                           topInset: CGFloat = WorkbenchLayout.normalTop) -> Dashboard {
-        let workspace = CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width, height: max(0, bounds.height - topInset))
-        let control = min(workspace.width, max(minimumControlWidth, controlWidth + horizontalInset * 2))
-        let right = CGRect(x: workspace.maxX - control, y: workspace.minY, width: control, height: workspace.height)
-        let left = CGRect(x: workspace.minX, y: workspace.minY, width: workspace.width - control, height: workspace.height)
-        return Dashboard(workspace: workspace, conversationColumn: left, controlColumn: right)
+        let availableHeight = max(0, bounds.height - max(0, topInset))
+        let barHeight = min(toolbarHeight, availableHeight)
+        let workspace = CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width,
+                               height: availableHeight - barHeight)
+        let topBar = CGRect(x: bounds.minX, y: workspace.maxY, width: bounds.width, height: barHeight)
+        let conversation: CGRect, control: CGRect
+        let isCompact = workspace.width < compactWidth
+        if isCompact {
+            // Content is an explicit overlay. Conversation keeps its full, mounted viewport underneath.
+            conversation = workspace
+            control = workspace
+        } else {
+            let chatWidth = min(conversationWidth, workspace.width * 0.45)
+            control = CGRect(x: workspace.minX, y: workspace.minY,
+                             width: max(0, workspace.width - chatWidth), height: workspace.height)
+            conversation = CGRect(x: control.maxX, y: workspace.minY, width: chatWidth, height: workspace.height)
+        }
+        return Dashboard(topBar: topBar, workspace: workspace, conversationColumn: conversation,
+                         contentColumn: control, isCompact: isCompact)
     }
 
     /// A column: content (toolbar above the available area) and, only when `footerHeight` > 0, the 차례 띠 below.

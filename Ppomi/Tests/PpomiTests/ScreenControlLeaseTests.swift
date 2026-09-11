@@ -28,7 +28,7 @@ final class ScreenControlLeaseTests: XCTestCase {
             XCTAssertFalse(ScreenControlLease.requiresVisibleSurface(tool: name), name)
         }
         XCTAssertTrue(ScreenControlLease.blockedMessage.hasPrefix("실행 안 함:"))
-        XCTAssertTrue(ScreenControlLease.blockedMessage.contains("작업으로 돌아가기"))
+        XCTAssertTrue(ScreenControlLease.blockedMessage.contains("제어로 돌아가기"))
     }
 
     func testSharedCallsPreventFocusUntilEveryCallFinishes() throws {

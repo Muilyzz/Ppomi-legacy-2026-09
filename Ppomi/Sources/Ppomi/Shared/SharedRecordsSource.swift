@@ -11,9 +11,12 @@ extension SharedLedgerArchive {
             let result = try db.table("SELECT * FROM \(table) ORDER BY id", limit: Int.max)
             tables[table] = ["columns": result.cols, "rows": result.rows.map { $0.map { $0 ?? NSNull() } }]
         }
-        return Self(snapshots: try db.snapshots().map { Snapshot(app: $0.app, account: $0.account, balance: $0.balance, ts: $0.ts) },
+        var archive = Self(snapshots: try db.snapshots().map { Snapshot(app: $0.app, account: $0.account, balance: $0.balance, ts: $0.ts) },
                     transactions: try db.transactions(), me: me,
-                    originalTables: try JSONSerialization.data(withJSONObject: tables, options: [.sortedKeys]))
+                    originalTables: try JSONSerialization.data(withJSONObject: tables, options: [.sortedKeys]),
+                    lenses: LensStore.load(dbPath: path), nodes: LensStore.nodes(dbPath: path))
+        archive.timelinePresentation = try JSONSerialization.data(withJSONObject: LedgerPage.timelineData(archive.ledger()), options: [.sortedKeys])
+        return archive
     }
 }
 
@@ -163,11 +166,13 @@ final class SharedRecordsMonitor {
         timer.setEventHandler { [weak self] in self?.refresh() }
         self.timer = timer; timer.resume()
     }
-    func request() { queue.async { [weak self] in self?.refresh() } }
+    /// 지금 바로 한 바퀴. `only` 를 주면 그 기록만 올리고 받는다(사람이 방금 고친 것 = 장부 하나); 나머지 버전은 지난 값을 그대로 든다.
+    func request(only names: [String]? = nil) { queue.async { [weak self] in self?.refresh(names ?? SharedRecordVault.names) } }
     deinit { timer?.cancel() }
-    private func refresh() {
-        var update = Update(versions: [:])
-        for name in SharedRecordVault.names {
+    private var known: [String: Int64] = [:]           // 마지막으로 확인한 버전(큐 안에서만 만진다)
+    private func refresh(_ names: [String] = SharedRecordVault.names) {
+        var update = Update(versions: known)
+        for name in names {
             do {
                 try SharedRecordsSource.publish(name)
                 _ = try SharedRecordVault.shared.read(name)
@@ -181,6 +186,7 @@ final class SharedRecordsMonitor {
                 if name == "ledger" { update.ledger = try LifeJSON.decoder().decode(SharedLedgerArchive.self, from: value.data).ledger() }
             } catch { update.error = "확인된 서버 기록을 읽지 못했습니다. 원본은 보존되어 있습니다." }
         }
+        known = update.versions
         DispatchQueue.main.async { [onUpdate] in onUpdate(update) }
     }
 }

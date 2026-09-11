@@ -10,7 +10,7 @@ class DebugProvisioningActivity : Activity() {
         super.onCreate(savedInstanceState)
         var accepted = false
         try {
-            val host = VoiceSessionHost.get(applicationContext)
+            val host = AndroidExecutor.get(applicationContext)
             check(BuildConfig.DEBUG && !host.active && !host.hasPendingStart() && LocalTaskRunner.actionOwner() == null)
             val token = intent.getStringExtra("bridge_token")
             val shared = intent.getStringExtra("ssot_config")
@@ -25,7 +25,7 @@ class DebugProvisioningActivity : Activity() {
                 token != null -> BridgeSession.configure(applicationContext, token)
                 shared != null -> SharedTaskController.get(applicationContext).configure(shared)
                 endpoint != null -> check(getSharedPreferences("voice_settings", MODE_PRIVATE)
-                    .edit().putString("endpoint", endpoint).commit())
+                    .edit().putString("endpoint_override", endpoint).commit())
             }
             accepted = true
             setResult(RESULT_OK)
@@ -36,7 +36,7 @@ class DebugProvisioningActivity : Activity() {
             intent.removeExtra("bridge_token")
             intent.removeExtra("ssot_config")
             intent.removeExtra("configure_agent_endpoint")
-            if (accepted) startActivity(Intent(this, MainActivity::class.java)
+            if (accepted) startActivity(ExecutorNavigation.conversation(this)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
             finish()
         }

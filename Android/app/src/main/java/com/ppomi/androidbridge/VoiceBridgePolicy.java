@@ -8,6 +8,8 @@ import java.util.Set;
 
 /** Pure validation shared by the native voice host and off-device boundary tests. */
 final class VoiceBridgePolicy {
+    // Public product endpoint shared with PpomiServer.agentEndpoint (Shared/SupabaseAuth.swift).
+    static final String DEFAULT_AGENT_ENDPOINT = "https://ppomi-agent.vercel.app";
     static final String ORIGIN = "https://appassets.androidplatform.net";
     static final String ENTRY = ORIGIN + "/assets/agent/index.html";
     static final Set<String> PATHS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(

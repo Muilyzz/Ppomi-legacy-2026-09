@@ -6,7 +6,16 @@ enum LedgerPage {
         ["accounts": L.accounts.map { ["id": $0.id, "app": $0.title] },
          "series": L.series.mapValues { $0.map { [TS.string($0.ts), $0.value, $0.how.rawValue] as [Any] } },
          "inside": Array(L.defaultLens.inside).sorted(),
-         "lines": L.lines.map { ["ts": TS.string($0.ts), "memo": $0.memo, "dr": $0.dr, "cr": $0.cr, "amount": $0.amount, "rev": $0.rev, "uid": $0.uid] }]
+         "lines": L.lines.map { ["ts": TS.string($0.ts), "memo": $0.memo, "dr": $0.dr, "cr": $0.cr, "amount": $0.amount, "rev": $0.rev, "uid": $0.uid] },
+         "defaultLens": L.defaultLens.name,
+         "lenses": L.lenses.map { l -> [String: Any] in
+             var d: [String: Any] = ["name": l.name, "inside": Array(l.inside).sorted()]
+             if let x = l.x, let y = l.y { d["x"] = x; d["y"] = y }
+             if let kind = l.kind { d["kind"] = kind }
+             return d },
+         "home": LensStore.home,
+         "nodes": L.nodes,
+         "lens": UserDefaults.standard.string(forKey: "timelineLens") ?? L.defaultLens.name]   // 마지막으로 보던 그룹
     }
     /// Web/timeline.html 의 /*TIMELINE*/null 자리에 데이터를 넣은 한 장.
     static func timelineHTML(template: String, ledger: Ledger) -> String {

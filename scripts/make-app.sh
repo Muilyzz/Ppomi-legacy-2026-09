@@ -21,6 +21,11 @@ cp "$BIN/Ppomi" "$APP/Contents/MacOS/"
 # Resources: Views/Web.swift reads Ppomi_Ppomi.bundle from Contents/Resources first (SwiftPM's own Bundle.module accessor only
 # looks at the .app root, which codesign rejects, and at $BIN), so the app stands alone once this copy is in place.
 cp -R "$BIN/Ppomi_Ppomi.bundle" "$APP/Contents/Resources/"
+# The release endpoint and verification key are part of the native signature, never downloaded configuration.
+if [ -n "${PPOMI_UPDATES_CONFIG:-}" ]; then
+    node "$ROOT/scripts/family-update.mjs" validate-config --config "$PPOMI_UPDATES_CONFIG"
+    cp "$PPOMI_UPDATES_CONFIG" "$APP/Contents/Resources/Updates.json"
+fi
 swiftc -O "$ROOT/phone.swift" -o "$APP/Contents/MacOS/phone"    # Collect/Phone.swift looks next to the executable first
 
 # Info.plist: the embedded one (usage strings) plus the bundle keys.

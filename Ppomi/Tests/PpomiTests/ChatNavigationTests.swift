@@ -42,7 +42,6 @@ final class ChatNavigationTests: XCTestCase {
         state.openChat()
         panel.onActive?(true)
         XCTAssertTrue(state.listening)
-        host.setVoice(false)
         XCTAssertTrue(panel.isVisible)
         XCTAssertTrue(state.listening)
         XCTAssertEqual(panel.closes, 0)

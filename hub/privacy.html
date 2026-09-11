@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>개인정보 · Ppomi</title>
 <link rel="icon" href="icon.png">
-<meta name="description" content="뽀미의 데이터는 당신 Mac 밖으로 나가지 않습니다.">
+<meta name="description" content="뽀미의 기기 저장, 암호화 동기화, AI 서비스 연결에 관한 안내입니다.">
 <style>
 :root{color-scheme:dark;--bg:#000;--card:#131313;--line:rgba(255,255,255,.10);--line2:rgba(255,255,255,.25);--fg:#e6e6e3;--meta:#8a8a86;--go:#c7a300;--sans:-apple-system,'Apple SD Gothic Neo',sans-serif;--mono:ui-monospace,'SF Mono',Menlo,monospace}
 html,body{margin:0;background:var(--bg);color:var(--fg)}
@@ -29,7 +29,7 @@ footer{margin-top:48px;padding-top:16px;border-top:1px solid var(--line);font-si
 <body>
 <header><img src="paw.svg" alt=""><span>Ppomi</span></header>
 <h1>개인정보</h1>
-<p class="lead">원칙은 하나입니다. 뽀미가 만든 것은 당신 Mac 에 있고, Mac 밖으로 나가지 않습니다.</p>
+<p class="lead">기록은 기기에 저장합니다. 동기화나 AI 기능을 사용하면 해당 기능에 필요한 정보가 설정한 서비스로 전송됩니다.</p>
 
 <h2>Mac 안에 있는 것</h2>
 <ul>
@@ -39,10 +39,15 @@ footer{margin-top:48px;padding-top:16px;border-top:1px solid var(--line);font-si
 <li>API 키 — macOS 키체인.</li>
 </ul>
 
+<h2>웹 앱에 있는 것</h2>
+<p>웹 앱은 Google 로그인과 Supabase 인증으로 계정을 확인합니다. 로그인 유지에 필요한 토큰은 이 브라우저에 저장하며, 로그아웃하면 브라우저의 로그인 정보를 지웁니다. 다른 기기의 로그인은 유지됩니다. 브라우저의 로그인 정보는 macOS 키체인과 별개의 저장소입니다.</p>
+<p>홈 화면 아이콘과 오프라인 시작 화면을 위해 공개된 화면 파일만 브라우저에 보관합니다. 인증 응답과 계정 정보는 오프라인 캐시에 넣지 않습니다. 기록은 암호화된 상태로 받아 이 브라우저 안에서 열고, 복호화한 원본은 오프라인 캐시에 저장하지 않습니다. 브라우저 기기의 비공개 암호 키는 내보낼 수 없는 키 형태로 IndexedDB에 보관하며, 로그아웃하거나 계정을 바꾸면 해당 계정의 브라우저 키와 열린 기록을 지웁니다. 다시 로그인하면 Mac에서 키가 연결될 때까지 잠시 기다릴 수 있습니다. 대화와 기기 제어는 설치한 앱에서 이용할 수 있습니다.</p>
+
 <h2>밖으로 나가는 것</h2>
 <ul>
 <li>두뇌(Claude 앱·Claude Code·Codex 등)에 붙이면, 그 두뇌가 도구로 요청한 화면 글자와 장부 결과가 <em>그 두뇌</em>로 갑니다. 어느 두뇌를 쓸지, 무엇을 물을지는 당신이 정합니다.</li>
-<li>음성은 당신의 OpenAI 키로 OpenAI 에 직접 붙습니다. 깨우는 말("뽀미야")은 Mac 안에서 듣습니다. Muilyzz 서버를 거치지 않습니다.</li>
+<li>대화·음성 기능은 설정한 중계 서버에서 로그인과 연결 권한을 확인하고 AI 서비스에 연결할 수 있습니다. 요청한 작업에 필요한 음성·텍스트·도구 결과가 AI 서비스로 전송될 수 있으며, 해당 서비스의 데이터 처리 정책이 적용됩니다.</li>
+<li>기록 동기화를 설정하면 암호화한 기록과 기기별로 암호화한 기록 키, 계정·기기 메타데이터가 동기화 서버에 저장됩니다. Google 로그인과 Apple 계정은 별개이며, 같은 뽀미 계정의 기기끼리 기록이 연결될 수 있습니다.</li>
 <li>실행 결과 텔레메트리(성공/실패 횟수)는 옵트인이며 기본은 꺼져 있습니다. 켜도 이름·금액·화면은 담지 않습니다.</li>
 </ul>
 
@@ -50,7 +55,7 @@ footer{margin-top:48px;padding-top:16px;border-top:1px solid var(--line);font-si
 <p>돈이 나가는 버튼은 승인 버튼을 누른 뒤에만 눌립니다. 승인 한 번은 결제 시도 한 번, 그 금액에만 유효합니다. 비밀번호·카드번호·Face ID 는 뽀미가 대신 하지 않습니다. 폰을 들어 당신이 합니다.</p>
 
 <h2>지우기</h2>
-<p><code>data/</code> 폴더를 지우면 전부 사라집니다. 서버에 남는 사본은 없습니다.</p>
+<p>로컬 기록 삭제와 서버 동기화 자료 삭제는 별개입니다. 로컬 데이터 폴더를 삭제하거나 로그아웃하는 것만으로 서버 사본·기기 키가 모두 삭제되지는 않습니다. 다른 가족에게 기기를 넘길 때는 각자 별도의 macOS 사용자 계정을 사용하고 기존 사용자의 앱 설정·키체인·기록 폴더를 복사하지 마세요.</p>
 
 <footer>Muilyzz · <a href="/">Ppomi</a></footer>
 </body>

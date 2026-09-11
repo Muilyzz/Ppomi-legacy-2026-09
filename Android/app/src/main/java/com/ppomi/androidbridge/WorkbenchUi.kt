@@ -14,7 +14,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
@@ -36,8 +35,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -60,18 +57,11 @@ internal fun PpomiWorkbench(
     onDismissError: () -> Unit,
     onPermission: () -> Unit,
     onStart: (String, Boolean) -> Unit,
-    onApprove: (String) -> Unit,
-    onCancel: (String) -> Unit,
-    onSaveAgentEndpoint: (String) -> Boolean,
-    onSaveSettings: (String, String, String) -> Boolean,
-    onClearSettings: () -> Unit,
+    onControl: () -> Unit,
     onRefreshShared: () -> Unit,
     onStartShared: (String) -> Unit,
-    onConnectShared: (String) -> Boolean,
-    onSecretScreen: (Boolean) -> Unit,
-    onBack: () -> Unit,
     context: Context,
-    initialSection: Int = 0
+    initialSection: Int = 1
 ) {
     var section by rememberSaveable { mutableIntStateOf(initialSection) }
     var selectedTaskId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -81,37 +71,33 @@ internal fun PpomiWorkbench(
     val selected = snapshot.tasks.firstOrNull { it.id == selectedTaskId }
         ?: snapshot.active?.takeIf { it.id == selectedTaskId }
     BackHandler(selectedTaskId != null) { selectedTaskId = null }
-    DisposableEffect(section, selectedTaskId) {
-        onSecretScreen(section == 2 && selectedTaskId == null)
-        onDispose { onSecretScreen(false) }
-    }
     PpomiTheme {
         Scaffold(modifier = Modifier.semantics { testTagsAsResourceId = true },
-            // 기록 페이지 머리띠 (docs/ui-tree.md): 대화로 돌아가기 + 이 플랫폼의 기록 탭.
+            // The content pane owns record navigation and the switch to native control.
             topBar = {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onBack, modifier = Modifier.testTag("back_to_chat")) { Text("← 대화") }
                     NavigationBar(modifier = Modifier.weight(1f), containerColor = palette.bg, tonalElevation = 0.dp) {
-                        listOf("작업" to Icons.Outlined.Dashboard, "기록" to Icons.Outlined.History,
-                            "설정" to Icons.Outlined.Tune, "공유" to Icons.Outlined.CloudQueue).forEachIndexed { index, item ->
-                            NavigationBarItem(modifier = Modifier.testTag(listOf("tab_tasks", "tab_history", "tab_settings", "tab_shared")[index]), selected = section == index,
+                        listOf(Triple(0, "작업", Icons.Outlined.Dashboard), Triple(1, "기록", Icons.Outlined.History),
+                            Triple(3, "공유", Icons.Outlined.CloudQueue)).forEach { (index, title, icon) ->
+                            val tag = when (index) { 0 -> "tab_tasks"; 1 -> "tab_history"; else -> "tab_shared" }
+                            NavigationBarItem(modifier = Modifier.testTag(tag), selected = section == index,
                                 onClick = { section = index; selectedTaskId = null },
-                                icon = { Icon(item.second, contentDescription = null, modifier = Modifier.size(22.dp)) },
-                                label = { Text(item.first, fontSize = 12.sp) })
+                                icon = { Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp)) },
+                                label = { Text(title, fontSize = 12.sp) })
                         }
                     }
+                    TextButton(onClick = onControl, modifier = Modifier.testTag("show_control")) { Text("제어") }
                 }
             }) { padding ->
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
                 Box(Modifier.widthIn(max = 720.dp).fillMaxSize()) {
                     when {
-                        selected != null -> TaskDetail(selected, onBack = { selectedTaskId = null }, onApprove, onCancel)
-                        section == 0 -> Workspace(snapshot, onPermission, onStart, onApprove, onCancel,
-                            onOpenTask = { selectedTaskId = it }, onSettings = { section = 2 })
-                        section == 1 -> Records(snapshot.tasks, onOpenTask = { selectedTaskId = it })
+                        selected != null -> TaskDetail(selected, onBack = { selectedTaskId = null })
+                        section == 0 -> Workspace(snapshot, onPermission, onStart,
+                            onOpenTask = { selectedTaskId = it })
                         section == 3 -> SharedScreen(snapshot, onRefreshShared, onStartShared,
-                            onOpenTask = { selectedTaskId = it }, onSettings = { section = 2 })
-                        else -> SettingsScreen(snapshot, onPermission, onSaveAgentEndpoint, onSaveSettings, onClearSettings, onConnectShared, context)
+                            onOpenTask = { selectedTaskId = it })
+                        else -> Records(snapshot.tasks, onOpenTask = { selectedTaskId = it })
                     }
                     if (error != null) {
                         Surface(Modifier.align(Alignment.BottomCenter).padding(16.dp).fillMaxWidth(),
@@ -130,8 +116,8 @@ internal fun PpomiWorkbench(
 
 @Composable
 private fun Workspace(snapshot: WorkbenchSnapshot, onPermission: () -> Unit,
-                      onStart: (String, Boolean) -> Unit, onApprove: (String) -> Unit, onCancel: (String) -> Unit,
-                      onOpenTask: (String) -> Unit, onSettings: () -> Unit) {
+                      onStart: (String, Boolean) -> Unit,
+                      onOpenTask: (String) -> Unit) {
     var request by rememberSaveable { mutableStateOf("") }
     var modelMode by rememberSaveable { mutableStateOf(false) }
     val focus = LocalFocusManager.current
@@ -156,7 +142,7 @@ private fun Workspace(snapshot: WorkbenchSnapshot, onPermission: () -> Unit,
             }
         }
         snapshot.active?.let { task ->
-            item { ActiveTaskCard(task, onApprove, onCancel, onOpenTask) }
+            item { ActiveTaskCard(task, onOpenTask) }
         }
         item {
             SurfaceCard {
@@ -166,8 +152,8 @@ private fun Workspace(snapshot: WorkbenchSnapshot, onPermission: () -> Unit,
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(selected = !modelMode, onClick = { modelMode = false }, label = { Text("내장 절차") })
-                    FilterChip(selected = modelMode, onClick = { if (snapshot.settings.configured) modelMode = true else onSettings() },
-                        label = { Text(if (snapshot.settings.configured) "AI" else "AI 연결") })
+                    if (snapshot.settings.configured) FilterChip(selected = modelMode, onClick = { modelMode = true },
+                        label = { Text("AI") })
                 }
                 Text(if (modelMode) snapshot.settings.model else "AI 미연결",
                     color = palette.fg2, fontSize = 12.sp)
@@ -202,8 +188,7 @@ private fun Workspace(snapshot: WorkbenchSnapshot, onPermission: () -> Unit,
 }
 
 @Composable
-private fun ActiveTaskCard(task: TaskSnapshot, onApprove: (String) -> Unit,
-                           onCancel: (String) -> Unit, onOpenTask: (String) -> Unit) {
+private fun ActiveTaskCard(task: TaskSnapshot, onOpenTask: (String) -> Unit) {
     SurfaceCard(borderColor = if (task.state == "waiting_approval") palette.turn else palette.line) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("현재 작업", fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
@@ -211,30 +196,21 @@ private fun ActiveTaskCard(task: TaskSnapshot, onApprove: (String) -> Unit,
         }
         Text(task.request.ifBlank { "테스트 앱 제어" }, fontSize = 16.sp, lineHeight = 24.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
         TaskProgress(task)
-        if (task.state == "waiting_approval") ApprovalContent(task, onApprove, onCancel)
+        if (task.state == "waiting_approval") ApprovalContent(task)
         else {
             Text(task.summary.ifBlank { task.events.lastOrNull()?.message ?: "준비 중" }, color = palette.fg2, fontSize = 14.sp, lineHeight = 21.sp)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = { onOpenTask(task.id) }) { Text("기록") }
-                if (task.inProgress) TextButton(onClick = { onCancel(task.id) }, modifier = Modifier.testTag("cancel_task"), colors = ButtonDefaults.textButtonColors(contentColor = palette.bad)) {
-                    Icon(Icons.Outlined.StopCircle, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(5.dp)); Text("중단")
-                }
-            }
+            TextButton(onClick = { onOpenTask(task.id) }) { Text("기록") }
         }
     }
 }
 
 @Composable
-private fun ApprovalContent(task: TaskSnapshot, onApprove: (String) -> Unit, onCancel: (String) -> Unit) {
+private fun ApprovalContent(task: TaskSnapshot) {
     Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Outlined.BackHand, null, tint = palette.accentFg, modifier = Modifier.size(22.dp))
         Text(task.approvalTitle.ifBlank { "승인 필요" }, color = palette.accentFg, fontWeight = FontWeight.Medium, fontSize = 16.sp)
     }
     Text(task.approvalDescription.ifBlank { task.summary }, fontSize = 14.sp, lineHeight = 21.sp)
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        OutlinedButton(onClick = { onCancel(task.id) }, modifier = Modifier.weight(1f).testTag("cancel_task"), shape = RoundedCornerShape(12.dp)) { Text("중단") }
-        Button(onClick = { onApprove(task.id) }, colors = accentButton, modifier = Modifier.weight(1.5f).testTag("approve_task"), shape = RoundedCornerShape(12.dp)) { Text("승인") }
-    }
 }
 
 @Composable
@@ -289,7 +265,7 @@ private fun TaskRow(task: TaskSnapshot, onOpenTask: (String) -> Unit) {
 }
 
 @Composable
-private fun TaskDetail(task: TaskSnapshot, onBack: () -> Unit, onApprove: (String) -> Unit, onCancel: (String) -> Unit) {
+private fun TaskDetail(task: TaskSnapshot, onBack: () -> Unit) {
     LazyColumn(Modifier.fillMaxSize().testTag("task_detail"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -306,12 +282,9 @@ private fun TaskDetail(task: TaskSnapshot, onBack: () -> Unit, onApprove: (Strin
         item {
             SurfaceCard {
                 TaskProgress(task)
-                if (task.state == "waiting_approval") ApprovalContent(task, onApprove, onCancel)
+                if (task.state == "waiting_approval") ApprovalContent(task)
                 else {
                     Text(task.summary.ifBlank { task.events.lastOrNull()?.message ?: "준비 중" }, fontSize = 14.sp, lineHeight = 21.sp)
-                    if (task.inProgress) OutlinedButton(onClick = { onCancel(task.id) }, modifier = Modifier.fillMaxWidth().testTag("cancel_task")) {
-                        Icon(Icons.Outlined.StopCircle, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("중단")
-                    }
                 }
             }
         }
@@ -360,48 +333,12 @@ private fun EvidenceCard(path: String) {
 }
 
 @Composable
-private fun SettingsScreen(snapshot: WorkbenchSnapshot, onPermission: () -> Unit, onSaveAgentEndpoint: (String) -> Boolean,
-                           onSave: (String, String, String) -> Boolean, onClear: () -> Unit,
-                           onConnectShared: (String) -> Boolean, context: Context) {
-    var agentEndpoint by rememberSaveable(snapshot.agentEndpoint) { mutableStateOf(snapshot.agentEndpoint) }
-    var endpoint by rememberSaveable(snapshot.settings.endpoint) { mutableStateOf(snapshot.settings.endpoint) }
-    var model by rememberSaveable(snapshot.settings.model) { mutableStateOf(snapshot.settings.model) }
-    // Keys deliberately never enter a saved instance state or a task record.
-    var apiKey by remember { mutableStateOf("") }
-    var sharedConfig by remember { mutableStateOf("") }
+internal fun WorkbenchSettings(snapshot: WorkbenchSnapshot, onPermission: () -> Unit, onControlApps: () -> Unit, context: Context) {
     var revealPairing by remember { mutableStateOf(false) }
     var copied by remember { mutableStateOf(false) }
-    var saveRequested by remember { mutableStateOf(false) }
-    val focus = LocalFocusManager.current
     val token = remember(revealPairing) { if (revealPairing) BridgeSession.token(context) else "" }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        item { AppHeader("설정", "서버 · 모델 · 권한") }
-        item {
-            SurfaceCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("에이전트 서버", fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                    StatusPill(if (snapshot.agentEndpoint.isNotEmpty()) "설정됨" else "미연결", if (snapshot.agentEndpoint.isNotEmpty()) palette.accentFg else palette.fg2)
-                }
-                OutlinedTextField(value = agentEndpoint, onValueChange = { agentEndpoint = it }, label = { Text("주소") },
-                    placeholder = { Text("https://…") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    singleLine = true, modifier = Modifier.fillMaxWidth().testTag("agent_endpoint"), shape = RoundedCornerShape(12.dp))
-                Button(onClick = { focus.clearFocus(); onSaveAgentEndpoint(agentEndpoint.trim()) }, colors = accentButton,
-                    enabled = agentEndpoint.isNotBlank() && agentEndpoint.trim() != snapshot.agentEndpoint,
-                    modifier = Modifier.fillMaxWidth().testTag("save_agent_endpoint"), shape = RoundedCornerShape(12.dp)) { Text("저장") }
-            }
-        }
-        item {
-            SurfaceCard {
-                Text("공유 서버", fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                Text(if (snapshot.shared.configured) "연결됨 · 공유 탭에서 확인" else "연결 정보 입력", color = palette.fg2, fontSize = 14.sp, lineHeight = 21.sp)
-                OutlinedTextField(value = sharedConfig, onValueChange = { sharedConfig = it }, label = { Text("연결 정보") },
-                    visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true, modifier = Modifier.fillMaxWidth().testTag("shared_config"), shape = RoundedCornerShape(12.dp))
-                Button(onClick = { focus.clearFocus(); if (onConnectShared(sharedConfig)) sharedConfig = "" }, enabled = sharedConfig.isNotBlank(), colors = accentButton,
-                    modifier = Modifier.fillMaxWidth().testTag("connect_shared")) { Text("연결") }
-                Text("기기에 암호화 보관 · 개인 기록·증빙 업로드 없음", color = palette.fg2, fontSize = 11.sp, lineHeight = 16.5.sp)
-            }
-        }
+        item { AppHeader("설정", "권한") }
         item {
             SurfaceCard {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -411,34 +348,8 @@ private fun SettingsScreen(snapshot: WorkbenchSnapshot, onPermission: () -> Unit
                 }
                 Text("접근성 설정에서 뽀미 켜기 · 실행 중 패널에서 중지", color = palette.fg2, fontSize = 14.sp, lineHeight = 21.sp)
                 OutlinedButton(onClick = onPermission, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) { Text("접근성 설정") }
-            }
-        }
-        item {
-            SurfaceCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("AI 모델", fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                    StatusPill(if (snapshot.settings.configured) "설정됨" else "미연결", if (snapshot.settings.configured) palette.accentFg else palette.fg2)
-                }
-                Text("내장 절차 · 모델 없음 · AI · 요청·화면 텍스트 전송",
-                    color = palette.fg2, fontSize = 14.sp, lineHeight = 21.sp)
-                OutlinedTextField(value = endpoint, onValueChange = { endpoint = it }, label = { Text("API 주소") },
-                    placeholder = { Text("https://…/v1") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
-                OutlinedTextField(value = model, onValueChange = { model = it }, label = { Text("모델 ID") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
-                OutlinedTextField(value = apiKey, onValueChange = { apiKey = it }, label = { Text("API 키") },
-                    placeholder = { Text(if (snapshot.settings.hasApiKey) "저장됨 · 변경 시 입력" else "직접 입력") },
-                    visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
-                Text("키는 캡처·기록 제외", color = palette.fg2, fontSize = 11.sp, lineHeight = 16.5.sp)
-                Button(onClick = { focus.clearFocus(); if (onSave(endpoint.trim(), model.trim(), apiKey)) { apiKey = ""; saveRequested = true } else saveRequested = false }, colors = accentButton,
-                    enabled = endpoint.isNotBlank() && model.isNotBlank() && (apiKey.isNotBlank() || snapshot.settings.hasApiKey),
-                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) { Text("저장") }
-                if (saveRequested && snapshot.settings.configured && endpoint.trim() == snapshot.settings.endpoint && model.trim() == snapshot.settings.model) {
-                    Text("저장됨", color = palette.accentFg, fontSize = 12.sp, lineHeight = 18.sp)
-                }
-                if (snapshot.settings.hasApiKey) TextButton(onClick = { onClear(); apiKey = ""; saveRequested = false },
-                    colors = ButtonDefaults.textButtonColors(contentColor = palette.bad)) { Text("연결 삭제") }
+                OutlinedButton(onClick = onControlApps, enabled = !snapshot.chatControl && snapshot.active == null,
+                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) { Text("제어 앱 선택") }
             }
         }
         item {
@@ -473,7 +384,7 @@ private fun SettingsScreen(snapshot: WorkbenchSnapshot, onPermission: () -> Unit
 
 @Composable
 private fun SharedScreen(snapshot: WorkbenchSnapshot, onRefresh: () -> Unit, onStart: (String) -> Unit,
-                         onOpenTask: (String) -> Unit, onSettings: () -> Unit) {
+                         onOpenTask: (String) -> Unit) {
     val shared = snapshot.shared
     LazyColumn(Modifier.fillMaxSize().testTag("shared_screen"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item { AppHeader("공유", "서버 · 기기") }
@@ -490,7 +401,7 @@ private fun SharedScreen(snapshot: WorkbenchSnapshot, onRefresh: () -> Unit, onS
                 if (shared.error.isNotBlank()) Text(shared.error, color = palette.bad, fontSize = 12.sp, lineHeight = 18.sp, modifier = Modifier.testTag("shared_error"))
                 if (shared.configured) OutlinedButton(onClick = onRefresh, enabled = !shared.busy,
                     modifier = Modifier.fillMaxWidth().testTag("refresh_shared")) { Text(if (shared.busy) "확인 중" else "새로고침") }
-                else Button(onClick = onSettings, colors = accentButton, modifier = Modifier.fillMaxWidth()) { Text("설정") }
+                else Text("Android 구글 로그인은 아직 지원하지 않습니다.", color = palette.fg2, fontSize = 14.sp, lineHeight = 21.sp)
             }
         }
         if (shared.configured && shared.runs.isEmpty()) item {

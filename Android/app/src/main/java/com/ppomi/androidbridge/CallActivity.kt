@@ -56,7 +56,7 @@ class CallActivity : VoiceHostActivity() {
             val connection = PpomiTelecom.connection
             if (call.ringing) IncomingScreen(call.reason, onAnswer = { connection?.answer() }, onDecline = { connection?.reject() })
             else CallScreen(call, onSpeaker = { connection?.setSpeaker(!call.speaker) }, onOpen = ::openConversation,
-                onEnd = { VoiceSessionHost.get(applicationContext).stopVoice() })
+                onEnd = { AndroidExecutor.get(applicationContext).stopVoice() })
         } }
     }
 
@@ -75,7 +75,7 @@ class CallActivity : VoiceHostActivity() {
     /** 대화(승인·선택)는 잠금을 푼 뒤에만 연다. */
     private fun openConversation() {
         val open = {
-            startActivity(Intent(this, MainActivity::class.java).putExtra("show_voice", true)
+            startActivity(ExecutorNavigation.conversation(this)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
         }
         val keyguard = getSystemService(KeyguardManager::class.java)

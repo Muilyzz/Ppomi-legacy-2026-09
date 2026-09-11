@@ -1,0 +1,21 @@
+{
+  "chunks" : [
+    {
+      "data" : "Zq0gdgE9HoyZ8qpOvhIfkuASFeQPoNiln9OOqic7AVIajIkRoGebMTreg2o6lTORiD41iW3NM3oLKEKeIN\/uxgfOXfHm11hlbuaM9avBHSnUPiasyDXGwFP8EG1OaTmgyR\/mcItvxRKAmSiRW20Jw0yX2PlBvuwHrWMvpEX85mV3hWsozikvKFdAWq1588vBjD0bqIMVQJwD1g4x+OFNWzNN27Pw6P4YMAskn7TOUVdjLzCNI60YmuyHp7OlMeNOZOQ54Pw18p2BYZUJDVZIzGYd+smvLZmbOCkZKhAFqvassY8kgPtsn7zwSwCv2MNq9CUKPzwGADZKc\/0CyILx0TdJkbjRezkRuxEDFLXIc05\/XiPSDHZzMzq3IldRKmj\/N70T6Pf\/P5bkLQOcBZBZCNkhrOcKTv0XnxzpBmR\/3\/5ucKHW",
+      "hash" : "b4d85914a3cdbc5d23c558788fd1b95cc11c3371082f720a136041faf5279883",
+      "size" : 324
+    }
+  ],
+  "deviceID" : "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  "keyID" : "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+  "plainBytes" : 54090,
+  "plainSHA256" : "a365f84dbd6cdd61b4393f089f298c82f22ffbd2edd68637f21a90b93ef811e4",
+  "privateKey" : "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+  "publicKey" : "j0DFrbaPJWJK5bIU6nZ6bslNgp09e14a0bpvPiE4KF8=",
+  "recordID" : "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+  "testOnly" : true,
+  "userID" : "11111111-1111-4111-8111-111111111111",
+  "version" : "9223372036854775807",
+  "workspaceID" : "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "wrapped" : "KTsjO4AsIuJ9I7vbdyYBe+kUO62ec2I15WWHOK+JmWubu5XERHD1QhsS2b2vyMozRLioxyYBIJjsCHdtJU4AKCN1xoEBN4aB1hmf2ZeOkh9YphVSDxaXDZ7rgpU="
+}

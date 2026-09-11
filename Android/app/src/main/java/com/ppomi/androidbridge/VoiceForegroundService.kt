@@ -12,10 +12,10 @@ import android.os.IBinder
 
 /** Retains a user-started text or voice session across app switches; never auto-restarts. */
 class VoiceForegroundService : Service() {
-    private lateinit var host: VoiceSessionHost
+    private lateinit var host: AndroidExecutor
     override fun onCreate() {
         super.onCreate()
-        host = VoiceSessionHost.get(this)
+        host = AndroidExecutor.get(this)
         val notifications = getSystemService(NotificationManager::class.java)
         notifications.createNotificationChannel(NotificationChannel(CHANNEL, "진행 중인 음성 대화", NotificationManager.IMPORTANCE_LOW))
         notifications.createNotificationChannel(NotificationChannel(TEXT_CHANNEL, "진행 중인 텍스트 대화", NotificationManager.IMPORTANCE_LOW))
@@ -25,7 +25,7 @@ class VoiceForegroundService : Service() {
         val voice = host.mode == "voice"
         // A voice session is an OS call: the notification returns to the call screen, text sessions to the conversation.
         val open = PendingIntent.getActivity(this, 1, if (voice) Intent(this, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            else Intent(this, MainActivity::class.java).putExtra("show_voice", true).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            else ExecutorNavigation.conversation(this).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val stop = PendingIntent.getService(this, 2, Intent(this, VoiceForegroundService::class.java)
             .setAction(STOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)

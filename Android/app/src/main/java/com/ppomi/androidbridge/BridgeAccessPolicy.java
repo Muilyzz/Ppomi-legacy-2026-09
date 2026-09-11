@@ -59,7 +59,7 @@ final class BridgeAccessPolicy {
 
     /** Called only by native user UI; never exposed through MCP, WebView, or a model tool. */
     static void saveUserPackages(Context context, Set<String> selected) {
-        if (VoiceSessionHost.hasActiveControl() || LocalTaskRunner.actionOwner() != null)
+        if (AndroidExecutor.hasActiveControl() || LocalTaskRunner.actionOwner() != null)
             throw new IllegalStateException("진행 중인 대화나 작업을 종료한 뒤 제어 앱을 변경해 주세요.");
         Set<String> launchable = new LinkedHashSet<>();
         for (App app : launchableApps(context)) launchable.add(app.packageName);

@@ -3,6 +3,7 @@ import AppKit
 /// 차례 띠: one question line and its buttons, only while a question is pending. The same instance survives both window modes.
 final class PhoneBand: WorkbenchSurface {
     weak var state: AppState?
+    var onLayoutChange: (() -> Void)?
     private let question = WorkbenchLabel(labelWithString: "")
     private let buttons = WorkbenchStack()
     private var askID: String?
@@ -25,6 +26,7 @@ final class PhoneBand: WorkbenchSurface {
         for case let b as NSButton in buttons.arrangedSubviews { style(b, index: b.tag) }
         needsLayout = true
         superview?.needsLayout = true
+        onLayoutChange?()
     }
 
     /// The first "결제 승인" choice is the money button: accent fill, dark text.
@@ -76,6 +78,7 @@ final class PhoneBand: WorkbenchSurface {
         isHidden = askID == nil
         needsLayout = true
         superview?.needsLayout = true
+        onLayoutChange?()
     }
 
     @objc private func pressed(_ b: NSButton) {

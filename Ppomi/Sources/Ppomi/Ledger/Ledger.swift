@@ -5,7 +5,7 @@ import Foundation
 extension Ledger {
     /// Both the source adapter and the server reader use exactly the same accounting rules.
     static func load(snapshots snaps: [(app: String, account: String, balance: Int, ts: Date)],
-                     transactions txs: [Transaction], me: String) -> Ledger {
+                     transactions txs: [Transaction], me: String, lenses: [Lens] = [], nodes: [String: [Int]] = [:]) -> Ledger {
         var app: [String: String] = [:], labels: [String] = []          // label → app, in first-seen order (Python dict order)
         var series: [String: [Observation]] = [:]
         for s in snaps {
@@ -31,7 +31,8 @@ extension Ledger {
         return Ledger(accounts: app.map { Account(id: $0.key, app: $0.value, title: Rules.title($0.value)) }.sorted { ($0.app, $0.id) < ($1.app, $1.id) },
                       series: series, lines: lines,
                       defaultLens: Lens(name: LegacyAccountingRules.bundled.defaultLensName,
-                                        inside: Set(labels).union(LegacyAccountingRules.bundled.defaultInside)))
+                                        inside: Set(labels).union(LegacyAccountingRules.bundled.defaultInside)),
+                      lenses: lenses, nodes: nodes)
     }
 
     /// The account's last observation at or before t.

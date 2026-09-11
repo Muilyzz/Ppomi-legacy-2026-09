@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>뽀미 타임라인</title><link rel="stylesheet" href="/web/vendor/tokens.css"><link rel="stylesheet" href="/web/vendor/theme.css"><link rel="stylesheet" href="/web/vendor/timeline.css"><link rel="stylesheet" href="/web/timeline-frame.css">
+<script src="/web/vendor/timeline.js" defer></script><script src="/web/timeline-frame.js" defer></script>
+</head><body><p id="source-note" class="meta" hidden></p>
+<main aria-label="장부 타임라인">
+  <section class="timeline-section" id="now" aria-labelledby="now-title">
+    <header class="sec"><h2 id="now-title">지금</h2><nav class="nav r" id="lenses" aria-label="계좌 그룹"></nav></header>
+    <div id="nowbody"></div>
+  </section>
+  <section class="timeline-section" aria-labelledby="net-worth-title">
+    <header class="sec"><h2 id="net-worth-title">순자산</h2></header>
+    <div id="charts" class="charts" aria-label="그룹별 순자산 · 면적 = 지금 금액"></div>
+    <p class="meta" id="chartsNote" hidden></p>
+  </section>
+  <section class="timeline-section" aria-labelledby="range-title">
+    <header class="sec"><h2 id="range-title">기간</h2><div class="r"><nav class="nav" id="chips" aria-label="조회 기간"></nav><span><i style="background:var(--fg)"></i>관측 <i style="background:var(--fg-2)"></i>설명 <i style="border:1px solid var(--fg)"></i>미관측</span></div></header>
+    <svg id="eq" role="img" aria-label="날짜별 관측·설명·미관측 증감 비교"></svg>
+    <div id="eqsum"></div>
+  </section>
+  <section class="timeline-section" id="panel" aria-labelledby="day-title"></section>
+</main>
+<section id="source-transactions" hidden></section></body></html>

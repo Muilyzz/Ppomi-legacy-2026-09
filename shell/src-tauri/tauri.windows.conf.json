@@ -1,0 +1,3 @@
+{
+  "bundle": {"resources": {"resources/executor/": "executor/"}}
+}
