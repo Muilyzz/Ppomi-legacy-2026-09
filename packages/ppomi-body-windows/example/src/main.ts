@@ -44,7 +44,7 @@ async function runFixtureStep(): Promise<void> {
 
 async function main(): Promise<void> {
   await runFixtureStep();
-  writeLiveProbe(probeWindowsLive());
+  writeLiveProbe(await probeWindowsLive());
 }
 
 main().catch(error => {
