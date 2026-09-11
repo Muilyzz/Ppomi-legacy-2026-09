@@ -1,3 +1,5 @@
+import { isAdapterTimeout } from "./adapter-timeout.ts";
+import { emitNotExecutedRest, emitStepResult } from "./emit-step-result.ts";
 import type { OsAdapter, ScreenSnapshot } from "./os-adapter.ts";
 import { defaultPermission, type PermissionGate } from "./permissions.ts";
 import type {
@@ -7,6 +9,7 @@ import type {
   StepEvidence,
   StepOutcome,
 } from "./playbook.ts";
+import type { StepAdapter, StepResult, StepTarget } from "./step-result.ts";
 
 /**
  * Runs declared steps against one OS adapter.
@@ -15,7 +18,9 @@ import type {
  * See `docs/adapter-selection.md`. Do not wait in Playwright for a native modal.
  * Permission and screen/target preconditions are fail-closed: the run stops
  * and later steps are not sent to the adapter.
- * `RunResult.evidence` is `StepEvidence`. Emitting `StepResult` is the next slice.
+ * `RunResult.evidence` is the runner log. `RunResult.stepResults` is one
+ * `StepResult` per declared step (`attempt` distinguishes timeout from
+ * not_executed). Adapter kind comes from the injected `OsAdapter`.
  * There is no device-approval or Mac-approver input.
  */
 export class PlaybookRuntime {
@@ -29,24 +34,75 @@ export class PlaybookRuntime {
 
   run(playbook: Playbook): RunResult {
     const evidence: StepEvidence[] = [];
-    for (const step of playbook.steps) {
+    const stepResults: StepResult[] = [];
+    const adapterKind = this.adapter.kind;
+    for (let index = 0; index < playbook.steps.length; index += 1) {
+      const step = playbook.steps[index]!;
       const permission = step.require?.permission ?? defaultPermission(step.kind);
       if (!this.permissions.allows(permission)) {
-        evidence.push(record(step, "permission_denied", [], `missing permission ${permission}`));
-        return stop(evidence, "permission_denied");
+        const note = `missing permission ${permission}`;
+        evidence.push(record(step, "permission_denied", [], note));
+        stepResults.push(
+          osStepResult(playbook.id, adapterKind, step, "protected", "not_executed", note, 0),
+        );
+        return stop(
+          evidence,
+          stepResults.concat(rest(playbook, adapterKind, index + 1)),
+          "permission_denied",
+        );
       }
 
       const screen = this.adapter.readScreen();
       const why = unmetPrecondition(step, screen);
       if (why !== null) {
         evidence.push(record(step, "precondition_failed", screen.texts, why));
-        return stop(evidence, "precondition_failed");
+        stepResults.push(
+          osStepResult(playbook.id, adapterKind, step, "failed", "not_executed", why, 0),
+        );
+        return stop(
+          evidence,
+          stepResults.concat(rest(playbook, adapterKind, index + 1)),
+          "precondition_failed",
+        );
       }
 
-      apply(this.adapter, step);
+      const started = Date.now();
+      try {
+        apply(this.adapter, step);
+      } catch (error) {
+        const timingMs = Date.now() - started;
+        const timeout = isAdapterTimeout(error);
+        const note = error instanceof Error ? error.message : String(error);
+        const outcome: Exclude<StepOutcome, "ok"> = timeout ? "timeout" : "failed";
+        evidence.push(record(step, outcome, screen.texts, note));
+        stepResults.push(osStepResult(
+          playbook.id,
+          adapterKind,
+          step,
+          timeout ? "retryable" : "failed",
+          timeout ? "timeout" : "executed",
+          note,
+          timingMs,
+        ));
+        return stop(
+          evidence,
+          stepResults.concat(rest(playbook, adapterKind, index + 1)),
+          outcome,
+        );
+      }
+
       evidence.push(record(step, "ok", screen.texts, "step finished"));
+      stepResults.push(osStepResult(
+        playbook.id,
+        adapterKind,
+        step,
+        "ok",
+        "executed",
+        "step finished",
+        Date.now() - started,
+      ));
     }
-    return { status: "completed", stopReason: null, evidence };
+    return { status: "completed", stopReason: null, evidence, stepResults };
   }
 }
 
@@ -91,6 +147,39 @@ function onScreen(screen: ScreenSnapshot, target: string): boolean {
   return screen.focused === target || screen.texts.includes(target);
 }
 
+function osTarget(step: PlaybookStep): StepTarget {
+  if (step.target !== undefined && step.target.length > 0) {
+    return { kind: "accessibility", name: step.target };
+  }
+  return { kind: "none" };
+}
+
+function osStepResult(
+  playbookId: string,
+  adapter: StepAdapter,
+  step: PlaybookStep,
+  status: "ok" | "retryable" | "failed" | "protected",
+  attempt: "executed" | "timeout" | "not_executed",
+  summary: string,
+  timingMs: number,
+): StepResult {
+  return emitStepResult({
+    stepId: step.id,
+    playbookId,
+    adapter,
+    action: step.kind,
+    status,
+    attempt,
+    target: osTarget(step),
+    summary,
+    timingMs,
+  });
+}
+
+function rest(playbook: Playbook, adapter: StepAdapter, startIndex: number): StepResult[] {
+  return emitNotExecutedRest(playbook.id, adapter, playbook.steps, startIndex, osTarget);
+}
+
 function record(
   step: PlaybookStep,
   outcome: StepOutcome,
@@ -100,6 +189,10 @@ function record(
   return { stepId: step.id, kind: step.kind, outcome, screenTexts: [...screenTexts], note };
 }
 
-function stop(evidence: StepEvidence[], stopReason: Exclude<StepOutcome, "ok">): RunResult {
-  return { status: "stopped", stopReason, evidence };
+function stop(
+  evidence: StepEvidence[],
+  stepResults: StepResult[],
+  stopReason: Exclude<StepOutcome, "ok">,
+): RunResult {
+  return { status: "stopped", stopReason, evidence, stepResults };
 }

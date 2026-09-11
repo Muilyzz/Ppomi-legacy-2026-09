@@ -1,3 +1,5 @@
+import type { StepResult } from "./step-result.ts";
+
 /** UI step permissions only. Not a device-approval or Mac-approver gate. */
 export type Permission = "ui.read" | "ui.control";
 
@@ -6,7 +8,12 @@ export type StepKind = "focus" | "click" | "type" | "read";
 /** In-page steps for `PagePlaybookRuntime`. Not OS screen-text `click` / `type`. See `docs/adapter-selection.md`. */
 export type PageStepKind = "goto" | "click" | "fill" | "waitFor" | "read";
 
-export type StepOutcome = "ok" | "permission_denied" | "precondition_failed";
+export type StepOutcome =
+  | "ok"
+  | "permission_denied"
+  | "precondition_failed"
+  | "timeout"
+  | "failed";
 
 export type RunStatus = "completed" | "stopped";
 
@@ -29,7 +36,7 @@ export interface Playbook {
   readonly steps: readonly PlaybookStep[];
 }
 
-/** Current runner log. Workbench/LLM status uses `StepResult` (not emitted yet). */
+/** Current runner log. Workbench/LLM status reads `RunResult.stepResults`. */
 export interface StepEvidence {
   readonly stepId: string;
   readonly kind: StepKind | PageStepKind;
@@ -42,4 +49,6 @@ export interface RunResult {
   readonly status: RunStatus;
   readonly stopReason: Exclude<StepOutcome, "ok"> | null;
   readonly evidence: readonly StepEvidence[];
+  /** One `StepResult` per declared step, in playbook order. */
+  readonly stepResults: readonly StepResult[];
 }

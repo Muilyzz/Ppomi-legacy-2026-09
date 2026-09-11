@@ -1,7 +1,7 @@
 /**
  * Stable per-step result for workbench timelines and LLM status.
  * Distinct from `StepEvidence` on `RunResult` (current runner log).
- * Runtimes do not emit `StepResult` yet; that is the next slice.
+ * Runtimes emit one `StepResult` per declared step on `RunResult.stepResults`.
  */
 
 export type StepAdapter = "page" | "os-windows" | "os-macos" | "phone";

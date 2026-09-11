@@ -1,4 +1,4 @@
-import type { OsAdapter, ScreenSnapshot } from "./os-adapter.ts";
+import type { OsAdapter, OsAdapterKind, ScreenSnapshot } from "./os-adapter.ts";
 
 export type DummyCall =
   | { readonly kind: "read" }
@@ -8,10 +8,12 @@ export type DummyCall =
 
 /** In-memory adapter for unit tests. Not `adapter-windows`. */
 export class DummyAdapter implements OsAdapter {
+  readonly kind: OsAdapterKind;
   readonly calls: DummyCall[] = [];
   private screen: ScreenSnapshot;
 
-  constructor(screen: ScreenSnapshot) {
+  constructor(screen: ScreenSnapshot, kind: OsAdapterKind = "os-windows") {
+    this.kind = kind;
     this.screen = copyScreen(screen);
   }
 
