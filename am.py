@@ -55,6 +55,12 @@ APPS = {
     # Toss with 비밀번호 인증 1단계 shows every linked bank/card on its 자산 tab without a PIN — the primary source.
     # Its rows repeat other banks' accounts, so totals are reported per app, never summed across apps.
     "TOSS": {"search": "toss", "title": "토스", "account": r"통장|계좌|뱅크|은행|입출금|적금|예금|청약"},
+    "KBBIZ": {"search": "KB스타기업뱅킹", "title": "KB스타기업뱅킹", "account": r"(통장|예금|적금)(\s+\d+/\d+)?$",   # 사업자로 로그인한 기업뱅킹: 홈 카드의 이름 줄이 계좌 행
+              "home": r"카드매출 입금확인|어제 매출|간편홈"},
+    "SHINHAN": {"search": "신한", "title": "신한 슈퍼SOL", "account": r"예금$|대출\(", "list": r"^계좌$",   # 홈의 '계좌' 제목 → 전체계좌(입출금·대출)
+                "home": r"땡겨요|마이신한포인트|추천서비스", "debt": r"대출"},
+    "SAMSUNG": {"search": "삼성증권", "title": "삼성증권", "account": r"^총 ?자산( 투자성과)?$", "expand": r"^자산$", "home": r"상품/연금"},   # mPOP 홈 '자산' 탭의 총 자산 한 줄
+    "KAKAOPAY": {"search": "카카오페이", "title": "카카오페이", "account": r"^계좌 총 자산$", "expand": r"^증권$", "list": r"^내 계좌$"},   # 증권 탭 → 내 계좌
 }
 
 # ---------------------------------------------------------------- db

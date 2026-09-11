@@ -1,84 +1,280 @@
 {
   "formatVersion": 1,
   "accounts": {
-    "KAKAO": { "pattern": "AI 관련 지출", "name": "카카오뱅크 AI 관련 지출 통장" },
-    "KB": { "pattern": "ONE통장", "name": "KB국민ONE통장" }
+    "KAKAO": {
+      "pattern": "AI 관련 지출",
+      "name": "카카오뱅크 AI 관련 지출 통장"
+    },
+    "KB": {
+      "pattern": "ONE통장",
+      "name": "KB국민ONE통장"
+    }
   },
   "titles": {
-    "KB": "KB스타뱅킹", "KAKAO": "카카오뱅크", "KBANK": "케이뱅크",
-    "TOSS": "토스", "TOSSINVEST": "토스증권(API)"
+    "KB": "KB스타뱅킹",
+    "KAKAO": "카카오뱅크",
+    "KBANK": "케이뱅크",
+    "TOSS": "토스",
+    "TOSSINVEST": "토스증권(API)",
+    "KBBIZ": "KB스타기업뱅킹",
+    "SHINHAN": "신한 슈퍼SOL",
+    "SAMSUNG": "삼성증권",
+    "KAKAOPAY": "카카오페이"
   },
   "capitals": [
-    { "pattern": "CURSOR|AWS|VERCEL|Google|GROK|APPLE|Amazon|OPENAI|ANTHROPIC", "capital": "역량" },
-    { "pattern": "쿠팡이츠|배달|택시|카카오 ?T", "capital": "시간" },
-    { "pattern": "사우나|헬스|병원|약국", "capital": "건강" },
-    { "pattern": "축의|조의|부의|경조", "capital": "관계" },
-    { "pattern": "유튜브|넷플릭스|멜론|게임", "capital": "즐거움" }
+    {
+      "pattern": "CURSOR|AWS|VERCEL|Google|GROK|APPLE|Amazon|OPENAI|ANTHROPIC",
+      "capital": "역량"
+    },
+    {
+      "pattern": "쿠팡이츠|배달|택시|카카오 ?T",
+      "capital": "시간"
+    },
+    {
+      "pattern": "사우나|헬스|병원|약국",
+      "capital": "건강"
+    },
+    {
+      "pattern": "축의|조의|부의|경조",
+      "capital": "관계"
+    },
+    {
+      "pattern": "유튜브|넷플릭스|멜론|게임",
+      "capital": "즐거움"
+    }
   ],
   "defaultCapital": "유지",
   "spendingRules": [
-    { "pattern": "커피|카페|스타벅스|이디야|투썸|메가|컴포즈|빽다방|폴바셋|블루보틀", "capital": "카페" },
-    { "pattern": "쿠팡이츠|배민|배달의민족|요기요|땡겨요", "capital": "배달" },
-    { "pattern": "AWS|Amazon_AWS|CURSOR|VERCEL|OPENAI|ANTHROPIC|GITHUB|APPLE|NETFLIX|YOUTUBE|SPOTIFY|NOTION|GOOGLE|MICROSOFT|ADOBE|CLAUDE|SUPABASE|CLOUDFLARE", "capital": "구독/도구" },
-    { "pattern": "쿠팡|마트|이마트|홈플러스|롯데마트|코스트코|다이소|편의점|GS25|CU|세븐일레븐|이마트24|올리브영", "capital": "생활/마트" },
-    { "pattern": "택시|카카오T|버스|지하철|주유|충전|EV|하이패스|주차|SRT|KTX|코레일", "capital": "교통/차" },
-    { "pattern": "병원|약국|의원|치과|한의원", "capital": "의료" },
-    { "pattern": "식당|김밥|국밥|치킨|피자|버거|맥도날드|롯데리아|버거킹|서브웨이|분식|초밥|고기|포차|주점|호프", "capital": "식비" },
-    { "pattern": "통신|SKT|KT|LG U|유플러스|전기|가스|수도|관리비|보험|생명|화재|카드대금|카드결제", "capital": "고정비" },
-    { "pattern": "이체|송금", "capital": "이체" }
+    {
+      "pattern": "커피|카페|스타벅스|이디야|투썸|메가|컴포즈|빽다방|폴바셋|블루보틀",
+      "capital": "카페"
+    },
+    {
+      "pattern": "쿠팡이츠|배민|배달의민족|요기요|땡겨요",
+      "capital": "배달"
+    },
+    {
+      "pattern": "AWS|Amazon_AWS|CURSOR|VERCEL|OPENAI|ANTHROPIC|GITHUB|APPLE|NETFLIX|YOUTUBE|SPOTIFY|NOTION|GOOGLE|MICROSOFT|ADOBE|CLAUDE|SUPABASE|CLOUDFLARE",
+      "capital": "구독/도구"
+    },
+    {
+      "pattern": "쿠팡|마트|이마트|홈플러스|롯데마트|코스트코|다이소|편의점|GS25|CU|세븐일레븐|이마트24|올리브영",
+      "capital": "생활/마트"
+    },
+    {
+      "pattern": "택시|카카오T|버스|지하철|주유|충전|EV|하이패스|주차|SRT|KTX|코레일",
+      "capital": "교통/차"
+    },
+    {
+      "pattern": "병원|약국|의원|치과|한의원",
+      "capital": "의료"
+    },
+    {
+      "pattern": "식당|김밥|국밥|치킨|피자|버거|맥도날드|롯데리아|버거킹|서브웨이|분식|초밥|고기|포차|주점|호프",
+      "capital": "식비"
+    },
+    {
+      "pattern": "통신|SKT|KT|LG U|유플러스|전기|가스|수도|관리비|보험|생명|화재|카드대금|카드결제",
+      "capital": "고정비"
+    },
+    {
+      "pattern": "이체|송금",
+      "capital": "이체"
+    }
   ],
-  "spendingCategories": ["카페", "배달", "식비", "생활/마트", "구독/도구", "교통/차", "의료", "고정비", "이체", "쇼핑", "여가", "기타"],
+  "spendingCategories": [
+    "카페",
+    "배달",
+    "식비",
+    "생활/마트",
+    "구독/도구",
+    "교통/차",
+    "의료",
+    "고정비",
+    "이체",
+    "쇼핑",
+    "여가",
+    "기타"
+  ],
   "defaultSpendingCategory": "기타",
-  "outsideClasses": ["이자수입", "수입(미분류)", "유지"],
+  "outsideClasses": [
+    "이자수입",
+    "수입(미분류)",
+    "유지"
+  ],
   "defaultLensName": "내 것 전부",
-  "defaultInside": ["현금(수중)", "내 다른 계좌(미확인)"],
+  "defaultInside": [
+    "현금(수중)",
+    "내 다른 계좌(미확인)"
+  ],
   "accountKinds": {
-    "역량": "expense", "시간": "expense", "건강": "expense", "관계": "expense",
-    "즐거움": "expense", "유지": "expense", "이자수입": "income", "수입(미분류)": "income",
-    "현금(수중)": "asset", "내 다른 계좌(미확인)": "asset"
+    "역량": "expense",
+    "시간": "expense",
+    "건강": "expense",
+    "관계": "expense",
+    "즐거움": "expense",
+    "유지": "expense",
+    "이자수입": "income",
+    "수입(미분류)": "income",
+    "현금(수중)": "asset",
+    "내 다른 계좌(미확인)": "asset"
   },
   "journalRules": [
     {
-      "kinds": ["deposit"], "any": [{ "field": "tag", "contains": "체크카드" }],
-      "memo": "{tag} {merchant} 환불", "debit": { "source": "sourceAccount" },
-      "credit": { "source": "category" }, "reversal": true
+      "kinds": [
+        "deposit"
+      ],
+      "any": [
+        {
+          "field": "tag",
+          "contains": "체크카드"
+        }
+      ],
+      "memo": "{tag} {merchant} 환불",
+      "debit": {
+        "source": "sourceAccount"
+      },
+      "credit": {
+        "source": "category"
+      },
+      "reversal": true
     },
     {
-      "kinds": ["deposit"], "any": [{ "field": "merchant", "contains": "ATM입금" }],
-      "memo": "{tag} {merchant}", "debit": { "source": "sourceAccount" },
-      "credit": { "source": "named", "name": "현금(수중)" }
-    },
-    {
-      "kinds": ["deposit"], "any": [{ "field": "tag", "contains": "이자" }, { "field": "merchant", "contains": "이자" }],
-      "memo": "{tag} {merchant}", "debit": { "source": "sourceAccount" },
-      "credit": { "source": "named", "name": "이자수입" }
-    },
-    {
-      "kinds": ["deposit"], "any": [{ "field": "merchant", "ownName": true }],
-      "memo": "{tag} {merchant}", "debit": { "source": "sourceAccount" },
-      "credit": { "source": "named", "name": "내 다른 계좌(미확인)" }
-    },
-    {
-      "kinds": ["deposit"], "memo": "{tag} {merchant}",
-      "debit": { "source": "sourceAccount" }, "credit": { "source": "named", "name": "수입(미분류)" }
-    },
-    {
-      "kinds": ["withdrawal"],
-      "any": [{ "field": "tag", "contains": "스마트출금" }, { "field": "tag", "contains": "ATM" }, { "field": "merchant", "ownName": true }],
-      "memo": "{tag} {merchant}", "debit": { "source": "named", "name": "현금(수중)" },
-      "credit": { "source": "sourceAccount" },
-      "inferred": {
-        "memo": "↳ {merchant} (메모에서 추정)", "debit": { "source": "category" },
-        "credit": { "source": "named", "name": "현금(수중)" }
+      "kinds": [
+        "deposit"
+      ],
+      "any": [
+        {
+          "field": "merchant",
+          "contains": "ATM입금"
+        }
+      ],
+      "memo": "{tag} {merchant}",
+      "debit": {
+        "source": "sourceAccount"
+      },
+      "credit": {
+        "source": "named",
+        "name": "현금(수중)"
       }
     },
     {
-      "kinds": ["withdrawal", "approval"], "memo": "{tag} {merchant}",
-      "debit": { "source": "category" }, "credit": { "source": "sourceAccount" }
+      "kinds": [
+        "deposit"
+      ],
+      "any": [
+        {
+          "field": "tag",
+          "contains": "이자"
+        },
+        {
+          "field": "merchant",
+          "contains": "이자"
+        }
+      ],
+      "memo": "{tag} {merchant}",
+      "debit": {
+        "source": "sourceAccount"
+      },
+      "credit": {
+        "source": "named",
+        "name": "이자수입"
+      }
     },
     {
-      "kinds": ["cancel"], "memo": "{tag} {merchant} 취소", "debit": { "source": "sourceAccount" },
-      "credit": { "source": "category" }, "reversal": true
+      "kinds": [
+        "deposit"
+      ],
+      "any": [
+        {
+          "field": "merchant",
+          "ownName": true
+        }
+      ],
+      "memo": "{tag} {merchant}",
+      "debit": {
+        "source": "sourceAccount"
+      },
+      "credit": {
+        "source": "named",
+        "name": "내 다른 계좌(미확인)"
+      }
+    },
+    {
+      "kinds": [
+        "deposit"
+      ],
+      "memo": "{tag} {merchant}",
+      "debit": {
+        "source": "sourceAccount"
+      },
+      "credit": {
+        "source": "named",
+        "name": "수입(미분류)"
+      }
+    },
+    {
+      "kinds": [
+        "withdrawal"
+      ],
+      "any": [
+        {
+          "field": "tag",
+          "contains": "스마트출금"
+        },
+        {
+          "field": "tag",
+          "contains": "ATM"
+        },
+        {
+          "field": "merchant",
+          "ownName": true
+        }
+      ],
+      "memo": "{tag} {merchant}",
+      "debit": {
+        "source": "named",
+        "name": "현금(수중)"
+      },
+      "credit": {
+        "source": "sourceAccount"
+      },
+      "inferred": {
+        "memo": "↳ {merchant} (메모에서 추정)",
+        "debit": {
+          "source": "category"
+        },
+        "credit": {
+          "source": "named",
+          "name": "현금(수중)"
+        }
+      }
+    },
+    {
+      "kinds": [
+        "withdrawal",
+        "approval"
+      ],
+      "memo": "{tag} {merchant}",
+      "debit": {
+        "source": "category"
+      },
+      "credit": {
+        "source": "sourceAccount"
+      }
+    },
+    {
+      "kinds": [
+        "cancel"
+      ],
+      "memo": "{tag} {merchant} 취소",
+      "debit": {
+        "source": "sourceAccount"
+      },
+      "credit": {
+        "source": "category"
+      },
+      "reversal": true
     }
   ]
 }

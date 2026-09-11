@@ -65,17 +65,18 @@ enum OCR {
     static let notBalance = Re(#"누적|총 ?자산|총 ?잔액|이벤트|혜택|수수료|배달비|출시|\d+개 계좌|모두 ?보기|전체보기|내역|송금|적립금|만료|다시 연결|예금 • 적금"#)
     private static let hangul2 = Re("[가-힣]{2,}"), last4 = Re(#"\(\d{4}\)"#), acctNo = Re(#"\d[\d-]{6,}\d"#)
     private static let wonOrNoise = Re(#"-?\d[\d,]*\s*원|이체|:"#), noiseLetter = Re(#"(?<=[\d)])\s+[A-Za-z](?=\s|$)|\s+[A-Za-z]$"#)
-    private static let splitLetters = Re(#"\b([A-Za-z]) (?=[A-Za-z]\b)"#), trim = Re(#"^[^\w가-힣(]+|[\s*•·]+$"#)
+    private static let splitLetters = Re(#"\b([A-Za-z]) (?=[A-Za-z]\b)"#), trim = Re(#"^(?:[^\w가-힣(<]|<(?![가-힣]))+|[\s*•·]+$"#)   // keep '<기시>' (신한 loan class) in front
 
     /// (account label, balance) pairs. The balance is the N원 on the account row itself, else within the next 4 rows
     /// (KB's full list puts 신규일/만기일 lines between a savings account and its balance). Stops at the next account row
     /// and never reuses a balance row, so wrapped names / headers can't double-count. When the account row is just a
     /// number (name on the row above, as in KB's 전체계좌조회), the name row becomes the label.
+    static let pager = Re(#"\s*\d+/\d+\s*$"#)
     static func balances(_ words: [Word], account accountRe: String) -> [(String, Int)] {
-        let acct = Re(accountRe), rows = rows(words)
+        let acct = Re(accountRe), exact = Re("^(?:" + accountRe + ")$"), rows = rows(words)   // a whole-row name (e.g. '^총 자산$') is asked for on purpose: no summary-row skip
         var out: [(String, Int)] = [], used = Set<Int>()
         for (i, r) in rows.enumerated() {
-            guard acct.search(r) != nil, notBalance.search(r) == nil else { continue }
+            guard acct.search(r) != nil, notBalance.search(r) == nil || exact.search(r) != nil else { continue }
             for j in i..<min(i + 5, rows.count) {
                 if used.contains(j) || (j > i && acct.search(rows[j]) != nil) { break }
                 guard let m = balance.search(rows[j]), notBalance.search(rows[j]) == nil else { continue }
@@ -88,6 +89,9 @@ enum OCR {
                 label = splitLetters.sub(label, "$1")                          // 'A I' -> 'AI' (split by OCR)
                 label = label.split(whereSeparator: \.isWhitespace).joined(separator: " ")
                 label = trim.sub(label, "")                                    // chevrons/bullets in front, hidden-balance '*' at the end
+                label = pager.sub(label, "")                                   // KB스타기업뱅킹 home card: '사업자응원통장-보통예금 1/1' -> the name
+                label = label.replacingOccurrences(of: "보동예금", with: "보통예금")   // OCR reads 통 as 동 on 신한's dark list
+                label = label.replacingOccurrences(of: "총자산 투자성과", with: "총 자산")   // 삼성증권: 종합잔고 screen and the home 자산 tab are the same account
                 out.append((label, Int(m[1]! + m[2]!.replacingOccurrences(of: ",", with: ""))!)); used.insert(j)
                 break
             }
