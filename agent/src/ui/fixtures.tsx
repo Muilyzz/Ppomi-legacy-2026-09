@@ -1,6 +1,7 @@
 // 스토리에 꽂는 가짜 서브트리. 실제 App(main.tsx)이 주입하는 것과 같은 모양의 DOM을 만든다.
 import React from "react";
 import { Shell, Pane, Log, Welcome, Bubble, BubbleActions, Thinking, ToolCard, Procedure, Waiting, Composer, CallCard, CallBar, IncomingCall } from "./shell";
+import { StepRecordPane } from "./step-record-pane";
 import { ControlHeader, RecordsHeader } from "./workbench";
 
 export const tools = <>
@@ -64,5 +65,5 @@ export const records = <>
       {recordTabs.map((tab, i) => <button key={tab} role="tab" aria-selected={i === 0}>{tab}</button>)}
     </div>
   </RecordsHeader>
-  <div className="records-body">비어 있음</div>
+  <div className="records-body"><StepRecordPane /></div>
 </>;

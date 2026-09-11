@@ -1,0 +1,84 @@
+[
+  {
+    "stepId": "open-next",
+    "playbookId": "fixture-page-happy",
+    "adapter": "page",
+    "action": "click",
+    "status": "ok",
+    "attempt": "executed",
+    "target": { "kind": "locator", "locator": "#next" },
+    "observation": { "summary": "clicked #next on Demo Page" },
+    "evidence": {
+      "screenshotBefore": "runs/fixture/open-next.before.png",
+      "screenshotAfter": "runs/fixture/open-next.after.png"
+    },
+    "timingMs": 42
+  },
+  {
+    "stepId": "wait-cert",
+    "playbookId": "fixture-hybrid",
+    "adapter": "os-windows",
+    "action": "read",
+    "status": "retryable",
+    "attempt": "timeout",
+    "target": { "kind": "accessibility", "name": "인증서" },
+    "observation": { "summary": "UIA read timed out waiting for 인증서" },
+    "timingMs": 8000
+  },
+  {
+    "stepId": "sign",
+    "playbookId": "fixture-hybrid",
+    "adapter": "os-windows",
+    "action": "click",
+    "status": "failed",
+    "attempt": "not_executed",
+    "target": { "kind": "accessibility", "name": "서명" },
+    "observation": { "summary": "previous step stopped the run; adapter was not called" },
+    "timingMs": 0
+  },
+  {
+    "stepId": "open-form",
+    "playbookId": "fixture-page-happy",
+    "adapter": "page",
+    "action": "goto",
+    "status": "ok",
+    "attempt": "executed",
+    "target": { "kind": "url", "url": "https://example.test/form" },
+    "observation": { "summary": "opened form url" },
+    "timingMs": 15
+  },
+  {
+    "stepId": "confirm",
+    "playbookId": "fixture-macos",
+    "adapter": "os-macos",
+    "action": "focus",
+    "status": "needs_human",
+    "attempt": "executed",
+    "target": { "kind": "none" },
+    "observation": { "summary": "cert PIN field needs the owner" },
+    "evidence": { "screenshotAfter": "runs/fixture/confirm.after.png" },
+    "timingMs": 120
+  },
+  {
+    "stepId": "tap-next",
+    "playbookId": "fixture-phone",
+    "adapter": "phone",
+    "action": "click",
+    "status": "ambiguous",
+    "attempt": "executed",
+    "target": { "kind": "accessibility", "name": "다음" },
+    "observation": { "summary": "two 다음 buttons on screen" },
+    "timingMs": 30
+  },
+  {
+    "stepId": "fill-name",
+    "playbookId": "fixture-page-happy",
+    "adapter": "page",
+    "action": "fill",
+    "status": "protected",
+    "attempt": "not_executed",
+    "target": { "kind": "locator", "locator": "#name" },
+    "observation": { "summary": "missing permission ui.control" },
+    "timingMs": 0
+  }
+]

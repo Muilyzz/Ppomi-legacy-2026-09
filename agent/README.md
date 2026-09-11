@@ -37,6 +37,10 @@ Android는 앱이 보이는 상태에서 사용자가 시작한 대화를 유지
 
 접근성 미연결·허용하지 않은 앱·설치되지 않은 앱·변경된 화면·보호 동작은 구분된 실패로 모델에 전달한다. 기기 예외 원문은 전달하지 않는다. 금융·인증·권한 변경 등 보호 동작은 현재 음성 실행기로 승인할 수 없으며 사용자가 직접 처리한다. 화면 읽기와 실제 결과 확인 없이 완료를 주장하지 않는다.
 
+## 플레이북 스텝 기록 (작업대)
+
+작업대 **기록** 칸(`src/ui/step-record-pane.tsx`)은 Dummy `PagePlaybookRuntime` / `PlaybookRuntime`이 남긴 `RunResult.stepResults`를 `StepTimeline`에 넣고, 고른 스텝의 `Evidence`/박스가 있을 때만 `HighlightOverlay`를 연다. 라이브 AX·Playwright·OCR/CU·금융 제출은 없다. 스토리 `스텝 기록` · `npx tsx --test src/step-result-views.test.ts`.
+
 ## 개발
 
 ```sh

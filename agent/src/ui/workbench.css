@@ -90,3 +90,75 @@
 }
 .workbench[data-compact="true"] .workbench-sheet-header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-shrink: 0; }
 .workbench-sheet-header h2 { margin: 0; color: var(--fg); font-size: var(--fs-3); font-weight: 500; }
+
+/* StepResult 기록. 색은 토큰만. StepRecordPane이 작업대 기록 칸에서 조합한다. */
+.highlight-overlay { margin: 0; display: grid; gap: .5rem; min-width: 0; }
+.highlight-overlay[hidden], .highlight-overlay[data-empty="true"] { display: none; }
+.highlight-overlay-frame {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.highlight-overlay-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.highlight-overlay-placeholder {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--fg-2);
+  font-size: var(--fs-2);
+}
+.highlight-overlay-boxes { list-style: none; margin: 0; padding: 0; }
+.highlight-overlay-box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  pointer-events: none;
+}
+.highlight-overlay-box[data-selected="true"] { outline: 2px solid var(--fg); outline-offset: 2px; }
+.highlight-overlay-box-label {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  margin-bottom: .125rem;
+  padding: 0 .25rem;
+  background: var(--surface);
+  color: var(--accent-fg);
+  font-size: var(--fs-1);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.highlight-overlay-caption { color: var(--fg-2); font-size: var(--fs-1); overflow-wrap: anywhere; }
+
+.step-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+.step-card {
+  display: grid;
+  gap: .25rem;
+  width: 100%;
+  text-align: left;
+  padding: .75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+}
+.step-card:focus-visible { outline: 2px solid var(--accent-fg); outline-offset: 2px; }
+.step-card[aria-pressed="true"] { outline: 2px solid var(--accent-fg); outline-offset: 2px; }
+.step-card-status { font-size: var(--fs-1); font-weight: 500; color: var(--fg-2); }
+.step-card-title { font-size: var(--fs-3); font-weight: 500; }
+.step-card-meta, .step-card-summary, .step-card-timing { font-size: var(--fs-2); color: var(--fg-2); }
+.step-card[data-status="ok"] .step-card-status { color: var(--accent-fg); }
+.step-card[data-status="retryable"] { border-style: dashed; }
+.step-card[data-status="ambiguous"] { border-style: dashed; }
+.step-card[data-status="ambiguous"] .step-card-status { color: var(--accent-fg); }
+.step-card[data-status="protected"] { color: var(--fg-2); }
+.step-card[data-status="needs_human"] { border-width: 2px; border-color: var(--turn); }
+.step-card[data-status="failed"] .step-card-status { color: var(--bad); }
+
+.step-result-preview, .step-record-pane { display: grid; gap: .75rem; min-width: 0; }
+.step-record-pane-note { margin: 0; color: var(--fg-2); font-size: var(--fs-2); }
