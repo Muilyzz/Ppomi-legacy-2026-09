@@ -1,4 +1,5 @@
-export type { OsAdapter, ScreenSnapshot } from "./os-adapter.ts";
+export type { OsAdapter, OsAdapterKind, ScreenSnapshot } from "./os-adapter.ts";
+export { AdapterTimeoutError, isAdapterTimeout } from "./adapter-timeout.ts";
 export type { BrowserPageAdapter, PageSnapshot } from "./browser-page-adapter.ts";
 export { DummyAdapter, type DummyCall } from "./dummy-adapter.ts";
 export { DummyPageAdapter, type DummyPageCall } from "./dummy-page-adapter.ts";

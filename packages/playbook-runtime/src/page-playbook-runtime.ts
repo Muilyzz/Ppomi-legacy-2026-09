@@ -1,10 +1,13 @@
+import { isAdapterTimeout } from "./adapter-timeout.ts";
 import type { BrowserPageAdapter, PageSnapshot } from "./browser-page-adapter.ts";
+import { emitNotExecutedRest, emitStepResult } from "./emit-step-result.ts";
 import { defaultPagePermission, type PermissionGate } from "./permissions.ts";
 import type {
   PagePlaybook,
   PagePlaybookStep,
 } from "./page-playbook.ts";
 import type { RunResult, StepEvidence, StepOutcome } from "./playbook.ts";
+import type { StepResult, StepTarget } from "./step-result.ts";
 
 /**
  * Runs declared in-page steps against one `BrowserPageAdapter`.
@@ -14,8 +17,10 @@ import type { RunResult, StepEvidence, StepOutcome } from "./playbook.ts";
  * See `docs/adapter-selection.md`.
  * Permission and page preconditions are fail-closed: the run stops
  * and later steps are not sent to the adapter.
- * `RunResult.evidence` is `StepEvidence`. Emitting `StepResult` is the next slice.
- * Does not call `OsAdapter`. There is no device-approval input.
+ * `RunResult.evidence` is the runner log. `RunResult.stepResults` is
+ * one `StepResult` per declared step (`attempt` distinguishes timeout
+ * from not_executed). Does not call `OsAdapter`. There is no
+ * device-approval input.
  */
 export class PagePlaybookRuntime {
   private readonly adapter: BrowserPageAdapter;
@@ -28,24 +33,64 @@ export class PagePlaybookRuntime {
 
   run(playbook: PagePlaybook): RunResult {
     const evidence: StepEvidence[] = [];
-    for (const step of playbook.steps) {
+    const stepResults: StepResult[] = [];
+    for (let index = 0; index < playbook.steps.length; index += 1) {
+      const step = playbook.steps[index]!;
       const permission = step.require?.permission ?? defaultPagePermission(step.kind);
       if (!this.permissions.allows(permission)) {
-        evidence.push(record(step, "permission_denied", [], `missing permission ${permission}`));
-        return stop(evidence, "permission_denied");
+        const note = `missing permission ${permission}`;
+        evidence.push(record(step, "permission_denied", [], note));
+        stepResults.push(pageStepResult(playbook.id, step, "protected", "not_executed", note, 0));
+        return stop(
+          evidence,
+          stepResults.concat(rest(playbook, index + 1)),
+          "permission_denied",
+        );
       }
 
       const page = this.adapter.readPage();
       const why = unmetPrecondition(step, page);
       if (why !== null) {
         evidence.push(record(step, "precondition_failed", page.texts, why));
-        return stop(evidence, "precondition_failed");
+        stepResults.push(pageStepResult(playbook.id, step, "failed", "not_executed", why, 0));
+        return stop(
+          evidence,
+          stepResults.concat(rest(playbook, index + 1)),
+          "precondition_failed",
+        );
       }
 
-      apply(this.adapter, step);
+      const started = Date.now();
+      try {
+        apply(this.adapter, step);
+      } catch (error) {
+        const timingMs = Date.now() - started;
+        const timeout = isAdapterTimeout(error);
+        const note = error instanceof Error ? error.message : String(error);
+        const outcome: Exclude<StepOutcome, "ok"> = timeout ? "timeout" : "failed";
+        evidence.push(record(step, outcome, page.texts, note));
+        stepResults.push(pageStepResult(
+          playbook.id,
+          step,
+          timeout ? "retryable" : "failed",
+          timeout ? "timeout" : "executed",
+          note,
+          timingMs,
+        ));
+        return stop(evidence, stepResults.concat(rest(playbook, index + 1)), outcome);
+      }
+
       evidence.push(record(step, "ok", page.texts, "step finished"));
+      stepResults.push(pageStepResult(
+        playbook.id,
+        step,
+        "ok",
+        "executed",
+        "step finished",
+        Date.now() - started,
+      ));
     }
-    return { status: "completed", stopReason: null, evidence };
+    return { status: "completed", stopReason: null, evidence, stepResults };
   }
 }
 
@@ -95,6 +140,42 @@ function unmetPrecondition(step: PagePlaybookStep, page: PageSnapshot): string |
   return null;
 }
 
+function pageTarget(step: PagePlaybookStep): StepTarget {
+  if (step.kind === "goto") {
+    if (step.url !== undefined && step.url.length > 0) return { kind: "url", url: step.url };
+    return { kind: "none" };
+  }
+  if (step.locator !== undefined && step.locator.length > 0) {
+    return { kind: "locator", locator: step.locator };
+  }
+  return { kind: "none" };
+}
+
+function pageStepResult(
+  playbookId: string,
+  step: PagePlaybookStep,
+  status: "ok" | "retryable" | "failed" | "protected",
+  attempt: "executed" | "timeout" | "not_executed",
+  summary: string,
+  timingMs: number,
+): StepResult {
+  return emitStepResult({
+    stepId: step.id,
+    playbookId,
+    adapter: "page",
+    action: step.kind,
+    status,
+    attempt,
+    target: pageTarget(step),
+    summary,
+    timingMs,
+  });
+}
+
+function rest(playbook: PagePlaybook, startIndex: number): StepResult[] {
+  return emitNotExecutedRest(playbook.id, "page", playbook.steps, startIndex, pageTarget);
+}
+
 function record(
   step: PagePlaybookStep,
   outcome: StepOutcome,
@@ -104,6 +185,10 @@ function record(
   return { stepId: step.id, kind: step.kind, outcome, screenTexts: [...pageTexts], note };
 }
 
-function stop(evidence: StepEvidence[], stopReason: Exclude<StepOutcome, "ok">): RunResult {
-  return { status: "stopped", stopReason, evidence };
+function stop(
+  evidence: StepEvidence[],
+  stepResults: StepResult[],
+  stopReason: Exclude<StepOutcome, "ok">,
+): RunResult {
+  return { status: "stopped", stopReason, evidence, stepResults };
 }
