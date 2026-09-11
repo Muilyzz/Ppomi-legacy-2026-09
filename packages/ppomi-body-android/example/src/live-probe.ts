@@ -56,10 +56,10 @@ export async function probeAndroidLive(): Promise<LiveProbe> {
   if (missing) return skipLines(lines, "adb not on PATH");
   const resolved = resolveAdbSerial(serials, pinned);
   if (resolved.serial === undefined) {
-    if (resolved.code === "multiple_devices") {
-      return skipLines(lines, "multiple devices; set ANDROID_SERIAL or PPOMI_ANDROID_SERIAL");
+    if (resolved.code === "serial_required") {
+      return skipLines(lines, "set PPOMI_ANDROID_SERIAL or ANDROID_SERIAL to the test device (a single attached phone is never auto-targeted)");
     }
-    return skipLines(lines, "no authorized Android device");
+    return skipLines(lines, "pinned serial is not an authorized attached device");
   }
 
   const serial = resolved.serial;
@@ -82,7 +82,11 @@ export async function probeAndroidLive(): Promise<LiveProbe> {
 
   const node = pickLiveAndroidClickTarget(preview.nodes);
   if (node === undefined) {
-    return skipLines(lines, `Settings dump had no clickable row`, `nodes=${preview.nodes.length}`);
+    return skipLines(
+      lines,
+      "no safe Settings row (연결 / Wi-Fi / 블루투스 / 알림 / 배터리 / 디스플레이) on screen — nothing else is tapped",
+      `nodes=${preview.nodes.length}`,
+    );
   }
 
   const target = liveAndroidClickLabel(node);

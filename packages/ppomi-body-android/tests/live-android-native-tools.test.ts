@@ -61,8 +61,10 @@ function readReply(nodes: readonly LiveAndroidNode[]): LiveAndroidReply {
 
 test("adb serials / pay word / skip codes / live flag", () => {
   assert.deepEqual(parseAdbDevices("List of devices attached\nR3CX\tdevice\nemulator-5554\toffline\n"), ["R3CX"]);
-  assert.equal(resolveAdbSerial(["a", "b"]).code, "multiple_devices");
+  assert.equal(resolveAdbSerial(["a", "b"]).code, "serial_required");
+  assert.equal(resolveAdbSerial(["a"]).code, "serial_required");
   assert.equal(resolveAdbSerial(["a", "b"], "b").serial, "b");
+  assert.equal(resolveAdbSerial(["a"], "z").code, "no_device");
   assert.equal(isAndroidPayWord("결제하기"), true);
   assert.equal(isAndroidPayWord("바로구매"), false);
   assert.equal(skipCode("adb: command not found"), "no_adb");

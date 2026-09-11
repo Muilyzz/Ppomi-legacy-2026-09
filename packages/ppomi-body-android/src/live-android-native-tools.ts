@@ -11,6 +11,14 @@ const SNAPSHOT_TTL_MS = 15_000;
 const MAX_NODES = 200;
 const SERIAL_OK = /^[A-Za-z0-9._:-]+$/;
 const PAY_WORD = /(?<!바로)(결제|구매|주문|송금|이체|입금|충전|구독|가입)\s*(하기|완료|진행)?\s*$/;
+/**
+ * The Windows executor's `ProtectedLabel` set plus the Settings rows that wipe or reset a phone.
+ * Unanchored on purpose, like the Windows rule: a conservative deny list, not a transaction classifier.
+ */
+const PROTECTED_LABEL =
+  /pay|purchase|checkout|transfer|send|submit|delete|remove|confirm|approve|allow|permission|password|sign.?in|log.?in|install|uninstall|run|execute|terminal|command|reset|erase|factory|format|wipe|결제|구매|송금|이체|전송|제출|삭제|제거|확인|승인|허용|권한|비밀번호|로그인|설치|실행|명령|초기화|재설정|지우기|포맷/i;
+/** Every C0/C1 control except `\t`: through `input text` a newline is Enter, and the device shell reads it as a command break. */
+const CONTROL_CHARS = /[\u0000-\u0008\u000A-\u001F\u007F-\u009F]/;
 const SMOKE_ROW =
   /연결|네트워크|와이파이|wi-?fi|wlan|connections?|network|bluetooth|블루투스|알림|notification|배터리|battery|디스플레이|display|소리/i;
 
@@ -28,6 +36,10 @@ export interface LiveAndroidNode {
   readonly editable: boolean;
   readonly password: boolean;
   readonly packageName?: string;
+  /** `resource-id` / `class` / `focused` from the dump: the identity a later fresh dump is checked against. */
+  readonly resourceId?: string;
+  readonly className?: string;
+  readonly focused?: boolean;
   readonly bounds: LiveAndroidBounds;
 }
 
@@ -73,12 +85,18 @@ interface StoredNode extends AndroidScreenNode {
   readonly index: number;
   readonly password: boolean;
   readonly bounds: LiveAndroidBounds;
+  readonly resourceId?: string;
+  readonly className?: string;
 }
 
 /**
  * `AndroidNativeTools` over live `uiautomator dump` + `input tap`.
- * Snapshot ids die after click/type or 15s; payment labels and password fields
- * are `protected_action`. No AccessibilityService APK required.
+ * Snapshot ids die after click/type or 15s; payment / destructive labels and password fields are
+ * `protected_action`. Before `input tap` / `input text` the target is re-verified against a fresh
+ * dump (same resource-id, class, text, description and bounds) and refused with `stale_screen` when
+ * the screen moved; typing also requires the field to hold focus. A live tap needs an explicit
+ * device pin (`PPOMI_ANDROID_SERIAL` / `ANDROID_SERIAL`): a single connected phone is never
+ * auto-targeted. No AccessibilityService APK required.
  */
 export class LiveAndroidNativeTools implements AndroidNativeTools {
   private serial: string | undefined;
@@ -127,50 +145,82 @@ export class LiveAndroidNativeTools implements AndroidNativeTools {
 
   android_click(args: { nodeId: string }): { invoked: boolean } {
     const node = this.requireAddressable(args.nodeId);
-    if (node.password || isAndroidPayWord(node.text) || !node.clickable) {
-      throw new AndroidAdapterError("protected_action", `protected_action. ${node.text}`);
+    if (node.password || isProtectedNode(node) || !node.clickable) {
+      throw new AndroidAdapterError("protected_action", `protected_action. ${liveAndroidClickLabel(node)}`);
     }
-    const x = Math.round((node.bounds.left + node.bounds.right) / 2);
-    const y = Math.round((node.bounds.top + node.bounds.bottom) / 2);
     this.stored = null;
-    const reply = this.exec({ op: "tap", serial: this.requireSerial(), x, y });
+    const serial = this.requireSerial();
+    const live = this.verifyFresh(serial, node);
+    const reply = this.exec({ op: "tap", serial, x: centerX(live.bounds), y: centerY(live.bounds) });
     if (!reply.ok) throw liveError(reply);
     return { invoked: true };
   }
 
   android_type(args: { nodeId: string; text: string }): { typed: boolean } {
-    if (args.text.length > 4096 || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(args.text)) {
+    if (args.text.length > 4096 || CONTROL_CHARS.test(args.text)) {
       throw new AndroidAdapterError("protected_action", "protected_action. text");
     }
     const node = this.requireAddressable(args.nodeId);
     if (node.password || !node.editable) {
-      throw new AndroidAdapterError("protected_action", `protected_action. ${node.text}`);
+      throw new AndroidAdapterError("protected_action", `protected_action. ${liveAndroidClickLabel(node)}`);
     }
-    const x = Math.round((node.bounds.left + node.bounds.right) / 2);
-    const y = Math.round((node.bounds.top + node.bounds.bottom) / 2);
     this.stored = null;
     const serial = this.requireSerial();
-    const tapped = this.exec({ op: "tap", serial, x, y });
+    const live = this.verifyFresh(serial, node);
+    const tapped = this.exec({ op: "tap", serial, x: centerX(live.bounds), y: centerY(live.bounds) });
     if (!tapped.ok) throw liveError(tapped);
+    this.verifyFocused(serial, node);
     const typed = this.exec({ op: "type", serial, text: args.text });
     if (!typed.ok) throw liveError(typed);
     return { typed: true };
   }
 
+  /** A live tap needs an explicit pin; with one phone attached, that phone is still not chosen for the caller. */
   private requireSerial(): string {
     if (this.serial !== undefined) return this.serial;
+    const pinned = process.env.ANDROID_SERIAL ?? process.env.PPOMI_ANDROID_SERIAL;
+    if (pinned === undefined || pinned.length === 0) {
+      throw new AndroidAdapterError("serial_required", "set PPOMI_ANDROID_SERIAL or ANDROID_SERIAL to the test device; no single-device auto-target");
+    }
     const reply = this.exec({ op: "devices" });
     if (!reply.ok) throw liveError(reply);
     if (reply.result.missing === true) {
       throw new AndroidAdapterError("no_adb", "adb not on PATH");
     }
-    const pinned = process.env.ANDROID_SERIAL ?? process.env.PPOMI_ANDROID_SERIAL;
     const resolved = resolveAdbSerial(reply.result.serials ?? [], pinned);
     if (resolved.serial === undefined) {
       throw new AndroidAdapterError(resolved.code ?? "no_device", resolved.code ?? "no_device");
     }
     this.serial = resolved.serial;
     return this.serial;
+  }
+
+  /**
+   * The node id encodes a position in an old dump. Re-read the screen and act only if the same node
+   * (resource-id, class, text, description, bounds) is still there — a dialog, toast, scroll or reflow
+   * since `android_screen` is `stale_screen`, and a label that turned protected is refused.
+   */
+  private verifyFresh(serial: string, stored: StoredNode): LiveAndroidNode {
+    const reply = this.exec({ op: "dump", serial });
+    if (!reply.ok) throw liveError(reply);
+    const live = (reply.result.nodes ?? []).find(node => sameNode(node, stored));
+    if (live === undefined) {
+      throw new AndroidAdapterError("stale_screen", `stale_screen. ${stored.id} is not on the current screen`);
+    }
+    if (live.password || isProtectedNode(live)) {
+      throw new AndroidAdapterError("protected_action", `protected_action. ${liveAndroidClickLabel(live)}`);
+    }
+    return live;
+  }
+
+  /** Keystrokes go to the focused field; confirm it is this one (bounds may reflow when the keyboard opens). */
+  private verifyFocused(serial: string, stored: StoredNode): void {
+    const reply = this.exec({ op: "dump", serial });
+    if (!reply.ok) throw liveError(reply);
+    const live = (reply.result.nodes ?? []).find(node => sameIdentity(node, stored));
+    if (live === undefined || live.focused !== true) {
+      throw new AndroidAdapterError("stale_screen", `stale_screen. ${stored.id} did not take focus`);
+    }
   }
 
   private requireAddressable(nodeId: string): StoredNode {
@@ -222,14 +272,14 @@ export function parseAdbDevices(text: string): string[] {
     .filter(serial => SERIAL_OK.test(serial));
 }
 
+/** Only an explicitly pinned serial that `adb devices` lists; never "the one device that happens to be attached". */
 export function resolveAdbSerial(
   serials: readonly string[],
   pinned?: string,
 ): { serial?: string; code?: string } {
-  if (pinned !== undefined && serials.includes(pinned)) return { serial: pinned };
-  if (serials.length === 0) return { code: "no_device" };
-  if (serials.length > 1) return { code: "multiple_devices" };
-  return { serial: serials[0] };
+  if (pinned === undefined || pinned.length === 0) return { code: "serial_required" };
+  if (!SERIAL_OK.test(pinned) || !serials.includes(pinned)) return { code: "no_device" };
+  return { serial: pinned };
 }
 
 export function parseUiAutomatorDump(xml: string): LiveAndroidNode[] {
@@ -242,23 +292,68 @@ export function isAndroidPayWord(text: string): boolean {
   return PAY_WORD.test(text.trim());
 }
 
+/** Windows `ProtectedLabel` + Settings reset/erase rows; see `PROTECTED_LABEL`. */
+export function isAndroidProtectedLabel(text: string): boolean {
+  return PROTECTED_LABEL.test(text);
+}
+
+function isProtectedNode(node: { readonly text: string; readonly contentDescription?: string }): boolean {
+  const labels = [node.text, node.contentDescription ?? ""];
+  return labels.some(label => isAndroidPayWord(label) || isAndroidProtectedLabel(label));
+}
+
+/**
+ * The argument `adb shell` hands to the device's `/bin/sh` for `input text`: spaces as `%s` (the
+ * `input` convention) and the whole thing single-quoted, so `;`, `&`, `|`, `$()`, backticks, quotes
+ * and redirections in the typed text are data, not a command on the phone.
+ */
+export function encodeInputText(text: string): string {
+  return `'${text.replace(/ /g, "%s").replace(/'/g, "'\\''")}'`;
+}
+
+function sameIdentity(live: LiveAndroidNode, stored: StoredNode): boolean {
+  return live.resourceId === stored.resourceId
+    && live.className === stored.className
+    && live.text === stored.text
+    && (live.contentDescription ?? "") === (stored.contentDescription ?? "");
+}
+
+function sameNode(live: LiveAndroidNode, stored: StoredNode): boolean {
+  return sameIdentity(live, stored)
+    && live.bounds.left === stored.bounds.left
+    && live.bounds.top === stored.bounds.top
+    && live.bounds.right === stored.bounds.right
+    && live.bounds.bottom === stored.bounds.bottom;
+}
+
+function centerX(bounds: LiveAndroidBounds): number {
+  return Math.round((bounds.left + bounds.right) / 2);
+}
+
+function centerY(bounds: LiveAndroidBounds): number {
+  return Math.round((bounds.top + bounds.bottom) / 2);
+}
+
 export function liveAndroidRequested(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.PPOMI_BODY_LIVE === "1";
 }
 
-export function liveAndroidClickLabel(node: AndroidScreenNode): string {
+export function liveAndroidClickLabel(node: { readonly text: string; readonly contentDescription?: string }): string {
   const text = node.text.trim();
   if (text.length > 0) return text;
   return node.contentDescription?.trim() ?? "";
 }
 
-/** Prefer a Settings row (연결 / Wi-Fi / …). Never a pay word. */
+/**
+ * Only a known-safe Settings row (연결 / Wi-Fi / 블루투스 / 알림 / 배터리 / 디스플레이 / 소리) that carries
+ * no protected label. No "first clickable" fallback: on an unexpected screen the probe skips instead
+ * of tapping whatever comes first (Samsung account, a search field, or a Reset row).
+ */
 export function pickLiveAndroidClickTarget(nodes: readonly AndroidScreenNode[]): AndroidScreenNode | undefined {
-  const clickable = nodes.filter(node => {
+  return nodes.find(node => {
     const label = liveAndroidClickLabel(node);
-    return node.clickable && label.length > 0 && !isAndroidPayWord(label);
+    return node.clickable && label.length > 0 && SMOKE_ROW.test(label) && !isProtectedNode(node);
   });
-  return clickable.find(node => SMOKE_ROW.test(liveAndroidClickLabel(node))) ?? clickable[0];
 }
 
 export function skipCode(message: string): string {
@@ -329,8 +424,8 @@ function tapReply(serial: string, x: number, y: number): LiveAndroidReply {
 
 function typeReply(serial: string, text: string): LiveAndroidReply {
   if (!SERIAL_OK.test(serial)) return { ok: false, code: "no_device", message: `invalid serial: ${serial}` };
-  const encoded = text.replace(/ /g, "%s");
-  const result = adb(["-s", serial, "shell", "input", "text", encoded]);
+  if (CONTROL_CHARS.test(text)) return { ok: false, code: "protected_action", message: "protected_action. text" };
+  const result = adb(["-s", serial, "shell", "input", "text", encodeInputText(text)]);
   if (result.missing) return { ok: false, code: "no_adb", message: "adb not on PATH" };
   if (!result.ok) return { ok: false, code: skipCode(result.text), message: result.text };
   return { ok: true, result: { typed: true } };
@@ -399,6 +494,9 @@ function flatten(raw: RawNode, out: LiveAndroidNode[]): void {
       bounds: LiveAndroidBounds;
       contentDescription?: string;
       packageName?: string;
+      resourceId?: string;
+      className?: string;
+      focused?: boolean;
     } = {
       text: label.text,
       clickable,
@@ -408,6 +506,9 @@ function flatten(raw: RawNode, out: LiveAndroidNode[]): void {
     };
     if (label.desc.length > 0) node.contentDescription = label.desc;
     if (raw.attrs.package) node.packageName = raw.attrs.package;
+    if (raw.attrs["resource-id"]) node.resourceId = raw.attrs["resource-id"];
+    if (className.length > 0) node.className = className;
+    if (raw.attrs.focused === "true") node.focused = true;
     out.push(node);
   }
   for (const child of raw.children) flatten(child, out);
@@ -461,7 +562,7 @@ function inferAppLabel(nodes: readonly LiveAndroidNode[], packageName?: string):
 }
 
 function publicStored(snapshotId: string, index: number, node: LiveAndroidNode): StoredNode {
-  const stored: StoredNode = {
+  let stored: StoredNode = {
     id: `${snapshotId}:${index}`,
     text: node.text,
     clickable: node.clickable,
@@ -470,9 +571,9 @@ function publicStored(snapshotId: string, index: number, node: LiveAndroidNode):
     password: node.password,
     bounds: node.bounds,
   };
-  if (node.contentDescription !== undefined) {
-    return { ...stored, contentDescription: node.contentDescription };
-  }
+  if (node.contentDescription !== undefined) stored = { ...stored, contentDescription: node.contentDescription };
+  if (node.resourceId !== undefined) stored = { ...stored, resourceId: node.resourceId };
+  if (node.className !== undefined) stored = { ...stored, className: node.className };
   return stored;
 }
 

@@ -8,7 +8,9 @@ export {
 export {
   LiveAndroidNativeTools,
   defaultExec,
+  encodeInputText,
   isAndroidPayWord,
+  isAndroidProtectedLabel,
   listAdbDevices,
   liveAndroidClickLabel,
   liveAndroidRequested,
