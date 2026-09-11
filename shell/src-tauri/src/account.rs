@@ -98,20 +98,20 @@ mod tests {
     #[test]
     fn callback_completes_exactly_one_waiting_sign_in() {
         let callbacks = SignInCallback::default();
-        let stray = Url::parse("ppomi://auth?code=stray").unwrap();
-        assert_eq!(callbacks.deliver(&[stray.clone()]), Delivery::Unclaimed("ppomi://auth?code=stray".into()), "nobody waiting: handed back, not dropped");
+        let stray = [Url::parse("ppomi://auth?code=stray").unwrap()];
+        assert_eq!(callbacks.deliver(&stray), Delivery::Unclaimed("ppomi://auth?code=stray".into()), "nobody waiting: handed back, not dropped");
         let mut receiver = callbacks.arm();
         assert_eq!(callbacks.deliver(&[Url::parse("ppomi://other?code=x").unwrap(), Url::parse("https://auth?code=x").unwrap()]), Delivery::NotACallback);
         assert!(receiver.try_recv().is_err(), "foreign URLs do not complete the sign-in");
         assert_eq!(callbacks.deliver(&[Url::parse("ppomi://auth?code=synthetic-code-1234").unwrap()]), Delivery::Completed);
         assert_eq!(receiver.try_recv().unwrap(), "ppomi://auth?code=synthetic-code-1234");
-        assert_eq!(callbacks.deliver(&[stray.clone()]), Delivery::Unclaimed("ppomi://auth?code=stray".into()), "a second callback has no waiter");
+        assert_eq!(callbacks.deliver(&stray), Delivery::Unclaimed("ppomi://auth?code=stray".into()), "a second callback has no waiter");
         let receiver = callbacks.arm();
         callbacks.disarm();
         assert!(receiver.blocking_recv().is_err(), "disarming fails the waiter instead of leaving it hanging");
         let receiver = callbacks.arm();
         drop(receiver);
-        assert_eq!(callbacks.deliver(&[stray]), Delivery::Unclaimed("ppomi://auth?code=stray".into()), "a waiter that gave up does not swallow the callback");
+        assert_eq!(callbacks.deliver(&stray), Delivery::Unclaimed("ppomi://auth?code=stray".into()), "a waiter that gave up does not swallow the callback");
     }
 
     #[test]
