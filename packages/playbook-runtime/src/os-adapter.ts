@@ -1,4 +1,4 @@
-/** Minimal OS port. Slice 2 implements this as `adapter-windows`; this package ships a dummy. No device-approval input. */
+/** Minimal OS port. OS packages (`adapter-windows`, `adapter-macos`) implement this; this package ships a dummy. No device-approval input. */
 export interface ScreenSnapshot {
   readonly title: string;
   readonly texts: readonly string[];

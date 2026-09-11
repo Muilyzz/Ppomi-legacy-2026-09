@@ -11,12 +11,13 @@ Package titles are domain-specific. Do not add `core`, `common`, `engine`, `util
 | `playbook-runtime` | one | Steps, permissions, stop, evidence. No OS calls of its own. |
 | `playbook-kr-cert` | later, one of many | Korean certificate content (scenario + fixtures). Not this slice. |
 | `adapter-windows` | later, one OS | Windows click / type / read-screen / focus. Not this slice. |
+| `adapter-macos` | one OS | macOS click / type / read-screen / focus. Lives in `packages/adapter-macos`. |
 
-This package is `playbook-runtime` only. It ships `OsAdapter` and a `DummyAdapter` so the contract can be tested without Windows UI Automation or hub login.
+This package is `playbook-runtime` only. It ships `OsAdapter` and a `DummyAdapter` so the contract can be tested without Windows UI Automation, Mac Accessibility, or hub login.
 
-A later `adapter-windows` package should wrap the existing `executors/windows` tools (`screen_read`, `ui_tap`, `ui_type`, `app_open`). Do not grow a second `playbook-runtime`.
+A later `adapter-windows` package should wrap the existing `executors/windows` tools (`screen_read`, `ui_tap`, `ui_type`, `app_open`). `adapter-macos` maps the same port onto Mac native names (`browser_open` where it exists; `screen_read` / `ui_tap` / `ui_type` as AX-class names). Do not grow a second `playbook-runtime`.
 
-Ppomi onboarding and playbook packages have **no device-approval or Mac-approver gate**. Do not add approved-device checks to `playbook-runtime`, `adapter-windows`, `playbook-kr-cert`, or their tests.
+Ppomi onboarding and playbook packages have **no device-approval or Mac-approver gate**. Do not add approved-device checks to `playbook-runtime`, `adapter-windows`, `adapter-macos`, `playbook-kr-cert`, or their tests.
 
 ## Contract
 
