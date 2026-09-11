@@ -12,6 +12,8 @@ The schema accepts the body core fields `effect` (`navigate` | `input` | `commit
 
 `kr-cert@0.1.0` is the absorbed `playbook-kr-cert` fixture (PR #8): 사업자 공동인증서 발급 준비. `payment` / `submit` keep targets so a later body run can fail-close. No secrets, resident-registration numbers, or device-approval fields.
 
+`kb-star-biz-iphone@0.1.0` is the first iPhone Mirroring path (MZZ-46): KB스타기업뱅킹 login is a human step, then 계좌조회 → human account detail → `ui.read` of the 계좌번호 label. No `payment` / `submit`. The body masks the account number in StepResult (`****last4`).
+
 ```ts
 import { loadPath, loadPathCatalog } from "ppomi-path";
 

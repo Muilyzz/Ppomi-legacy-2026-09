@@ -61,6 +61,8 @@ node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts
 # Android live dump+tap (Settings via AndroidDriver + LiveAndroidNativeTools)
 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts
 node --experimental-strip-types packages/ppomi-body-iphone-mirroring/example/src/main.ts
+# iPhone Mirroring live read (Mac; phone locked beside it, mirroring connected)
+PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-iphone-mirroring/example/src/main.ts
 ```
 
 ## Rules

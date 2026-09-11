@@ -1,5 +1,16 @@
-import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import {
+  FixedPermissionGate,
+  OsSurface,
+  Runtime,
+  type Playbook,
+} from "../../../ppomi-body/src/index.ts";
+import {
+  IphoneMirroringAdapterError,
+  IphoneMirroringDriver,
+  LiveIphoneMirroringTools,
+  liveIphoneRequested,
+} from "../../src/index.ts";
 
 const LIVE_COMMAND =
   "PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-iphone-mirroring/example/src/main.ts";
@@ -20,15 +31,24 @@ function mirroringInstalled(): boolean {
   return MIRRORING_APPS.some(app => existsSync(app));
 }
 
-function runOsascript(source: string): { ok: boolean; text: string } {
-  const result = spawnSync("osascript", ["-e", source], { encoding: "utf8" });
-  const text = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
-  return { ok: result.status === 0, text };
+function skipLines(lines: readonly string[], detail: string, extra?: string): LiveProbe {
+  const out = [...lines, `probe     SKIP — ${detail}`];
+  if (extra !== undefined && extra.length > 0) out.push(`          ${extra}`);
+  return { status: "skip", lines: out };
 }
 
-/** Activate iPhone Mirroring on Mac. Off-macOS or without PPOMI_BODY_LIVE=1 this skips. */
-export function probeIphoneMirroringLive(): LiveProbe {
-  const live = process.env.PPOMI_BODY_LIVE === "1";
+function errorCode(error: unknown): string {
+  if (error instanceof IphoneMirroringAdapterError) return error.code;
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Live read through IphoneMirroringDriver + LiveIphoneMirroringTools.
+ * Off-macOS / no env / no window → skip (exit 0). Does not tap Home/Switcher
+ * and does not open KB스타기업뱅킹 — that path starts with a human login.
+ */
+export async function probeIphoneMirroringLive(): Promise<LiveProbe> {
+  const live = liveIphoneRequested();
   if (process.platform !== "darwin") {
     return {
       status: "skip",
@@ -44,42 +64,85 @@ export function probeIphoneMirroringLive(): LiveProbe {
   const lines = [
     `platform  ${process.platform}`,
     `mirroring ${installed ? "iPhone Mirroring.app" : "(not installed)"}`,
-    `live      ${live ? "PPOMI_BODY_LIVE=1" : "off (set PPOMI_BODY_LIVE=1 to activate iPhone Mirroring)"}`,
+    `live      ${live ? "PPOMI_BODY_LIVE=1" : "off (set PPOMI_BODY_LIVE=1 when mirroring is connected)"}`,
   ];
 
   if (!live) {
-    return { status: "ok", lines: [...lines, "probe     dry-run — no AX / phone_*"] };
+    return { status: "ok", lines: [...lines, "probe     dry-run — fixture only, no AX / phone_*"] };
   }
-  if (!installed) {
-    return { status: "skip", lines: [...lines, "probe     SKIP — iPhone Mirroring.app missing"] };
+  if (!installed) return skipLines(lines, "iPhone Mirroring.app missing");
+
+  const tools = new LiveIphoneMirroringTools();
+  if (!tools.trusted()) {
+    return skipLines(
+      lines,
+      "Accessibility denied",
+      "Grant 손쉬운 사용 (and 화면 기록 for OCR) to Terminal / iTerm / Cursor, then rerun.",
+    );
   }
 
-  const opened = runOsascript(`
-tell application "iPhone Mirroring"
-  activate
-  delay 2
-  if (count of windows) is 0 then error "no window"
-  return name of front window
-end tell
-`);
-  if (!opened.ok) {
+  let preview;
+  try {
+    tools.phone_open({});
+    preview = tools.phone_screen();
+  } catch (error) {
+    const code = errorCode(error);
+    if (code === "accessibility" || code === "app_not_found" || code === "no_phone_cli") {
+      return skipLines(
+        lines,
+        "iPhone Mirroring not connected or Automation denied",
+        `${code}. Unlock the Mac, leave the iPhone locked beside it, open iPhone Mirroring until the Home/Switcher chrome is visible.`,
+      );
+    }
+    return { status: "fail", lines: [...lines, `probe     FAIL — phone_screen ${code}`] };
+  }
+
+  if (preview.rows.length === 0 && preview.title.trim().length === 0) {
+    return skipLines(lines, "mirroring window has no AX/OCR rows", "nodes=0");
+  }
+
+  const oneStep: Playbook = {
+    id: "iphone-mirroring-live-read",
+    steps: [{ id: "live-read", kind: "read" }],
+  };
+
+  try {
+    const result = await new Runtime(
+      new OsSurface(new IphoneMirroringDriver(tools)),
+      new FixedPermissionGate(["ui.read"]),
+    ).run(oneStep);
+    if (result.status !== "completed" || result.stepResults[0]?.status !== "ok") {
+      return {
+        status: "fail",
+        lines: [
+          ...lines,
+          `probe     FAIL — Runtime ${result.status} ${result.stepResults[0]?.code ?? "?"}`,
+        ],
+      };
+    }
     return {
-      status: "skip",
+      status: "ok",
       lines: [
         ...lines,
-        "probe     SKIP — iPhone Mirroring Automation denied, no window, or phone not connected",
-        `          ${opened.text}`,
+        `probe     read "${preview.title}" via IphoneMirroringDriver + LiveIphoneMirroringTools`,
+        `          driver=${result.stepResults[0]?.driver ?? "phone"} rows=${preview.rows.length} grant=ui.read`,
       ],
     };
+  } catch (error) {
+    const code = errorCode(error);
+    if (code === "accessibility" || code === "app_not_found") {
+      return skipLines(lines, "iPhone Mirroring AX read skipped", code);
+    }
+    return { status: "fail", lines: [...lines, `probe     FAIL — ${code}`] };
   }
-  return { status: "ok", lines: [...lines, `probe     iPhone Mirroring window: ${opened.text}`] };
 }
 
-export function writeLiveProbe(probe: LiveProbe): void {
-  const label = probe.status === "fail" ? "FAIL" : probe.status === "skip" ? "SKIP" : "PASS";
+export async function writeLiveProbe(probe: LiveProbe | Promise<LiveProbe>): Promise<void> {
+  const resolved = await probe;
+  const label = resolved.status === "fail" ? "FAIL" : resolved.status === "skip" ? "SKIP" : "PASS";
   process.stdout.write(`  live     ${label}\n`);
-  for (const line of probe.lines) {
+  for (const line of resolved.lines) {
     process.stdout.write(`           ${line}\n`);
   }
-  if (probe.status === "fail") process.exitCode = 1;
+  if (resolved.status === "fail") process.exitCode = 1;
 }

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "kb-star-biz-iphone",
+  "version": "0.1.0",
+  "title": "KB스타기업뱅킹 iPhone 사업자 계좌번호 조회",
+  "surface": "iphone-mirroring",
+  "steps": [
+    {
+      "id": "human-login",
+      "title": "KB스타기업뱅킹 로그인은 당사자 (비밀번호·생체·OTP)",
+      "kind": "human"
+    },
+    {
+      "id": "open-accounts",
+      "title": "계좌조회",
+      "kind": "click",
+      "target": "계좌조회",
+      "effect": "navigate",
+      "require": {
+        "wait": 15000
+      }
+    },
+    {
+      "id": "human-account-detail",
+      "title": "쓸 계좌 하나의 상세 화면은 당사자 (목록에서 추정 금지)",
+      "kind": "human"
+    },
+    {
+      "id": "read-account",
+      "title": "계좌번호 읽기 (원문은 StepResult에 남기지 않음)",
+      "kind": "read",
+      "require": {
+        "permission": "ui.read",
+        "screen": ["계좌번호"],
+        "wait": 15000
+      }
+    }
+  ]
+}

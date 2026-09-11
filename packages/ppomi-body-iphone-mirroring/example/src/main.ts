@@ -24,7 +24,7 @@ const oneStep: Playbook = {
   steps: [{ id: "open-next", kind: "click", target: "Next", effect: "navigate" }],
 };
 
-async function main(): Promise<void> {
+async function runFixtureStep(): Promise<void> {
   const tools = new FixtureIphoneMirroringTools(screen);
   const result = await new Runtime(
     new OsSurface(new IphoneMirroringDriver(tools)),
@@ -39,7 +39,11 @@ async function main(): Promise<void> {
   process.stdout.write("  step     click Next (effect: navigate) via Runtime + FixtureIphoneMirroringTools\n");
   process.stdout.write(`  driver   ${result.stepResults[0]?.driver ?? "?"}\n`);
   process.stdout.write(`  status   ${result.status}\n`);
-  writeLiveProbe(probeIphoneMirroringLive());
+}
+
+async function main(): Promise<void> {
+  await runFixtureStep();
+  await writeLiveProbe(probeIphoneMirroringLive());
 }
 
 main().catch(error => {
