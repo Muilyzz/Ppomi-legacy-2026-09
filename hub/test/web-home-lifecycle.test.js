@@ -91,6 +91,12 @@ async function harness({ recordConnect, recordRead, clearKey, tokenResponse } = 
       return auth;
     },
     createRecordSession,
+    createTranscriptSession: () => ({
+      start() {}, stop() {}, refresh: async () => {}, append: async () => {},
+      clearPrivate: async () => {}, subscribe: () => () => {}, watch: () => () => {},
+      getState: () => ({ status: 'idle', transcript: null, turns: [], error: null }),
+    }),
+    createTranscriptClient: () => ({ dispose() {} }),
     createDeviceStore: () => ({ clear: async owner => {
       clearedOwners.push(owner);
       if (clearKey) await clearKey(owner);

@@ -1,6 +1,6 @@
 # Ppomi ephemeral agent (v1)
 
-The shared bundled TypeScript UI/core uses OpenAI Agents SDK RealtimeAgent + RealtimeSession: microphone-free WebSocket text chat by default and optional WebRTC voice. Chat messages and tool progress exist in memory only for the current session. No conversation table, transcript storage, SDK tracing, Web Storage or raw tool logs. Only distilled records explicitly written by tools are durable. Ending, failure or destroying the host closes audio/transport and drops session context and pending callbacks. Existing historical data is not deleted.
+The shared bundled TypeScript UI/core uses OpenAI Agents SDK RealtimeAgent + RealtimeSession: microphone-free WebSocket text chat by default and optional WebRTC voice. The agent server still has no conversation table: `/v1/session` and `/v1/responses` stay ephemeral. Shared chat history is a **client** concern — devices write turn JSON to `ppomi_transcript_*` RPCs; Postgres stores server-held AES envelopes. Auth + workspace-member RLS gates who may call those RPCs. The page holds the current session in memory; ending the agent session does not delete stored turns. SDK tracing, Web Storage of tokens, and raw tool-payload logs stay out. Only distilled records explicitly written by tools go to `ppomi_agent_memories`. Ending, failure or destroying the host closes audio/transport and drops session context and pending callbacks. Existing historical data is not deleted.
 
 ## Native bridge
 
@@ -14,6 +14,8 @@ Methods:
 - `setEndpoint {endpoint:string}` -> native preference, allow HTTPS (no credentials/query/fragment), user-visible settings only.
 - `heard {text:string}` -> the person's transcribed words during a call (each user item once, ≤500 chars). Native decides 구두 결재: if a turn is pending and the words contain 승인 or 취소 (not both), the matching option of that turn is chosen as if its button were pressed; Android ignores it while the device is locked. The model never approves anything itself.
 - `declineCall {}` -> the page's 나중에 on an incoming call. Android rejects the ringing OS call (Telecom); Mac has nothing to end and replies `{declined:true}`.
+- `transcriptOpen {}` -> Mac loads the latest shared conversation and returns `{transcript_id,turns}`. Older hosts and iPad omit this method; the page treats that as no shared history.
+- `transcriptAppend {turn}` -> Mac uploads one projected turn. The agent server is not on this path.
 
 Native -> page hooks for the person's turn (secretary ladder, docs/ui-tree.md): `window.ppomiNotice(text)` appends a 뽀미 bubble (the 톡, sent first and quietly), `window.ppomiIncomingCall(reason)` shows the incoming-call band (sent only when the turn went unanswered; `""` clears it), `window.ppomiAnswerCall(reason)` opens the call directly (the OS call screen already answered). A band nobody answers clears itself after 45 s.
 
@@ -25,7 +27,7 @@ Bundled entry `agent/dist/index.html`; build script copies it and hashed assets 
 
 ## Server
 
-Bearer Supabase access token; validate via existing `ppomi_context` RPC and active device/workspace on every request. OpenAI API key lives on server. No request body/error/response/transcript logging. `Cache-Control: no-store`. No conversation persistence.
+Bearer Supabase access token; validate via existing `ppomi_context` RPC and workspace on every request. Session, responses, and memory list/save/delete are workspace-member paths (no device-approval gate). The shared server seals memory writes. Leftover GCM rows are migrated with `scripts/rewrap-gcm-leftovers.mjs`, not this handler. OpenAI API key lives on server. Voice safety HMAC uses `PPOMI_VOICE_SAFETY_KEY`. No request body/error/response/transcript logging. `Cache-Control: no-store`. No conversation persistence on this server; clients persist turns through Supabase RPCs that encrypt at rest.
 - POST `/v1/session {mode?:"voice"|"text"}` -> `{clientSecret:string,model:string}` mint short-lived Realtime credential; model env default gpt-realtime-2.1, voice marin, tracing disabled. Voice mode enables input transcription (gpt-4o-mini-transcribe) so the call log shows both sides; text mode sets output_modalities:["text"], input transcription null and turn detection null. Never return standard API key.
 - POST `/v1/memories/list {}` -> `{records:Memory[]}` latest 50 records for workspace.
 - POST `/v1/memories/save {id:UUID,kind:"fact"|"preference"|"decision"|"todo"|"result",text:string,source:"user_reported"|"tool_observed"|"ai_inferred",confidence:number,replacesId?:UUID}` -> `{record:Memory}`. Max 2000 chars. Same ID+same content idempotent, different content conflicts. Replacement retains revision history. No raw conversation, passwords, secrets, or invented financial observations. Source is epistemic label, never proof of user confirmation. All AI selected records labelled automatic selection. Server encryption protects DB ciphertext, server can decrypt; no E2EE claim.

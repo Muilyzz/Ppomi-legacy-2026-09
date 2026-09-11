@@ -189,7 +189,9 @@ export type Method =
   | "bankProfileRequest"
   | "bankProfileSubmit"
   | "bankProfileCancel"
-  | "setEndpoint";
+  | "setEndpoint"
+  | "transcriptOpen"
+  | "transcriptAppend";
 declare global {
   interface Window {
     webkit?: {
