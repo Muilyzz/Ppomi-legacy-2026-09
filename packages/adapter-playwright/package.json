@@ -7,9 +7,13 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test tests/*.test.ts"
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test:live": "node --experimental-strip-types scripts/live-smoke.ts"
   },
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "playwright": "^1.63.0"
   }
 }

@@ -2,10 +2,12 @@ import type { PageSnapshot } from "../../playbook-runtime/src/index.ts";
 
 /**
  * Playwright page methods this adapter may call.
- * Slice 1 uses an in-memory fixture. Live `page.goto` / locators are slice 2.
+ * Fixture tools are sync. Live `page.goto` / locators return promises.
  * Not an OS / UIA / Accessibility surface and not a device-approval gate.
  */
 export type PlaywrightPageToolName = "goto" | "click" | "fill" | "waitFor" | "readPage";
+
+export type PlaywrightToolResult<T> = T | Promise<T>;
 
 export interface PlaywrightPageNode {
   readonly locator: string;
@@ -16,11 +18,11 @@ export interface PlaywrightPageNode {
 }
 
 export interface PlaywrightPageTools {
-  goto(args: { url: string }): { url: string };
-  click(args: { locator: string }): { clicked: boolean };
-  fill(args: { locator: string; text: string }): { filled: boolean };
-  waitFor(args: { locator: string }): { visible: boolean };
-  readPage(): PageSnapshot;
+  goto(args: { url: string }): PlaywrightToolResult<{ url: string }>;
+  click(args: { locator: string }): PlaywrightToolResult<{ clicked: boolean }>;
+  fill(args: { locator: string; text: string }): PlaywrightToolResult<{ filled: boolean }>;
+  waitFor(args: { locator: string }): PlaywrightToolResult<{ visible: boolean }>;
+  readPage(): PlaywrightToolResult<PageSnapshot>;
 }
 
 export class PlaywrightPageError extends Error {
