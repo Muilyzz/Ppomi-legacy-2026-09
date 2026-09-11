@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>뽀미 — 내 기록</title>
   <meta name="description" content="뽀미에 로그인하고 내 기록을 살펴보세요.">
-  <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#090909">
+  <meta name="color-scheme" content="light dark">
+  <!-- Browser chrome tint = --bg of /web/vendor/tokens.css (generated from agent/theme.json); the manifest cannot follow the scheme. -->
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f8f8f8">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#111111">
   <meta property="og:title" content="뽀미">
   <meta property="og:description" content="로그인하고 내 기록을 살펴보세요.">
   <meta property="og:url" content="https://ppomi.muilyzz.com/">
@@ -15,6 +17,7 @@
   <link rel="apple-touch-icon" href="/icon.png">
   <meta name="apple-mobile-web-app-title" content="뽀미">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="/web/vendor/tokens.css">
   <link rel="stylesheet" href="/install-guide.css">
   <script src="/install-guide.js" defer></script>
   <link rel="stylesheet" href="/web/home.css">
@@ -22,9 +25,10 @@
 </head>
 <body>
   <a class="skip-link" href="#main">본문으로 바로 가기</a>
+  <svg hidden aria-hidden="true"><symbol id="paw" viewBox="0 0 24 24"><ellipse cx="3.5" cy="8.75" rx="2.1" ry="2.6" transform="rotate(-18 3.5 8.75)"/><ellipse cx="8.75" cy="5.25" rx="2.2" ry="2.7"/><ellipse cx="15.25" cy="5.25" rx="2.2" ry="2.7"/><ellipse cx="20.5" cy="8.75" rx="2.1" ry="2.6" transform="rotate(18 20.5 8.75)"/><path d="M12 11.2 C 15.8 11.2 19 14 19 17.2 C 19 19.9 16.2 21 12 21 C 7.8 21 5 19.9 5 17.2 C 5 14 8.2 11.2 12 11.2 Z"/></symbol></svg>
   <div class="home-wrap">
     <header class="site-header">
-      <a class="brand" href="/" aria-label="뽀미 홈"><img src="/paw.svg" alt="" width="26" height="26"><span>Ppomi</span></a>
+      <a class="brand" href="/" aria-label="뽀미 홈"><svg class="paw" width="24" height="24" aria-hidden="true"><use href="#paw"/></svg><span>Ppomi</span></a>
       <nav class="site-nav" aria-label="사이트 메뉴"><a href="/download">다운로드</a><a href="/privacy">개인정보</a></nav>
     </header>
 
@@ -38,7 +42,7 @@
 
       <section id="sign-in-panel" class="sign-in-panel" aria-labelledby="sign-in-title">
         <div class="sign-in-card">
-          <img class="sign-in-mark" src="/paw.svg" alt="" width="44" height="44">
+          <svg class="paw sign-in-mark" width="44" height="44" aria-hidden="true"><use href="#paw"/></svg>
           <h1 id="sign-in-title">뽀미에 로그인하세요</h1>
           <p class="sign-in-description">사용하던 계정으로 시작하세요.</p>
           <button id="sign-in" class="button primary sign-in-button" type="button" disabled>
@@ -54,7 +58,7 @@
         <aside class="workspace-sidebar" aria-label="계정과 기록 탐색">
           <div class="sidebar-heading"><h1>내 뽀미</h1><button id="sign-out" class="button quiet" type="button">로그아웃</button></div>
           <section class="account-card" aria-labelledby="account-title">
-            <div class="account-mark" aria-hidden="true"><img src="/paw.svg" alt="" width="28" height="28"></div>
+            <div class="account-mark" aria-hidden="true"><svg class="paw" width="24" height="24"><use href="#paw"/></svg></div>
             <div class="account-details"><h2 id="account-title">로그인 계정</h2><strong id="user-name"></strong><span id="user-email"></span></div>
           </section>
           <section class="connection-card" aria-labelledby="connection-title">

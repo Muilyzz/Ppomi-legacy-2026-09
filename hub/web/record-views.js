@@ -7,6 +7,12 @@ const active = new WeakMap();
 const title = {timeline: '타임라인', evidence: '증빙·전표', accounting: '분개장', playbooks: '플레이북', health: '건강', spatial: '건축물 3D'};
 const target = (container) => container || document.getElementById('main-content');
 const failure = (code) => Object.assign(new Error(code), {code});
+// The opaque frame follows the system scheme on its own; only an explicit host
+// theme (tokens.css's html[data-theme]) has to travel with the URL.
+const hostTheme = () => {
+  const theme = document.documentElement.dataset.theme;
+  return theme === 'light' || theme === 'dark' ? `?theme=${theme}` : '';
+};
 
 export function clearRecords(container) {
   container = target(container);
@@ -53,7 +59,7 @@ export async function renderRecords(name, record, {container, signal} = {}) {
   frame.setAttribute('sandbox', 'allow-scripts');
   frame.setAttribute('allow', "camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'");
   frame.referrerPolicy = 'no-referrer';
-  frame.src = `/web/${name === 'timeline' ? 'timeline-frame' : 'record-frame'}.html#${channel}`;
+  frame.src = `/web/${name === 'timeline' ? 'timeline-frame' : 'record-frame'}.html${hostTheme()}#${channel}`;
   return new Promise((resolve, reject) => {
     let settled = false, sent = false;
     const cleanup = () => { clearTimeout(timer); window.removeEventListener('message', receive); signal?.removeEventListener('abort', cancel); };

@@ -30,10 +30,10 @@ await writeFile(path.join(dest, 'timeline.css'), css.replace('/*THEME*/', ''));
 await writeFile(path.join(dest, 'timeline.js'), js);
 hashes['timeline.html'] = createHash('sha256').update(template).digest('hex');
 await writeFile(path.join(repo, 'hub/web/timeline-frame.html'), `<!doctype html>
-<html lang="ko" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-<title>뽀미 타임라인</title><link rel="stylesheet" href="/web/vendor/tokens.css"><link rel="stylesheet" href="/web/vendor/theme.css"><link rel="stylesheet" href="/web/vendor/timeline.css"><link rel="stylesheet" href="/web/timeline-frame.css">
+<title>뽀미 타임라인</title><script src="/web/frame-theme.js"></script><link rel="stylesheet" href="/web/vendor/tokens.css"><link rel="stylesheet" href="/web/vendor/theme.css"><link rel="stylesheet" href="/web/vendor/timeline.css"><link rel="stylesheet" href="/web/timeline-frame.css">
 <script src="/web/vendor/timeline.js" defer></script><script src="/web/timeline-frame.js" defer></script>
 </head><body><p id="source-note" class="meta" hidden></p>${body}<section id="source-transactions" hidden></section></body></html>\n`);
 await writeFile(path.join(dest, 'sources.json'), JSON.stringify({source: 'Ppomi/Sources/Ppomi/Web', sha256: hashes}, null, 2) + '\n');

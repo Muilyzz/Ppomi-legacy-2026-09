@@ -1,54 +1,56 @@
-:root { color-scheme: dark; --font: -apple-system, "Apple SD Gothic Neo", system-ui, sans-serif; --bg: #0e0e0d; }
+/* record-frame.css — 격리 프레임 안 기록 화면의 배치. 색·글꼴·글자 단은 tokens.css·theme.css의 공통 규칙을 그대로 따른다
+   (라이트/다크는 시스템, 부모가 넘긴 html[data-theme]로 강제). 이 파일은 색 값이나 새 토큰을 두지 않는다. */
 * { box-sizing: border-box; }
-body { max-width: none; padding: 1.5rem 1.75rem 2.5rem; font-size: .875rem; }
+body { max-width: none; padding: 1.5rem 1.75rem 2.5rem; }
 [hidden] { display: none !important; }
 button, select, input { font: inherit; color: inherit; }
 button, select { min-height: 40px; }
-button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid #ccb466; outline-offset: 3px; }
-h2 { font-size: 1rem; line-height: 1.5; }
+button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+h2 { font-size: var(--fs-4); line-height: 1.5; }
 p, h2, h3, dt, dd { overflow-wrap: anywhere; }
-.filters { display: flex; flex-wrap: wrap; align-items: end; gap: .8rem; margin-bottom: 1.25rem; }
-.filters label { display: flex; flex-direction: column; gap: .35rem; color: var(--fg-2); font-size: .75rem; }
-.filters select, .filters input { width: min(100%, 330px); padding: .4rem .6rem; border: 1px solid var(--line-2); border-radius: 5px; background: var(--surface); }
+.filters { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin-bottom: 1.25rem; }
+.filters label { display: flex; flex-direction: column; gap: .375rem; color: var(--fg-2); font-size: var(--fs-2); }
+.filters select, .filters input { width: min(100%, 330px); padding: .375rem .625rem; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface); }
 .filters .book-filter { flex: 1; min-width: 180px; }
 .filters .book-filter select { max-width: 100%; width: 100%; }
-.context { color: var(--fg-2); font-size: .75rem; margin-bottom: 1.25rem; white-space: pre-line; }
-.view-notice { margin: 0 0 1.2rem; padding: .8rem 1rem; border: 1px solid var(--line); border-radius: 6px; color: var(--fg-2); font-size: .8125rem; }
-.source-list { display: grid; gap: .9rem; }
-.source-card { border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.1rem; min-width: 0; }
-.source-card h2 { margin: 0 0 .65rem; }
-.source-card h3 { margin: .8rem 0 .35rem; font-size: .875rem; }
+.context { color: var(--fg-2); font-size: var(--fs-2); margin-bottom: 1.25rem; white-space: pre-line; }
+.view-notice { margin: 0 0 1.25rem; padding: .75rem 1rem; border: 1px solid var(--line); border-radius: var(--r); color: var(--fg-2); font-size: var(--fs-2); }
+.source-list { display: grid; gap: .75rem; }
+.source-card { border: 1px solid var(--line); border-radius: var(--rc); padding: 1rem 1.125rem; min-width: 0; background: var(--surface); }
+.source-card h2 { margin: 0 0 .625rem; }
+.source-card h3 { margin: .75rem 0 .375rem; font-size: var(--fs-3); }
 .source-card p { white-space: pre-line; }
-.source-card dl { margin: .65rem 0; display: grid; grid-template-columns: minmax(75px, auto) 1fr; gap: .35rem .9rem; font-size: .8125rem; }
+.source-card dl { margin: .625rem 0; display: grid; grid-template-columns: minmax(75px, auto) 1fr; gap: .375rem .75rem; font-size: var(--fs-2); }
 .source-card dt { color: var(--fg-2); }
 .source-card dd { margin: 0; }
 .source-card details { margin-top: .75rem; }
-.source-card pre { max-height: 420px; overflow: auto; margin-top: .6rem; }
-.source-meta { color: var(--fg-2); font-size: .75rem; margin-top: .65rem; }
-.source-badge { display: inline-block; border: 1px solid var(--line-2); border-radius: 4px; padding: .1rem .4rem; font-size: .6875rem; margin-right: .4rem; margin-bottom: .5rem; }
+.source-card pre { max-height: 420px; overflow: auto; margin-top: .625rem; }
+.source-meta { color: var(--fg-2); font-size: var(--fs-2); margin-top: .625rem; }
+.source-badge { display: inline-block; border: 1px solid var(--line-2); border-radius: 4px; padding: .125rem .375rem; font-size: var(--fs-1); margin-right: .375rem; margin-bottom: .5rem; }
 .source-table { overflow-x: auto; }
 .source-table table { min-width: 510px; }
-.source-table th, .source-table td { padding: .6rem .65rem; }
+.source-table th, .source-table td { padding: .625rem .625rem; }
 .source-table .raw { white-space: pre-wrap; }
-.jnav .nav { flex-wrap: wrap; row-gap: .2rem; }
-.jnav { column-gap: 1.3rem; }
+.jnav .nav { flex-wrap: wrap; row-gap: .25rem; }
+.jnav { column-gap: 1.25rem; }
 .nav button { min-height: 36px; }
 #journal { overflow-x: auto; }
 #journal table { min-width: 520px; }
 .empty { display: grid; place-content: center; text-align: center; min-height: 340px; color: var(--fg-2); }
-.empty h2 { color: var(--fg); margin-bottom: .65rem; }
+.empty h2 { color: var(--fg); margin-bottom: .625rem; }
+/* 증빙 열은 흰 종이 위의 글자다(theme.css .ev-paper와 같은 고정값): 폰 화면의 픽셀에서 읽은 잉크색이라 테마를 따르지 않는다. */
 .evidence-column { position: relative; width: 348px; background: #fff; color: #222; overflow: hidden; }
 .evidence-column .row { position: absolute; left: 0; width: 348px; color: #222; }
 .evidence-column .row span { position: absolute; white-space: nowrap; line-height: 1; font-size: 15px; }
 .evidence-column .peek { display: none; }
 .evidence-column .box { position: absolute; left: 4px; width: 338px; border: 1px solid; }
-.evidence-column .box.warn { border-style: dashed; border-color: #999; }
-.evidence-column .box.bad { border-color: #416fac; background: #dbe7f450; }
+.evidence-column .box.warn { border-style: dashed; border-color: color-mix(in srgb, var(--primary) 24%, white); }
+.evidence-column .box.bad { border-color: color-mix(in srgb, var(--accent) 75%, black); background: color-mix(in srgb, var(--accent) 14%, white); }
 .evidence-area { overflow-x: auto; }
 .evidence-originals { display: grid; gap: 1rem; margin-top: 1rem; }
 .evidence-originals img { max-width: 100%; height: auto; display: block; }
 @media (max-width: 600px) {
-  body { padding: 1.1rem 1rem 2rem; }
+  body { padding: 1.125rem 1rem 2rem; }
   .filters label { width: 100%; }
   .filters select { width: 100%; }
   .source-card { padding: 1rem; }

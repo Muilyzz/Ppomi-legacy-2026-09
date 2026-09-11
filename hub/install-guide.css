@@ -1,50 +1,50 @@
-.guide-button { display: flex; align-items: center; justify-content: space-between; gap: .8rem; min-height: 48px; padding: .65rem 1rem; border: 1px solid #64645d; border-radius: 6px; color: var(--fg); background: transparent; font-weight: 600; cursor: pointer; }
-.guide-button:hover { background: #2a2a25; }
-.guide-button { text-decoration: none; }
-.install-home-link { display: inline-block; margin-top: .9rem; padding: .3rem 0; min-height: 44px; border: 0; color: var(--muted); background: transparent; font: inherit; font-size: .875rem; text-decoration: underline; text-underline-offset: .22em; cursor: pointer; }
+/* install-guide.css — iPad 홈 화면 추가 안내(웹 홈·다운로드 공용). 색·글자 단·모서리는 tokens.css 토큰만 쓴다.
+   다운로드 페이지는 아직 자기 팔레트라 download.css가 같은 이름의 토큰을 임시로 맞춰 준다. */
+.guide-button { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-height: 48px; padding: .625rem 1rem; border: 1px solid var(--line-2); border-radius: var(--r); color: var(--fg); background: transparent; font-weight: 500; text-decoration: none; cursor: pointer; }
+.guide-button:hover { background: var(--surface-2); }
+.install-home-link { display: inline-block; margin-top: .875rem; padding: .25rem 0; min-height: 44px; border: 0; color: var(--fg-2); background: transparent; font: inherit; font-size: var(--fs-3); text-decoration: underline; text-underline-offset: .22em; cursor: pointer; }
 .install-footer { padding-bottom: 1rem; text-align: right; }
 .ipad-card .guide-button { width: 100%; min-height: 58px; text-align: left; }
-.ipad-prompt { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; margin: 0 0 1.5rem; padding: 1.3rem 1.5rem; border: 1px solid #6b6245; border-radius: 10px; background: #211e16; }
-.ipad-prompt p { margin-top: .25rem; color: #c2bda9; }
+.ipad-prompt { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; margin: 0 0 1.5rem; padding: 1.25rem 1.5rem; border: 1px solid var(--line); border-radius: var(--rc); background: var(--surface); }
+.ipad-prompt strong { font-weight: 500; }
+.ipad-prompt p { margin-top: .25rem; color: var(--fg-2); }
 .ipad-prompt .guide-button { flex: none; }
-.install-guide { width: min(850px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); padding: 2rem; border: 1px solid #4d4d46; border-radius: 16px; background: var(--surface); color: var(--fg); overflow-y: auto; overscroll-behavior: contain; }
-.install-guide::backdrop { background: rgb(0 0 0 / .78); }
+.install-guide { width: min(850px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); padding: 2rem; border: 1px solid var(--line); border-radius: calc(var(--rc) + .25rem); background: var(--surface); color: var(--fg); overflow-y: auto; overscroll-behavior: contain; }
+.install-guide::backdrop { background: rgb(0 0 0 / .45); }
 .guide-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
 .guide-heading .eyebrow { margin: 0; }
-.guide-close { flex: none; width: 44px; height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--fg); font-size: 1.5rem; cursor: pointer; }
-.guide-close:hover { background: #2a2a25; }
-.install-guide h2 { margin-top: .75rem; font-size: clamp(1.5rem, 4vw, 2rem); letter-spacing: -.025em; line-height: 1.3; }
-.guide-description { margin-top: .8rem; color: #cecec7; }
-.guide-context { margin-top: 1rem; padding: .8rem 1rem; background: #23231f; border-radius: 6px; color: #c2c2b6; font-size: .875rem; }
-.install-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.4rem; margin: 1.75rem 0; padding: 0; list-style: none; }
-.install-steps h3 { margin: .35rem 0 .5rem; font-size: 1rem; }
-.install-steps p { color: #b5b5ad; font-size: .9375rem; }
-.guide-illustration { display: flex; align-items: center; justify-content: center; height: 116px; margin-bottom: 1rem; padding: .8rem; border: 1px solid #44443d; border-radius: 10px; background: #20201d; color: var(--paper); font-size: .75rem; }
-.safari-bar { display: flex; align-items: center; gap: .7rem; width: 100%; }
-.safari-address { flex: 1; padding: .6rem .5rem; border-radius: 5px; background: #35352f; text-align: center; }
-.safari-bar svg { flex: none; color: #e4ca79; }
-.safari-menu { display: grid; gap: .65rem; width: 100%; }
-.safari-menu > span { color: var(--muted); }
-.safari-menu strong { display: flex; align-items: center; gap: .5rem; padding-top: .65rem; border-top: 1px solid #48483f; }
+.guide-close { flex: none; width: 44px; height: 44px; padding: 0; border: 1px solid var(--line-2); border-radius: 50%; background: transparent; color: var(--fg); font-size: var(--fs-6); line-height: 1; cursor: pointer; }
+.guide-close:hover { background: var(--surface-2); }
+.install-guide h2 { margin-top: .75rem; font-size: var(--fs-6); letter-spacing: -.01em; }
+.guide-description { margin-top: .75rem; }
+.guide-context { margin-top: 1rem; padding: .75rem 1rem; border-radius: var(--r); background: var(--surface-2); color: var(--fg-2); font-size: var(--fs-2); }
+.install-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; margin: 1.75rem 0; padding: 0; list-style: none; }
+.install-steps h3 { margin: .25rem 0 .5rem; font-size: var(--fs-4); }
+.install-steps p { color: var(--fg-2); }
+.guide-illustration { display: flex; align-items: center; justify-content: center; height: 116px; margin-bottom: 1rem; padding: .75rem; border: 1px solid var(--line); border-radius: var(--rc); background: var(--surface-2); font-size: var(--fs-2); }
+.safari-bar { display: flex; align-items: center; gap: .75rem; width: 100%; }
+.safari-address { flex: 1; padding: .5rem; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); text-align: center; }
+.safari-bar svg { flex: none; color: var(--accent-fg); }
+.safari-menu { display: grid; gap: .625rem; width: 100%; }
+.safari-menu > span { color: var(--fg-2); }
+.safari-menu strong { display: flex; align-items: center; gap: .5rem; padding-top: .625rem; border-top: 1px solid var(--line-2); font-weight: 500; }
 .home-plus { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid currentColor; border-radius: 4px; }
 .safari-confirm { width: 100%; }
-.safari-confirm > span { display: flex; justify-content: space-between; align-items: center; gap: .4rem; }
-.switch-example { width: 28px; height: 17px; padding: 2px; background: #708966; border-radius: 12px; }
-.switch-example::after { content: ''; display: block; width: 13px; height: 13px; margin-left: auto; background: white; border-radius: 50%; }
-.safari-confirm strong { display: block; margin-top: .8rem; color: #e4ca79; text-align: right; }
-.guide-footnote { color: var(--muted); font-size: .875rem; }
+.safari-confirm > span { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+.switch-example { width: 28px; height: 17px; padding: 2px; border-radius: 12px; background: var(--accent); }
+.switch-example::after { content: ''; display: block; width: 13px; height: 13px; margin-left: auto; border-radius: 50%; background: var(--on-accent); }
+.safari-confirm strong { display: block; margin-top: .75rem; color: var(--accent-fg); font-weight: 500; text-align: right; }
+.guide-footnote { color: var(--fg-2); font-size: var(--fs-2); }
 .guide-actions { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); }
-.guide-actions a { font-size: .875rem; }
-
-.install-guide .step-number { color: var(--muted); font: .875rem/1.5 ui-monospace, monospace; }
-.install-guide { --paper: #e6e6e3; }
+.guide-actions a { font-size: var(--fs-3); }
+.install-guide .step-number { color: var(--fg-2); font: var(--fs-2)/1.5 var(--mono); }
 .install-guide p, .install-guide h2, .install-guide h3 { word-break: keep-all; overflow-wrap: anywhere; }
 @media (max-width: 720px) {
   .ipad-prompt { align-items: stretch; flex-direction: column; gap: 1rem; }
   .install-guide { padding: 1.25rem; }
   .install-steps { grid-template-columns: 1fr; gap: 1.5rem; }
   .install-steps li { display: grid; grid-template-columns: 110px minmax(0, 1fr); column-gap: 1rem; }
-  .guide-illustration { grid-row: 1 / 4; min-height: 110px; height: 100%; margin: 0; padding: .6rem; }
+  .guide-illustration { grid-row: 1 / 4; min-height: 110px; height: 100%; margin: 0; padding: .625rem; }
   .install-steps .step-number { grid-row: auto; }
   .safari-bar { flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
   .safari-address { flex-basis: 100%; }

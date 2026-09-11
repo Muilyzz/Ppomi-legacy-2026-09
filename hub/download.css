@@ -10,6 +10,14 @@
   --paper-muted: #565651;
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   font-synthesis: none;
+  /* install-guide.css speaks tokens.css names; this page still has its own dark palette, so alias them until it migrates. */
+  --fg-2: var(--muted);
+  --surface-2: #1b1b19;
+  --line-2: #55554e;
+  --r: 6px;
+  --rc: 10px;
+  --fs-2: .75rem;
+  --fs-3: .875rem;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }

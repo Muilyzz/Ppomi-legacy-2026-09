@@ -80,6 +80,9 @@ npm run deploy                 # 카탈로그 복사·다운로드 파일 준비
 | 연결·갱신·계정 정리 | [record-session.js](web/record-session.js) | [세션](test/web-record-session.test.js), [화면 연동](test/web-home-lifecycle.test.js) |
 | 복호화·압축 해제 | [record-crypto.js](web/record-crypto.js), [lzfse.js](web/lzfse.js) | [암호화](test/web-records-crypto.test.js) |
 | UI 연결·격리 렌더링 | [home.js](web/home.js), [record-views.js](web/record-views.js) | [화면 연동](test/web-home-lifecycle.test.js) |
+| 공통 테마·토큰 | [home.css](web/home.css), [record-frame.css](web/record-frame.css), [frame-theme.js](web/frame-theme.js) | [테마 계약](test/web-theme.test.js) |
+
+색·글꼴·글자 단·모서리는 Mac·Android·작업대와 같은 [tokens.css](web/vendor/tokens.css)(`agent/theme.json`에서 생성)만 쓴다. 라이트/다크는 시스템을 따르고 `html[data-theme]`로 강제할 수 있으며, 격리 프레임은 부모 문서의 명시적 `data-theme`만 URL 질의(`?theme=`)로 넘겨받는다. 홈 CSS에는 색 값이나 새 토큰을 두지 않는다(`web-theme.test.js`가 검사).
 
 브라우저는 Mac의 키체인을 읽지 않고 독립된 기기 키를 사용한다. 렌더링 프레임에는 인증 토큰과 기기 키를 넘기지 않으며, 공개 앱 캐시에 개인 기록을 저장하지 않는다. 계정 전환 때 기다려야 하는 정리와 렌더러의 버퍼 수명 계약은 `record-session.js`의 주석과 사용 예시를 따른다.
 
