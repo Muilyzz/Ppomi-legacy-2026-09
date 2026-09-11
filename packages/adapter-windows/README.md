@@ -38,6 +38,15 @@ Both follow the semantics measured against the real executor (Windows 11 ARM64, 
 
 Live UI Automation stays in `executors/windows`. This package talks to that tool surface and never calls `beginSignIn`, `completeSignIn`, `configureDevice`, or any approval RPC.
 
+## What PR #7 should absorb
+
+The base branch's `WindowsAdapter` and fixture predate the measured semantics encoded here. When #7 folds them in it must:
+
+- Re-read before every addressed action: `FixtureWindowsExecutorTools` no longer keeps a spent snapshot addressable, so any consumer that re-used a `nodeId` after an action now gets `stale_screen`, matching the real executor. `WindowsAdapter` already re-reads.
+- Update hand-written `WindowsExecutorTools` implementations for `ui_tap`/`ui_type` now returning `requiresScreenRead`.
+- Call `allowApps` only while the session is idle; never `setControlApps` during an active session.
+- Honour `app_open`'s `activated` flag in `focus()`: treat `activated: false` as a failed focus (throw) instead of silently continuing, since the executor reports `activated` as `GetForegroundWindow() == window`, which can be `false`.
+
 ## Live smoke (real executor, Edge)
 
 `tests/live-edge-uia-smoke.test.ts` launches an isolated Edge profile (`--user-data-dir` in a temp dir, `--force-renderer-accessibility`) on an offline local page with a text input and a button, then runs `app_list → allowApps → app_open → screen_read → ui_type → (stale_screen check) → screen_read → ui_tap → screen_read` through `LiveWindowsExecutorTools`. It skips when not on Windows or when the executor / Edge is missing.
