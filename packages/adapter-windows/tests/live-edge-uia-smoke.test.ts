@@ -98,9 +98,22 @@ test("live: Edge read → type → tap → re-read through the real executor", {
   } finally {
     tools.close();
     if (edge.pid !== undefined) spawnSync("taskkill", ["/PID", String(edge.pid), "/T", "/F"], { stdio: "ignore" });
-    rmSync(workDir, { recursive: true, force: true });
+    await removeWorkDir(workDir);
   }
 });
+
+/** Edge releases its profile directory a moment after taskkill; a leftover temp dir must not fail the smoke. */
+async function removeWorkDir(dir: string): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+      return;
+    } catch {
+      await sleep(500);
+    }
+  }
+  console.warn(`could not remove ${dir}; Edge may still hold the profile`);
+}
 
 function captureScreen(target: string): void {
   const script = [
