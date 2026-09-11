@@ -1,6 +1,6 @@
 import Foundation
 
-/// Uploads conversation turns as JSON the server can read. No client E2E key.
+/// Uploads conversation turns as JSON. The server seals them; this store never holds the AES key.
 final class SharedTranscriptStore: @unchecked Sendable {
     static let shared = SharedTranscriptStore()
     static let rpcNames: Set<String> = [

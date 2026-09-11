@@ -46,7 +46,7 @@ test('the service worker caches the workbench bundle as a public file and nothin
   assert.equal(paths.includes('/web/transcript-crypto.js'), false);
   assert.equal(paths.some(path => path.startsWith('/api/') || path.includes('supabase')), false);
   assert.match(worker, /request\.headers\.has\('Authorization'\)/, 'authenticated requests bypass the cache');
-  assert.match(worker, /ppomi-public-home-20260911-10/, 'the cache version moved with the new static files');
+  assert.match(worker, /ppomi-public-home-20260911-11/, 'the cache version moved with the new static files');
 });
 
 test('the committed bundle exposes the mount function, points at the shared font and carries no credential', async () => {

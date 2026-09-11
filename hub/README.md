@@ -70,7 +70,7 @@ npm run deploy                 # 카탈로그 복사·다운로드 파일 준비
 
 `/`는 뽀미 작업대(대화 + 내 기록), `/download`는 설치 파일 안내다. 화면은 Mac·Android 앱과 같은 공통 React `Workbench`/`ChatPanel`이다: `agent/`에서 `npm run build:web`으로 만든 [번들](web/workbench/)을 [index.html](index.html)이 싣고, [home.js](web/home.js)는 브라우저 전용 계층 — Supabase 로그인, 기기 키·등록, 기록 세션, 샌드박스 프레임 렌더러 — 을 만들어 `mountWebWorkbench(root, host)`에 넘기는 접착제만 남았다. 토큰·기기 키·평문 기록은 host 상태에 들어가지 않는다.
 
-텍스트 대화는 앱과 같은 에이전트 서버([config.js](web/config.js)의 `AGENT_ENDPOINT`)로 간다. 브라우저는 Supabase 세션 토큰과 `X-Ppomi-Device`(이 브라우저의 등록 기기)를 붙여 `/v1/session`·`/v1/responses`만 부르고, 모델·Gateway 키는 그 서버에만 있다. 대화 원문은 클라이언트가 `ppomi_transcript_*` RPC로 올리며, Realtime으로 turn INSERT를 받아 같은 계정의 다른 창에 합친다. 접근은 작업 공간 구성원 Auth/RLS이며 기기 승인이나 감싼 기록 키가 필요 없다. 서버 쪽 Origin 허용 목록은 [agent/server/README.md](../agent/server/README.md)를 따른다. 통화·기기 제어·기억 저장은 웹에 없고 화면과 지침이 그렇게 말한다. 번들을 다시 만들면 [service-worker.js](service-worker.js)의 캐시 버전을 올린다.
+텍스트 대화는 앱과 같은 에이전트 서버([config.js](web/config.js)의 `AGENT_ENDPOINT`)로 간다. 브라우저는 Supabase 세션 토큰과 `X-Ppomi-Device`(이 브라우저의 등록 기기)를 붙여 `/v1/session`·`/v1/responses`만 부르고, 모델·Gateway 키는 그 서버에만 있다. 대화 원문은 클라이언트가 `ppomi_transcript_*` RPC로 올리며 서버가 Vault 키로 봉한다. Realtime은 암호문 INSERT를 신호로만 쓰고, 이 브라우저는 복호화 RPC로 다시 읽어 합친다. 접근은 작업 공간 구성원 Auth/RLS이며 기기 승인이나 감싼 기록 키가 필요 없다. 서버 쪽 Origin 허용 목록은 [agent/server/README.md](../agent/server/README.md)를 따른다. 통화·기기 제어·기억 저장은 웹에 없고 화면과 지침이 그렇게 말한다. 번들을 다시 만들면 [service-worker.js](service-worker.js)의 캐시 버전을 올린다.
 
 구현과 사용 예시는 다음을 기준으로 한다.
 

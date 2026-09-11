@@ -75,18 +75,17 @@ export function transcriptTurnPage(value, transcriptID) {
   });
 }
 
-export function realtimeTurnRow(value) {
+/** Realtime rows are ciphertext. Only identity/seq are trusted as a refetch signal. */
+export function realtimeTurnSignal(value) {
   if (!value || !UUID.test(value.workspace_id) || !UUID.test(value.transcript_id) || !UUID.test(value.turn_id)) {
     throw new RecordError('invalid');
   }
-  return transcriptTurnRow({
-    turn_id: value.turn_id,
-    seq: value.seq,
-    writer_user_id: value.writer_user_id,
-    writer_device_id: value.writer_device_id,
-    payload: value.payload,
-    created_at: value.created_at,
-    workspace_id: value.workspace_id,
-    transcript_id: value.transcript_id,
-  }, { workspaceID: value.workspace_id, transcriptID: value.transcript_id });
+  const envelope = value.envelope;
+  return Object.freeze({
+    workspaceID: value.workspace_id,
+    transcriptID: value.transcript_id,
+    turnID: value.turn_id,
+    seq: value.seq == null ? null : recordVersion(value.seq),
+    wiped: !!envelope && typeof envelope === 'object' && Object.keys(envelope).length === 0,
+  });
 }

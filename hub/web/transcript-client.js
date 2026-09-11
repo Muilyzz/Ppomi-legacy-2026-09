@@ -2,15 +2,15 @@ import { createRecordRPC } from './record-rpc.js';
 import { createDeviceStore } from './device-store.js';
 import { RecordError, UUID, base64, verifyDevice } from './record-crypto.js';
 import { recordContext } from './record-protocol.js';
-import { transcriptHead, transcriptList, transcriptPayload, transcriptTurnPage, realtimeTurnRow } from './transcript-protocol.js';
+import { transcriptHead, transcriptList, transcriptPayload, transcriptTurnPage, realtimeTurnSignal } from './transcript-protocol.js';
 import { createTranscriptRealtime } from './transcript-realtime.js';
 
-/** Uploads conversation turns as JSON the server can read. No client E2E key. */
+/** Uploads turn JSON to RPCs that seal with a server-held key. The browser never holds that key. */
 export function createTranscriptClient({ auth, user, onState = () => {}, fetch: fetcher = globalThis.fetch.bind(globalThis),
   crypto = globalThis.crypto, deviceStore = createDeviceStore({ crypto }),
   realtime: realtimeFactory = createTranscriptRealtime } = {}) {
   if (!user || !UUID.test(user.id) || !auth?.getAccessToken || !auth?.getUser) throw new RecordError('authentication');
-  let disposed = false, device = null, context = null, connectFlight = null, realtime, transcript = null;
+  let disposed = false, device = null, context = null, connectFlight = null, realtime, transcript = null, lastSeq = 0;
   const lifetime = new AbortController();
   const listeners = new Set();
   const check = () => { if (disposed || auth.getUser()?.id !== user.id) throw new RecordError('cancelled'); };
@@ -50,7 +50,18 @@ export function createTranscriptClient({ auth, user, onState = () => {}, fetch: 
     return run;
   }
   function turnFromRow(row) {
+    const seq = Number(row.seq);
+    if (Number.isFinite(seq) && seq > lastSeq) lastSeq = seq;
     return Object.freeze({ ...row.payload, seq: row.seq, createdAt: row.createdAt });
+  }
+  async function pullTurns(afterSeq = lastSeq) {
+    if (!transcript) return Object.freeze([]);
+    const page = transcriptTurnPage(await rpc('ppomi_transcript_turns', {
+      p_transcript_id: transcript.id, p_after_seq: afterSeq,
+    }), transcript.id);
+    check();
+    if (!page.found) return Object.freeze([]);
+    return Object.freeze(page.turns.map(turnFromRow));
   }
   async function open() {
     check();
@@ -71,11 +82,8 @@ export function createTranscriptClient({ auth, user, onState = () => {}, fetch: 
     check();
     const selected = listed[0] ?? await open();
     transcript = selected;
-    const page = transcriptTurnPage(await rpc('ppomi_transcript_turns', {
-      p_transcript_id: selected.id, p_after_seq: 0,
-    }), selected.id);
-    check();
-    const turns = page.found ? page.turns.map(turnFromRow) : [];
+    lastSeq = 0;
+    const turns = await pullTurns(0);
     state('ready', { workspace: context.workspace, device: context.device });
     return Object.freeze({ status: 'ready', transcript: selected, turns: Object.freeze(turns) });
   }
@@ -90,6 +98,8 @@ export function createTranscriptClient({ auth, user, onState = () => {}, fetch: 
       p_transcript_id: transcript.id, p_turn_id: turn.id, p_payload: turn,
     });
     check();
+    const seq = Number(saved.seq);
+    if (Number.isFinite(seq) && seq > lastSeq) lastSeq = seq;
     return Object.freeze({ ...turn, seq: String(saved.seq ?? '') });
   }
   async function tombstone() {
@@ -99,6 +109,7 @@ export function createTranscriptClient({ auth, user, onState = () => {}, fetch: 
     check();
     await rpc('ppomi_transcript_delete', { p_transcript_id: transcript.id });
     transcript = null;
+    lastSeq = 0;
     return Object.freeze({ deleted: true });
   }
   function subscribe(listener) {
@@ -122,10 +133,11 @@ export function createTranscriptClient({ auth, user, onState = () => {}, fetch: 
             return;
           }
           if (event.type !== 'turn' || !context) return;
-          const row = realtimeTurnRow(event.record);
-          if (transcript && event.record.transcript_id !== transcript.id) return;
-          if (!row.payload || Object.keys(event.record.payload ?? {}).length === 0) return;
-          publish({ type: 'turn', turn: turnFromRow(row) });
+          const signal = realtimeTurnSignal(event.record);
+          if (transcript && signal.transcriptID !== transcript.id) return;
+          if (signal.wiped) return;
+          const turns = await pullTurns(lastSeq);
+          for (const turn of turns) publish({ type: 'turn', turn });
         } catch (error) {
           if (error instanceof RecordError && error.code === 'cancelled') return;
         }
@@ -139,7 +151,7 @@ export function createTranscriptClient({ auth, user, onState = () => {}, fetch: 
     lifetime.abort();
     realtime?.stop();
     listeners.clear();
-    device = null; context = null; transcript = null;
+    device = null; context = null; transcript = null; lastSeq = 0;
   }
   return Object.freeze({
     connect, load, append, tombstone, subscribe, startRealtime, dispose,

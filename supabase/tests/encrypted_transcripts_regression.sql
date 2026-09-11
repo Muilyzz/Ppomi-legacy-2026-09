@@ -1,8 +1,8 @@
 -- Run as the migration owner using psql -v ON_ERROR_STOP=1 -f ... .
 -- Every fixture and write rolls back. Auth users are synthetic isolated UUIDs.
--- Covers 20260911120000_encrypted_transcripts.sql: member R/W without
--- wrapped keys or device approval, pending-device access, JWT-only access,
--- append idempotency, tombstone wipe, workspace isolation.
+-- Covers 20260911120000_encrypted_transcripts.sql: server AES at rest,
+-- member R/W without wrapped keys or device approval, pending-device
+-- access, JWT-only access, append idempotency, tombstone wipe, isolation.
 begin;
 
 create temporary table ppomi_test_results(label text not null) on commit drop;
@@ -75,6 +75,9 @@ returns jsonb language sql as $$
         'parts', jsonb_build_array(jsonb_build_object('type', 'text', 'text', p_text)));
 $$;
 
+-- 32 zero bytes, canonical base64. Used when Vault is not available in this session.
+select set_config('app.ppomi_transcript_key', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=', true);
+
 set local role authenticated;
 select pg_temp.ppomi_as('96a00000-0000-4000-8000-000000000001', '96c00000-0000-4000-8000-000000000001');
 select pg_temp.ppomi_assert(
@@ -120,7 +123,12 @@ select pg_temp.ppomi_assert(
       = '96e00000-0000-4000-8000-000000000001' and
     (public.ppomi_transcript_turns('96d00000-0000-4000-8000-000000000001')->'turns'->0->'payload'->'parts'->0->>'text')
       = 'hello',
-    'listed turns expose the stored payload the server can read');
+    'RPC decrypts the stored envelope for a member');
+select pg_temp.ppomi_assert(
+    (select bool_and(envelope ? 'ciphertext' and envelope::text not like '%hello%')
+       from public.ppomi_transcript_turns
+      where transcript_id = '96d00000-0000-4000-8000-000000000001'),
+    'direct SELECT is ciphertext and a dump does not contain the turn text');
 select pg_temp.ppomi_expect_error(
     $q$select public.ppomi_transcript_append(
         '96d00000-0000-4000-8000-000000000001',
@@ -203,9 +211,9 @@ select pg_temp.ppomi_assert(
     (public.ppomi_transcript_turns('96d00000-0000-4000-8000-000000000001')->>'found') = 'false',
     'tombstoned transcript turns are hidden');
 select pg_temp.ppomi_assert(
-    (select bool_and(payload = '{}'::jsonb) from public.ppomi_transcript_turns
+    (select bool_and(envelope = '{}'::jsonb) from public.ppomi_transcript_turns
       where transcript_id = '96d00000-0000-4000-8000-000000000001'),
-    'tombstone clears turn payload');
+    'tombstone clears turn envelopes');
 select pg_temp.ppomi_expect_error(
     $q$select public.ppomi_transcript_append(
         '96d00000-0000-4000-8000-000000000001',
@@ -222,6 +230,13 @@ select pg_temp.ppomi_expect_error(
     $q$select public.ppomi_transcript_list()$q$,
     '42501', 'anonymous RPC denied');
 reset role;
+select pg_temp.ppomi_assert(
+    not has_function_privilege('authenticated', 'public.ppomi_transcript_master_key()', 'execute')
+    and not has_function_privilege('authenticated',
+      'public.ppomi_transcript_seal(jsonb,uuid,uuid,uuid)', 'execute')
+    and not has_function_privilege('authenticated',
+      'public.ppomi_transcript_open_envelope(jsonb,uuid,uuid,uuid)', 'execute'),
+    'clients cannot execute the key or seal helpers');
 select pg_temp.ppomi_expect_error($q$delete from public.ppomi_transcripts$q$,
     '55000', 'transcript history immutable even for owner');
 select pg_temp.ppomi_expect_error($q$delete from public.ppomi_transcript_turns$q$,
