@@ -1,8 +1,26 @@
 // Mac 의 구글 로그인: 나 › Google 계정으로 로그인. 세션은 키체인, 기기는 모든 요청의 X-Ppomi-Device.
 // 이 Mac 에 옛 기기 계정(이메일·비밀번호, --configure-shared)이 있으면 첫 로그인 때 그 기기·작업 공간을 구글 사용자 것으로 넘긴다(ppomi_rebind_device).
 // 기록 키는 서버에 평문으로 안 올린다: 기기마다 X25519 공개키를 등록하고, 키를 가진 이 Mac 이 기다리는 기기의 공개키로 감싼 사본만 올린다(exchangeKeys).
+// 새 기기는 승인 대기로 등록된다(ppomi_devices_pending). 사람이 이 Mac 에서 승인(approve)한 기기만 서버의 '기다리는 기기' 목록에 나오고 키를 받는다.
 import AppKit
 import AuthenticationServices
+
+/// 승인을 기다리는 기기(표시용 라벨·플랫폼만). 기기 ID 는 서버의 안정적인 참조이며 화면에는 이름을 쓴다.
+struct PendingDevice: Identifiable, Equatable {
+    let id: String
+    let label: String
+    let platform: String
+    var platformName: String {
+        switch platform {
+        case "macos": return "Mac"
+        case "ios": return "iPad"
+        case "android": return "Android"
+        case "windows": return "Windows"
+        case "web": return "웹 브라우저"
+        default: return platform
+        }
+    }
+}
 
 struct MacSession: Codable {
     var accessToken: String
@@ -16,7 +34,8 @@ struct MacSession: Codable {
 
 @MainActor final class GoogleAccount: NSObject, ASWebAuthenticationPresentationContextProviding {
     static let shared = GoogleAccount()
-    static let rpcNames: Set<String> = ["ppomi_rebind_device", "ppomi_register_device", "ppomi_devices_waiting", "ppomi_key_wrap_put", "ppomi_key_get"]
+    static let rpcNames: Set<String> = ["ppomi_rebind_device", "ppomi_register_device", "ppomi_devices_waiting", "ppomi_key_wrap_put", "ppomi_key_get",
+                                        "ppomi_devices_pending", "ppomi_device_approve", "ppomi_device_revoke"]
     private static let service = "com.muilyzz.ppomi.google"
     private var web: ASWebAuthenticationSession?
 
@@ -75,7 +94,29 @@ struct MacSession: Codable {
     /// 이 Mac 의 X25519 공개키(등록 때 서버로). 비밀키는 이 Mac 키체인에만.
     nonisolated static func publicKey() throws -> String { try DeviceKey.publicKeyBase64(service: service) }
 
-    /// 기록 키 주고받기. 이 Mac 에 키가 있으면 기다리는 기기들의 공개키로 감싸 올리고, 없으면(새 Mac) 다른 기기가 감싸 준 것을 받는다. 서버엔 감싼 사본만.
+    /// 같은 작업 공간에서 승인을 기다리는 기기들. 이 Mac 자신이 승인된 기기여야 읽을 수 있다(서버가 거른다).
+    nonisolated static func pendingDevices(_ client: SharedServerClient = .shared) throws -> [PendingDevice] {
+        guard let rows = try client.rpc("ppomi_devices_pending", [:]) as? [[String: Any]] else { throw SharedServerError.invalidResponse }
+        return rows.compactMap { row in
+            guard let id = row["id"] as? String, UUID(uuidString: id) != nil,
+                  let label = row["label"] as? String, !label.isEmpty, let platform = row["platform"] as? String else { return nil }
+            return PendingDevice(id: id.lowercased(), label: label, platform: platform)
+        }
+    }
+    /// 사람의 승인. 서버에 표시한 뒤 이 Mac 에 키가 있으면 바로 감싸 올린다 — 기다리던 기기는 다음 확인 때 받는다.
+    nonisolated static func approve(_ deviceID: String, _ client: SharedServerClient = .shared) throws {
+        guard UUID(uuidString: deviceID) != nil else { throw SharedServerError.invalidArgument("기기") }
+        _ = try client.rpc("ppomi_device_approve", ["p_device_id": deviceID])
+        try exchangeKeys(client)
+    }
+    /// 거절·해지: 그 기기는 등록이 끊기고 감싼 사본도 지워진다. 다시 쓰려면 그 기기가 다시 등록해 승인을 받아야 한다.
+    nonisolated static func revoke(_ deviceID: String, _ client: SharedServerClient = .shared) throws {
+        guard UUID(uuidString: deviceID) != nil else { throw SharedServerError.invalidArgument("기기") }
+        _ = try client.rpc("ppomi_device_revoke", ["p_device_id": deviceID])
+    }
+
+    /// 기록 키 주고받기. 이 Mac 에 키가 있으면 기다리는(= 승인된) 기기들의 공개키로 감싸 올리고, 없으면(새 Mac) 다른 기기가 감싸 준 것을 받는다. 서버엔 감싼 사본만.
+    /// 승인 전 기기는 서버의 ppomi_devices_waiting 에 나오지 않으므로 여기서 키를 받지 못한다.
     nonisolated static func exchangeKeys(_ client: SharedServerClient = .shared) throws {
         if let key = try? SharedRecordVault.loadKey() {
             guard let waiting = try client.rpc("ppomi_devices_waiting", [:]) as? [[String: Any]] else { return }
