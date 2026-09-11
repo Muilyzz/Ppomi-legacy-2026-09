@@ -946,7 +946,11 @@ final class Tools {
                 let home = perform("phone_key", ["name": "home"])
                 if home.hasPrefix("오류:") || home.hasPrefix("실행 안 함:") { return home }
                 let opened = perform("phone_open", ["app": "kb-enterprise"])
-                if opened.hasPrefix("오류:") || opened.hasPrefix("실행 안 함:") { return opened }
+                // Only a verified open ("열었다.") hands off to Face ID; a Spotlight miss or error must not claim a human login.
+                guard opened.hasPrefix("열었다") else {
+                    if opened.hasPrefix("오류:") || opened.hasPrefix("실행 안 함:") { return opened }
+                    return "오류: app_not_found · KB스타기업뱅킹을 열지 못했다(로그인 화면으로 넘어가지 않음). \(opened)"
+                }
                 runtimeRecorder.emit(.handedOff, method: .human)
                 return "멈춤: 사람 로그인(Face ID). \(DeviceRegistry.displayLine(fleet)). 계좌·비밀은 읽지 않음. 메인 앱에서 실행(example 아님)."
             default: return "unknown tool \(name)"
