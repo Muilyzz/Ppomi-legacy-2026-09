@@ -6,7 +6,9 @@ import {RecordsHeader, Workbench} from '../agent/src/ui/workbench';
 import {HighlightOverlay} from '../agent/src/ui/highlight-overlay';
 import {StepTimeline} from '../agent/src/ui/step-timeline';
 import {StepResultPreview} from '../agent/src/ui/step-result-preview';
-import {fixtureSteps, overlayFixture} from '../agent/src/ui/step-result-fixtures';
+import {StepRecordPanel} from '../agent/src/ui/step-record-panel';
+import {StepRecordPreview} from '../agent/src/ui/step-record-preview';
+import {fixtureScreenshots, fixtureSteps, overlayFixture} from '../agent/src/ui/step-result-fixtures';
 import * as f from '../agent/src/ui/fixtures';
 
 const mount = (node) => {
@@ -69,6 +71,40 @@ export const SelectStep = {
 export const FixturePage = {
   name: '픽스처 페이지',
   render: () => mount(<div className="step-result-story"><StepResultPreview /></div>),
+};
+
+// 「스텝 기록」 패널: 선택 상태를 갖고 타임라인·오버레이를 조합한다. 런타임 실행 스토리는 PlaybookRuntime 이 인메모리 드라이버로
+// 픽스처 ppomi-path 를 실행해 방출한 RunResult.stepResults 를 그대로 그린다(emit → 뷰). 라이브 드라이버·캡처 없음.
+export const RuntimeRun = {
+  name: '런타임 실행',
+  render: () => mount(<div className="step-result-story"><StepRecordPreview /></div>),
+};
+
+export const PanelFixture = {
+  name: '패널 · 픽스처 증빙',
+  render: () => mount(<div className="step-result-story">
+    <StepRecordPanel steps={fixtureSteps} screenshots={fixtureScreenshots} />
+  </div>),
+};
+
+export const PanelEmpty = {
+  name: '패널 · 비어 있음',
+  render: () => mount(<div className="step-result-story"><StepRecordPanel steps={[]} /></div>),
+};
+
+export const PanelInWorkbench = {
+  name: '작업대 기록 칸 · 런타임 실행',
+  render: () => mount(<div style={{height: '100dvh'}}>
+    <Workbench topBar={f.topBar} conversation={f.conversation} contentLabel="스텝 기록"
+      contentPane={<>
+        <RecordsHeader>
+          <div role="tablist" aria-label="기록 종류">
+            {f.recordTabs.map((tab, i) => <button key={tab} role="tab" aria-selected={i === 0}>{tab}</button>)}
+          </div>
+        </RecordsHeader>
+        <div className="records-body"><StepRecordPreview /></div>
+      </>} />
+  </div>),
 };
 
 export const InWorkbench = {

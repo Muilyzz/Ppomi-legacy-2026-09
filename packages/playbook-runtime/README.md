@@ -44,7 +44,7 @@ Ppomi onboarding and playbook packages have **no device-approval or Mac-approver
 - Permission denial or a failed precondition **stops the run**. Later steps are not sent to the adapter.
 - Evidence records each attempted step and its outcome. `completed` means declared steps finished. It is not a business-result claim and does not write a journal.
 - `RunResult.stepResults` is one `StepResult` per declared step (playbook order). Consumers read that list — a timeline iterates it, an LLM can use only `status`, and overlay uses optional `evidence` screenshot paths when present. `dumpStepResults(result.stepResults)` writes the run. `RunResult.evidence` remains the runner log (`StepEvidence`) of evaluated steps only. Later unreached steps are `attempt: "not_executed"` on `stepResults` only. No workbench UI, OCR/CU, or `playbook-kr-cert` in this package yet.
-- Presentational workbench pieces live in `agent/src/ui` (`HighlightOverlay`, `StepTimeline`). They take `StepResult` / `Evidence` as props (DI fixtures only). The workbench orchestrator will compose them later. They do not call AX, Playwright, screen capture, or a live runtime.
+- Presentational workbench pieces live in `agent/src/ui` (`HighlightOverlay`, `StepTimeline`). They take `StepResult` / `Evidence` as props. `StepRecordPanel` composes them from `RunResult.stepResults` and owns the selection; its fixture page runs this runtime with the in-memory driver. None of them call AX, Playwright, screen capture, or a live driver; wiring the panel into the live chat loop is a later slice.
 
 ```ts
 import { dumpStepResults } from "playbook-runtime";
