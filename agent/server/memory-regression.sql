@@ -33,15 +33,19 @@ insert into auth.users(id) values
  ('97a00000-0000-4000-8000-000000000003'), ('97a00000-0000-4000-8000-000000000004');
 insert into public.ppomi_workspaces(id,name) values
  ('97b00000-0000-4000-8000-000000000001','Synthetic memory A'), ('97b00000-0000-4000-8000-000000000002','Synthetic memory B');
-insert into public.ppomi_devices(id,workspace_id,auth_user_id,label,platform,revoked_at) values
- ('97c00000-0000-4000-8000-000000000001','97b00000-0000-4000-8000-000000000001','97a00000-0000-4000-8000-000000000001','Synthetic Mac','macos',null),
- ('97c00000-0000-4000-8000-000000000002','97b00000-0000-4000-8000-000000000001','97a00000-0000-4000-8000-000000000002','Synthetic Android','android',null),
- ('97c00000-0000-4000-8000-000000000003','97b00000-0000-4000-8000-000000000002','97a00000-0000-4000-8000-000000000003','Other workspace','android',null),
- ('97c00000-0000-4000-8000-000000000004','97b00000-0000-4000-8000-000000000001','97a00000-0000-4000-8000-000000000004','Revoked','android',statement_timestamp());
+insert into public.ppomi_devices(id,workspace_id,auth_user_id,label,platform,revoked_at,approved_at) values
+ ('97c00000-0000-4000-8000-000000000001','97b00000-0000-4000-8000-000000000001','97a00000-0000-4000-8000-000000000001','Synthetic Mac','macos',null,statement_timestamp()),
+ ('97c00000-0000-4000-8000-000000000002','97b00000-0000-4000-8000-000000000001','97a00000-0000-4000-8000-000000000002','Synthetic Android','android',null,statement_timestamp()),
+ ('97c00000-0000-4000-8000-000000000003','97b00000-0000-4000-8000-000000000002','97a00000-0000-4000-8000-000000000003','Other workspace','android',null,statement_timestamp()),
+ ('97c00000-0000-4000-8000-000000000004','97b00000-0000-4000-8000-000000000001','97a00000-0000-4000-8000-000000000004','Revoked','android',statement_timestamp(),statement_timestamp());
 set local role authenticated;
 select set_config('request.jwt.claim.sub','97a00000-0000-4000-8000-000000000001',true);
 select pg_temp.agent_assert(public.ppomi_agent_memory_list()='[]'::jsonb,'new workspace list empty');
 select pg_temp.agent_assert(public.ppomi_agent_memory_save('97d00000-0000-4000-8000-000000000001',pg_temp.agent_envelope(),repeat('a',64))->>'id'='97d00000-0000-4000-8000-000000000001','save returns stable id');
+select pg_temp.agent_assert(
+    public.ppomi_agent_memory_list()->0 ? 'envelope'
+    and not public.ppomi_agent_memory_list()->0 ? 'payload',
+    'legacy GCM list row stays an envelope for the agent');
 select pg_temp.agent_assert(public.ppomi_agent_memory_save('97d00000-0000-4000-8000-000000000001',jsonb_set(pg_temp.agent_envelope(),'{nonce}','"BBBBBBBBBBBBBBBB"'),repeat('a',64))->'envelope'->>'nonce'='AAAAAAAAAAAAAAAA','retry returns original ciphertext');
 select pg_temp.agent_assert((select count(*) from public.ppomi_agent_memories)=1,'retry did not duplicate row');
 select pg_temp.agent_error($q$select public.ppomi_agent_memory_save('97d00000-0000-4000-8000-000000000001',pg_temp.agent_envelope(),repeat('b',64))$q$,'PT409','changed content digest conflicts');
@@ -86,5 +90,41 @@ reset role;
 select pg_temp.agent_error($q$delete from public.ppomi_agent_memories where workspace_id='97b00000-0000-4000-8000-000000000001'$q$,'55000','history hard delete denied');
 select pg_temp.agent_error($q$update public.ppomi_agent_memories set envelope='{}' where workspace_id='97b00000-0000-4000-8000-000000000001' and id='97d00000-0000-4000-8000-000000000001'$q$,'55000','history content immutable');
 select pg_temp.agent_error($q$update public.ppomi_agent_memories set deleted_at=null where workspace_id='97b00000-0000-4000-8000-000000000001' and id='97d00000-0000-4000-8000-000000000002'$q$,'55000','tombstone cannot be undone');
+
+-- Slice 2: list opens a shared at-rest envelope. Writes still reject this shape.
+select set_config('app.ppomi_at_rest_key', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=', true);
+insert into public.ppomi_agent_memories(workspace_id,id,created_by_device_id,envelope,request_digest)
+values (
+    '97b00000-0000-4000-8000-000000000001',
+    '97d00000-0000-4000-8000-000000000010',
+    '97c00000-0000-4000-8000-000000000001',
+    public.ppomi_at_rest_seal(
+        '{"id":"97d00000-0000-4000-8000-000000000010","kind":"fact","text":"from-vault","source":"tool_observed","confidence":1,"replacesId":null,"selection":"automatic"}'::jsonb,
+        public.ppomi_agent_memory_aad(
+            '97b00000-0000-4000-8000-000000000001',
+            '97d00000-0000-4000-8000-000000000010',
+            null)),
+    repeat('d', 64));
+set local role authenticated;
+select set_config('request.jwt.claim.sub','97a00000-0000-4000-8000-000000000001',true);
+select pg_temp.agent_assert(
+    public.ppomi_agent_memory_list()->0->'payload'->>'text' = 'from-vault'
+    and not public.ppomi_agent_memory_list()->0 ? 'envelope',
+    'list decrypts an at-rest envelope via the shared helper');
+select pg_temp.agent_assert(
+    (select envelope::text not like '%from-vault%' from public.ppomi_agent_memories
+      where id = '97d00000-0000-4000-8000-000000000010'),
+    'at-rest dump does not contain the memory text');
+select pg_temp.agent_error(
+    $q$select public.ppomi_agent_memory_save(
+        '97d00000-0000-4000-8000-000000000011',
+        public.ppomi_at_rest_seal('{"id":"97d00000-0000-4000-8000-000000000011"}'::jsonb, 'ppomi-test-aad-v1'),
+        repeat('e', 64))$q$,
+    '22023', 'save still rejects at-rest envelopes this slice');
+reset role;
+select pg_temp.agent_assert(
+    not has_function_privilege('authenticated', 'public.ppomi_agent_memory_aad(uuid,uuid,uuid)', 'execute'),
+    'clients cannot execute the memory AAD helper');
+
 select count(*) as passed from pg_temp.agent_test_results;
 rollback;

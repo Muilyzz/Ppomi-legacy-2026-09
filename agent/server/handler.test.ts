@@ -250,6 +250,48 @@ test('known secrets, raw transcripts, unknown fields, invalid sources/confidence
   assert.equal(f.rows.size, 0);
 });
 
+test('list accepts RPC-opened at-rest payloads without the Vercel memory key', async () => {
+  const env = { ...environment(), PPOMI_AGENT_MEMORY_KEY: undefined };
+  const handle = createHandler({
+    env,
+    fetch: (async (url: string | URL | Request) => {
+      if (String(url).endsWith('ppomi_context')) return Response.json({ workspace: { id: WORKSPACE }, device: { id: DEVICE } });
+      if (String(url).endsWith('ppomi_agent_memory_list')) {
+        return Response.json([{
+          id: ID, workspace_id: WORKSPACE, replaces_id: null, created_at: '2026-09-09T13:00:00Z', deleted_at: null,
+          payload: { id: ID, kind: 'preference', text: '답변은 한국어로 간결하게 받는 것을 선호한다.', source: 'user_reported', confidence: 0.9, replacesId: null, selection: 'automatic' },
+        }]);
+      }
+      throw new Error('Unexpected endpoint');
+    }) as typeof fetch,
+  });
+  const listed = await (await handle(request('/v1/memories/list'))).json();
+  assert.equal(listed.records[0].text, '답변은 한국어로 간결하게 받는 것을 선호한다.');
+  assert.equal(listed.records[0].selection, 'automatic');
+  assert.equal((await handle(request('/v1/memories/save', memory()))).status, 503, 'writes still require the Vercel key');
+});
+
+test('list decrypts a mix of RPC-opened payloads and legacy GCM envelopes', async () => {
+  const f = fixture();
+  const saved = await (await f.handle(request('/v1/memories/save', memory()))).json();
+  const opened = {
+    id: NEXT, workspace_id: WORKSPACE, replaces_id: null, created_at: '2026-09-09T14:00:00Z', deleted_at: null,
+    payload: { id: NEXT, kind: 'fact', text: '서버 헬퍼로 연 기록이다.', source: 'tool_observed', confidence: 1, replacesId: null, selection: 'automatic' },
+  };
+  const handle = createHandler({
+    env: f.env,
+    fetch: (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith('ppomi_context')) return Response.json({ workspace: { id: WORKSPACE }, device: { id: DEVICE } });
+      if (String(url).endsWith('ppomi_agent_memory_list')) return Response.json([opened, ...f.rows.values()]);
+      return f.handle(new Request(String(url), init));
+    }) as typeof fetch,
+  });
+  const listed = await (await handle(request('/v1/memories/list'))).json();
+  assert.equal(listed.records.length, 2);
+  assert.equal(listed.records[0].text, '서버 헬퍼로 연 기록이다.');
+  assert.equal(listed.records[1].text, saved.record.text);
+});
+
 test('misconfigured admin key and missing memory key fail closed without exposing environment', async () => {
   const f = fixture();
   f.env.SUPABASE_ANON_KEY = 'sb_secret_do_not_expose_this_value';
