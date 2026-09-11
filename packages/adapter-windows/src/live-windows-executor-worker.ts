@@ -36,7 +36,10 @@ const pending = new Map<string, (reply: ExecutorReply) => void>();
 let alive = false;
 
 function wake(): void {
-  Atomics.store(flag, 0, 1);
+  // A monotonic counter, not a 0/1 flag: the main thread waits on the value it last saw, so a reply
+  // that lands after its request already timed out still advances the counter and is drained, instead
+  // of being mistaken for the next request's reply.
+  Atomics.add(flag, 0, 1);
   Atomics.notify(flag, 0);
 }
 

@@ -208,23 +208,31 @@ export class LiveWindowsExecutorTools implements WindowsExecutorTools {
     }
   }
 
-  /** One synchronous round trip: post the request, block until the worker signals, read the reply. */
+  /** One synchronous round trip: post the request, block until the worker signals, read this seq's reply. */
   private request(method: string, args: unknown): unknown {
     if (this.closed) throw new WindowsAdapterError("native_unavailable", "executor tools are closed");
     this.seq += 1;
     const seq = this.seq;
-    Atomics.store(this.flag, 0, 0);
+    const deadline = Date.now() + this.requestTimeoutMs;
+    let seen = Atomics.load(this.flag, 0);
     this.port.postMessage({ seq, id: `live-${seq}`, method, args });
-    if (Atomics.wait(this.flag, 0, 0, this.requestTimeoutMs) === "timed-out") {
-      throw new WindowsAdapterError("bridge_timeout", `${method} did not answer within ${this.requestTimeoutMs} ms`);
+    for (;;) {
+      // Drop replies to earlier requests that already timed out; only the one tagged with this seq counts.
+      let message = receiveMessageOnPort(this.port)?.message as BridgeReply | undefined;
+      while (message !== undefined && message.seq !== seq) {
+        message = receiveMessageOnPort(this.port)?.message as BridgeReply | undefined;
+      }
+      if (message !== undefined) {
+        const { error, result } = message.reply;
+        if (error !== undefined) throw new WindowsAdapterError(error.code ?? "tool_failed", error.message);
+        return result;
+      }
+      const remaining = deadline - Date.now();
+      if (remaining <= 0 || Atomics.wait(this.flag, 0, seen, remaining) === "timed-out") {
+        throw new WindowsAdapterError("bridge_timeout", `${method} did not answer within ${this.requestTimeoutMs} ms`);
+      }
+      seen = Atomics.load(this.flag, 0);
     }
-    const message = receiveMessageOnPort(this.port)?.message as BridgeReply | undefined;
-    if (message === undefined || message.seq !== seq) {
-      throw new WindowsAdapterError("native_unavailable", `${method}: reply missing or out of order`);
-    }
-    const { error, result } = message.reply;
-    if (error !== undefined) throw new WindowsAdapterError(error.code ?? "tool_failed", error.message);
-    return result;
   }
 }
 
