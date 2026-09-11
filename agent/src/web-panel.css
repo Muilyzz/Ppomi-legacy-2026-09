@@ -3,6 +3,11 @@
 .web-notice { flex: 1 1 12rem; min-width: 0; margin: 0; color: var(--fg-2); font-size: var(--fs-2); overflow-wrap: anywhere; }
 .web-notice.error { color: var(--bad); }
 
+/* 계정 시트는 네이티브 <dialog>: 스타일 주입 없이 포커스 트랩·Esc·배경을 얻는다(style-src 'self'). 배경 스크림은 workbench.css의 시트와 같다. */
+.web-sheet { width: min(28rem, calc(100vw - 2rem)); max-height: 85dvh; margin: auto; padding: 0; border: 1px solid var(--line); border-radius: var(--rc); background: var(--surface); color: var(--fg); overflow: auto; }
+.web-sheet::backdrop { background: rgb(0 0 0 / .45); }
+.web-sheet-body { padding: 1.25rem; }
+.web-sheet h2 { margin: 0; font-size: var(--fs-4); font-weight: 500; }
 .web-account { display: flex; flex-direction: column; gap: 1.25rem; }
 .web-account h3 { margin: 0 0 .5rem; color: var(--fg-2); font-size: var(--fs-1); font-weight: 400; }
 .web-account-identity { display: flex; flex-direction: column; margin: 0 0 .75rem; min-width: 0; }

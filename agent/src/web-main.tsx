@@ -1,4 +1,5 @@
 // 웹(hub) 진입점. 브라우저 전용 계층은 hub/web/home.js가 만들고, 여기는 공통 대화 패널을 웹 프레임에 마운트만 한다.
+import "./zod-jitless";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { ChatPanel, type ChatFrame } from "./chat-panel";

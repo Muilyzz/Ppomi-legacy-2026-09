@@ -1,10 +1,9 @@
 // 웹(hub) 프레임: 상단 바(뽀미 · 로그인/나)와 콘텐츠(기록 탭 + 샌드박스 기록 프레임). 대화는 공통 ChatPanel 그대로.
 // 브라우저 전용 계층(Supabase 로그인, 기기 키, 복호화, 프레임 렌더러)은 hub가 소유하고 host 객체로만 들어온다.
-import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { UserRound, X } from "lucide-react";
 import type { Bootstrap } from "./bridge";
 import type { WebHostSource } from "./web-host";
-import { Dialog, DialogClose, DialogContent, DialogTitle } from "./components/ui/dialog";
 import { RecordsHeader } from "./ui/workbench";
 import type { ShellFrameSlots } from "./ui/shell";
 
@@ -147,6 +146,22 @@ function WebRecordsPane({ records, state }: { records: WebRecords; state: WebRec
   </>;
 }
 
+/** A native <dialog>: focus trap, Escape and backdrop without injected styles, so the page keeps style-src 'self'. */
+function Sheet({ open, onClose, labelledBy, children }: { open: boolean; onClose(): void; labelledBy: string; children: ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog || typeof dialog.showModal !== "function") return;
+    if (open && !dialog.open) dialog.showModal();
+    else if (!open && dialog.open) dialog.close();
+  }, [open]);
+  // The backdrop's clicks arrive on the dialog element itself; clicks inside land on the body wrapper.
+  const backdrop = (event: MouseEvent<HTMLDialogElement>) => { if (event.target === event.currentTarget) onClose(); };
+  return <dialog ref={ref} className="web-sheet executor-settings" aria-labelledby={labelledBy} onClose={onClose} onClick={backdrop}>
+    <div className="web-sheet-body web-account">{children}</div>
+  </dialog>;
+}
+
 type Props = { boot?: Bootstrap; active: boolean; refresh(): Promise<void>; host: WebWorkbenchHost; children(slots: ShellFrameSlots): ReactNode };
 
 /** Browser-owned controls: sign-in, the account sheet and the records pane. None of this is part of the agent's tool set. */
@@ -180,10 +195,9 @@ export function WebPanel({ active, host, children }: Props) {
           </button>}
       </div>
     </nav>
-    <Dialog open={open && account !== null} onOpenChange={setOpen}>
-      <DialogContent className="executor-settings web-account" showCloseButton={false} aria-describedby={undefined}>
-        <div className="executor-sheet-heading"><DialogTitle>나</DialogTitle>
-          <DialogClose className="executor-nav-button executor-icon-button" aria-label="닫기"><X aria-hidden="true" /></DialogClose></div>
+    <Sheet open={open && account !== null} onClose={() => setOpen(false)} labelledBy="web-sheet-title">
+        <div className="executor-sheet-heading"><h2 id="web-sheet-title">나</h2>
+          <button type="button" className="executor-nav-button executor-icon-button" aria-label="닫기" onClick={() => setOpen(false)}><X aria-hidden="true" /></button></div>
         <section aria-labelledby="web-account-title">
           <h3 id="web-account-title">계정</h3>
           <p className="web-account-identity"><strong>{account?.name || "내 계정"}</strong>{account?.email && <span>{account.email}</span>}</p>
@@ -206,8 +220,7 @@ export function WebPanel({ active, host, children }: Props) {
           <a href="/download">앱 설치 안내</a>
           <a href="/privacy">개인정보 처리방침</a>
         </nav>
-      </DialogContent>
-    </Dialog>
+    </Sheet>
     {error && <p className="executor-error" role="alert">{error}<button type="button" onClick={() => setError("")}>닫기</button></p>}
   </div>;
   const contentPane = account ? <WebRecordsPane records={host.records} state={records} /> : undefined;
