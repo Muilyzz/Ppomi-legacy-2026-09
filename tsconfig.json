@@ -1,0 +1,12 @@
+{
+  "extends": "./packages/tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "ppomi-body": ["./packages/ppomi-body/src/index.ts"],
+      "ppomi-path": ["./packages/ppomi-path/src/index.ts"],
+      "playbook-runtime": ["./packages/ppomi-body/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "**/node_modules"]
+}

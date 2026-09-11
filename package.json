@@ -1,0 +1,16 @@
+{
+  "name": "ppomi",
+  "private": true,
+  "workspaces": [
+    "packages/ppomi-body",
+    "packages/ppomi-path",
+    "packages/playbook-runtime"
+  ],
+  "scripts": {
+    "test": "npm test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=22.6"
+  }
+}

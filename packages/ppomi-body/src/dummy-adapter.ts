@@ -6,7 +6,7 @@ export type DummyCall =
   | { readonly kind: "click"; readonly target: string }
   | { readonly kind: "type"; readonly target: string; readonly text: string };
 
-/** In-memory adapter for unit tests. Not `adapter-windows`. */
+/** In-memory adapter for unit tests. Not `ppomi-body-windows`. */
 export class DummyAdapter implements OsUiDriver {
   readonly kind: OsUiDriverKind;
   readonly calls: DummyCall[] = [];

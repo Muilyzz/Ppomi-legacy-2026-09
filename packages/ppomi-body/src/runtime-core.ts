@@ -74,7 +74,7 @@ export interface UiDriver<Snap, Ref, Step extends RuntimeStep> {
  * Wrapper-only escape hatch: execute mutations that declare no `effect`, as the
  * pre-core runners did. Every such row carries `code: "undeclared_effect"` and the
  * result carries `legacy: true`. `Runtime.run` refuses it; it is deleted together
- * with the wrappers in the driver-* port slice.
+ * with the wrappers in the ppomi-body-* port slice.
  */
 export interface LegacyOptions {
   readonly runUndeclaredMutations: true;
@@ -180,7 +180,7 @@ export class Runtime<Snap, Ref, Step extends RuntimeStep> {
 
   /**
    * The deprecated wrappers' engine: drives sync drivers and fixtures without an
-   * event loop, and is deleted with the wrappers in the driver-* port slice. It
+   * event loop, and is deleted with the wrappers in the ppomi-body-* port slice. It
    * never sleeps, so a playbook that declares `require.wait` is `invalid` here
    * (`wait_requires_run`); a driver that returns a Promise is a programming
    * error and throws `TypeError` — use `Runtime.run` for both.

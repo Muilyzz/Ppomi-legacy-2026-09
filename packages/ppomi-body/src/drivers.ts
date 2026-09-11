@@ -1,8 +1,8 @@
 /**
- * Glossary (#22): the ppomi-body is `playbook-runtime` plus the `driver-*`
- * packages; a driver is observation ("eye") plus actuation ("hand"); the
- * ppomi-path is `playbook-*` content. Every driver name is defined or re-exported
- * here so a rename is one commit in one module.
+ * Glossary: the ppomi-body is this package plus `ppomi-body-*` surfaces;
+ * a driver is observation ("eye") plus actuation ("hand"); the ppomi-path is
+ * the JSON catalog. Every driver name is defined or re-exported here so a
+ * rename is one commit in one module. `driver-*` / `adapter-*` are legacy names.
  *
  * Drivers may be implemented sync or async: the runtime awaits every call. None of
  * them carries a device-approval input.
