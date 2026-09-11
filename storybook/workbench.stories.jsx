@@ -3,10 +3,13 @@ import React, {useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Workbench, ControlSlot, ControlHeader, RecordsHeader} from '../agent/src/ui/workbench';
 import {ChatPanel} from '../agent/src/chat-panel';
+import {WebPanel} from '../agent/src/web-panel';
 import {createStoryChatHost} from './chat-host.fixture';
 import * as f from '../agent/src/ui/fixtures';
 import '../Ppomi/Sources/Ppomi/Web/evidence.js';
 import {bank} from './screens.js';
+import '../agent/src/executor-panel.css';
+import '../agent/src/web-panel.css';
 
 const control = (turn = false) => <>{f.controlHeader}<ControlSlot turn={turn}>{turn ? '승인 차례' : 'iPhone · 연결 끊김'}</ControlSlot>{turn && f.turn}</>;
 const CLOSED = 400, OPEN = 704;
@@ -88,3 +91,41 @@ function ResizableLiveChat(args) {
   </div>;
 }
 export const LiveChatResize = {name: '공통 채팅 · 접기와 펼치기', render: ({width, ...args}) => mount(<ResizableLiveChat {...args} />)};
+
+// 웹(hub) 프레임: 같은 ChatPanel 위에 WebPanel(상단 바 · 나 시트 · 기록 탭)을 얹는다. 브라우저 계층은 오프라인 가짜 host이며
+// 기록 프레임 자리에는 글 한 줄만 둔다(실제 hub는 샌드박스 iframe을 이 컨테이너에 렌더링한다).
+function offlineWebHost(signedIn = true) {
+  const listeners = new Set();
+  const notify = () => listeners.forEach(listener => listener());
+  const account = {id: '11111111-1111-4111-8111-111111111111', name: '미리보기 계정', email: 'preview@example.test'};
+  let state = {account: signedIn ? account : null, deviceID: signedIn ? 'dddddddd-1111-4111-8111-111111111111' : null, notice: '', noticeIsError: false};
+  const set = patch => { state = {...state, ...patch}; notify(); };
+  const records = signedIn ? {status: 'ready', busy: false, connection: {status: 'ready', workspace: {id: 'w', name: '뽀미'},
+    device: {id: state.deviceID, label: '뽀미 웹 브라우저', platform: 'web'}, recordNames: ['ledger', 'accounting']},
+    record: {name: 'ledger', version: '3', updatedAt: '2026-09-11T08:30:00Z'}, error: null}
+    : {status: 'idle', busy: false, connection: null, record: null, error: null};
+  return {
+    source: {
+      endpoint: 'https://preview.invalid', getState: () => state,
+      subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+      getAccessToken: async () => 'preview.token.only',
+      async signIn() { set({notice: '미리보기: 실제 Google 로그인으로 이동하지 않습니다.'}); },
+      async signOut() { set({account: null, deviceID: null, notice: '이 브라우저에서 로그아웃했습니다.'}); },
+    },
+    records: {
+      views: [{id: 'timeline', label: '타임라인'}, {id: 'evidence', label: '증빙·전표'}, {id: 'accounting', label: '분개장'}, {id: 'playbooks', label: '플레이북'}, {id: 'health', label: '건강'}, {id: 'spatial', label: '건축물 3D'}],
+      getState: () => records, subscribe: () => () => {}, select() {}, refresh() {},
+      attach(element) { element.textContent = '기록 프레임(sandbox iframe)이 이 자리에 렌더링됩니다.'; return () => { element.textContent = ''; }; },
+    },
+  };
+}
+const webHostSignedIn = offlineWebHost(true), webHostSignedOut = offlineWebHost(false);
+function WebWorkbench({signedIn}) {
+  const host = signedIn ? webHostSignedIn : webHostSignedOut;
+  const [chatHost] = useState(() => createStoryChatHost({platform: 'web', deviceLabel: '웹 브라우저', configured: signedIn, voiceSupported: false, bankProfileSupported: false,
+    executor: {googleSignIn: true}, authentication: {method: 'google', signedIn, googleSignIn: true, ...(signedIn ? {displayName: '미리보기 계정'} : {})}}));
+  return <ChatPanel host={chatHost} frame={(state, render) => <WebPanel {...state} host={host}>{render}</WebPanel>} />;
+}
+export const Web = {name: '웹 · hub 프레임 · 로그인 상태', render: ({width}) => mount(width ? frame(width, <WebWorkbench signedIn />) : <WebWorkbench signedIn />)};
+export const WebSignedOut = {name: '웹 · hub 프레임 · 로그아웃 상태', render: ({width}) => mount(width ? frame(width, <WebWorkbench signedIn={false} />) : <WebWorkbench signedIn={false} />)};
+export const WebCompact = {name: '웹 · hub 프레임 · 420', args: {width: CLOSED}, render: ({width}) => mount(frame(width, <WebWorkbench signedIn />))};

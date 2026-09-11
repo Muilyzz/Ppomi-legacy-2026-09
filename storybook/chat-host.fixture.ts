@@ -3,11 +3,11 @@ import type { ChatHost } from "../agent/src/chat-host";
 import { BootstrapReadiness } from "../agent/src/update-readiness";
 
 /** Offline preview of the actual chat panel. No native hooks, credentials or network transport. */
-export function createStoryChatHost(): ChatHost {
+export function createStoryChatHost(patch: Partial<Bootstrap> = {}): ChatHost {
   let active = false, responses = 0;
   const bootstrap = (): Bootstrap => ({
     platform: "macos", deviceLabel: "오프라인 미리보기", configured: true,
-    endpoint: "https://preview.invalid", tools: [],
+    endpoint: "https://preview.invalid", tools: [], ...patch,
   });
   const bridge = new NativeBridge(raw => {
     const request = JSON.parse(raw) as { id: string; method: string; args: Record<string, unknown> };
