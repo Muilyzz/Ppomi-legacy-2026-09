@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "id": "kr-cert",
+  "version": "0.1.0",
+  "title": "사업자 공동인증서 발급 준비",
+  "surface": "os-windows",
+  "legacyPackage": "playbook-kr-cert",
+  "steps": [
+    {
+      "id": "focus-issuer-window",
+      "title": "인증서 발급 창에 초점",
+      "kind": "focus",
+      "target": "인증서 발급"
+    },
+    {
+      "id": "read-purpose",
+      "title": "용도 안내 확인",
+      "kind": "read",
+      "require": {
+        "screen": ["인증서 발급", "용도"]
+      }
+    },
+    {
+      "id": "open-next",
+      "title": "다음 화면",
+      "kind": "click",
+      "target": "다음",
+      "effect": "navigate"
+    },
+    {
+      "id": "fill-business-kind",
+      "title": "사업자 구분 준비 (비밀·주민번호 아님)",
+      "kind": "type",
+      "target": "사업자 구분",
+      "text": "개인사업자",
+      "effect": "input"
+    },
+    {
+      "id": "read-fee",
+      "title": "수수료 표시 확인",
+      "kind": "read",
+      "require": {
+        "screen": ["수수료"]
+      }
+    },
+    {
+      "id": "human-identity",
+      "title": "본인 확인은 당사자",
+      "kind": "human"
+    },
+    {
+      "id": "pay-certificate",
+      "title": "결제 — 자동 클릭 금지",
+      "kind": "payment",
+      "target": "결제하기",
+      "effect": "commit"
+    },
+    {
+      "id": "submit-application",
+      "title": "제출 — 자동 클릭 금지",
+      "kind": "submit",
+      "target": "제출",
+      "effect": "commit"
+    }
+  ]
+}
