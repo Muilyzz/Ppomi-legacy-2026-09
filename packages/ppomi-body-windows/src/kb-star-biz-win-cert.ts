@@ -30,7 +30,7 @@ export function loadKbStarBizWinCert(): PathDocument {
 export function pagePlaybookFromPath(document: PathDocument): PagePlaybook {
   return {
     id: `${document.id}@${document.version}`,
-    allowedOrigins: document.allowedOrigins,
+    ...(document.allowedOrigins === undefined ? {} : { allowedOrigins: document.allowedOrigins }),
     steps: pageStepsUntilHandoff(document).map(toPageStep),
   };
 }
@@ -74,41 +74,42 @@ export function publicStepUrl(url: string | undefined): string {
 }
 
 function toPageStep(step: PathStep): PagePlaybookStep {
+  const require = toPageRequire(step.require);
   switch (step.kind) {
     case "goto":
       return {
         id: step.id,
         kind: "goto",
-        url: step.url,
-        effect: step.effect,
-        require: toPageRequire(step.require),
+        ...(step.url === undefined ? {} : { url: step.url }),
+        ...(step.effect === undefined ? {} : { effect: step.effect }),
+        ...(require === undefined ? {} : { require }),
       };
     case "fill":
       return {
         id: step.id,
         kind: "fill",
-        locator: step.locator,
-        text: step.text,
-        effect: step.effect,
-        require: toPageRequire(step.require),
+        ...(step.locator === undefined ? {} : { locator: step.locator }),
+        ...(step.text === undefined ? {} : { text: step.text }),
+        ...(step.effect === undefined ? {} : { effect: step.effect }),
+        ...(require === undefined ? {} : { require }),
       };
     case "waitFor":
       return {
         id: step.id,
         kind: "waitFor",
-        locator: step.locator,
-        require: toPageRequire(step.require),
+        ...(step.locator === undefined ? {} : { locator: step.locator }),
+        ...(require === undefined ? {} : { require }),
       };
     case "click":
       return {
         id: step.id,
         kind: "click",
-        locator: step.locator,
-        effect: step.effect,
-        require: toPageRequire(step.require),
+        ...(step.locator === undefined ? {} : { locator: step.locator }),
+        ...(step.effect === undefined ? {} : { effect: step.effect }),
+        ...(require === undefined ? {} : { require }),
       };
     case "read":
-      return { id: step.id, kind: "read", require: toPageRequire(step.require) };
+      return { id: step.id, kind: "read", ...(require === undefined ? {} : { require }) };
     case "focus":
     case "type":
     case "human":
@@ -124,14 +125,13 @@ function toPageStep(step: PathStep): PagePlaybookStep {
 
 function toPageRequire(require: PathStepRequirement | undefined): PageStepRequirement | undefined {
   if (require === undefined) return undefined;
-  const mapped: PageStepRequirement = {
+  return {
     ...(require.permission !== undefined ? { permission: require.permission } : {}),
     ...(require.url !== undefined ? { url: require.url } : {}),
     ...(require.wait !== undefined ? { wait: require.wait } : {}),
     ...(require.text !== undefined ? { texts: require.text } : {}),
     ...(require.locator !== undefined ? { locators: [require.locator] } : {}),
   };
-  return mapped;
 }
 
 function originOf(url: string): string {
