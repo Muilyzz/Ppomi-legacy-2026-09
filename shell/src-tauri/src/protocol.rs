@@ -21,7 +21,8 @@ impl Request {
         let allowed = match self.method.as_str() {
             "bootstrap" | "request" | "executeTool" | "sessionState" | "heard" | "declineCall"
             | "bankProfileRequest" | "bankProfileSubmit" | "bankProfileCancel" => true,
-            "executorStatus" | "answerApproval" | "setControlApps" | "openSettings" | "openAccount" | "openRecords" | "configureDevice" => management,
+            "executorStatus" | "answerApproval" | "setControlApps" | "openSettings" | "openAccount" | "openRecords" | "configureDevice"
+            | "beginSignIn" | "completeSignIn" | "signOut" | "refreshAccount" => management,
             _ => false,
         };
         if allowed { Ok(()) } else { Err("invalid_request") }
@@ -42,7 +43,7 @@ mod tests {
     use super::*;
     #[test]
     fn model_requests_cannot_use_management_or_arbitrary_processes() {
-        for method in ["answerApproval", "configureDevice", "setControlApps", "setEndpoint", "shell", "spawn"] {
+        for method in ["answerApproval", "configureDevice", "setControlApps", "setEndpoint", "beginSignIn", "completeSignIn", "signOut", "refreshAccount", "shell", "spawn"] {
             let request = Request {id: "request-1".into(), method: method.into(), args: json!({})};
             assert_eq!(request.validate(false), Err("invalid_request"));
         }

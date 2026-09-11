@@ -6,6 +6,8 @@ mod media_macos;
 mod media_windows;
 #[cfg(not(target_os = "android"))]
 mod desktop;
+#[cfg(not(target_os = "android"))]
+mod account;
 
 use protocol::{failure, Request};
 use serde_json::{json, Value};
@@ -43,6 +45,26 @@ async fn executor_request(app: AppHandle, window: WebviewWindow, request: Reques
     reply
 }
 
+/// Google sign-in (desktop): the executor mints the Supabase authorize URL, the system browser shows Google, and the
+/// `ppomi://auth?code=…` deep link comes back through the single running instance. Only the executor sees tokens.
+#[cfg(not(target_os = "android"))]
+async fn sign_in(app: &AppHandle, id: String) -> Value {
+    use tauri_plugin_opener::OpenerExt;
+    let begun = dispatch(app, Request { id: id.clone(), method: "beginSignIn".into(), args: json!({}) }).await;
+    if begun.get("error").is_some() { return begun; }
+    let url = begun.get("result").and_then(|result| result.get("url")).and_then(Value::as_str).and_then(|text| tauri::Url::parse(text).ok());
+    let Some(url) = url.filter(account::is_authorize_url) else { return failure(&id, "sign_in_failed"); };
+    let callbacks = app.state::<account::SignInCallback>();
+    let receiver = callbacks.arm();
+    if app.opener().open_url(url.as_str(), None::<&str>).is_err() { callbacks.disarm(); return failure(&id, "sign_in_failed"); }
+    // The person may take a while in the browser; an abandoned attempt simply expires (the executor forgets its verifier too).
+    let callback = match tokio::time::timeout(std::time::Duration::from_secs(300), receiver).await {
+        Ok(Ok(callback)) => callback,
+        _ => { callbacks.disarm(); return failure(&id, "sign_in_failed"); }
+    };
+    dispatch(app, Request { id, method: "completeSignIn".into(), args: json!({"callback": callback}) }).await
+}
+
 /// Settings and human answers are separate from the model's request channel.
 #[tauri::command]
 async fn executor_manage(app: AppHandle, window: WebviewWindow, action: String, args: Value) -> Value {
@@ -55,6 +77,14 @@ async fn executor_manage(app: AppHandle, window: WebviewWindow, action: String, 
         "openSettings" => ("openSettings", json!({})),
         "openAccount" => ("openAccount", json!({})),
         "openRecords" => ("openRecords", json!({})),
+        "signIn" => {
+            #[cfg(not(target_os = "android"))]
+            { return sign_in(&app, id).await; }
+            #[cfg(target_os = "android")]
+            { ("openAccount", json!({})) }
+        }
+        "signOut" => ("signOut", json!({})),
+        "refreshAccount" => ("refreshAccount", json!({})),
         "configureDevice" => {
             #[cfg(not(target_os = "android"))]
             {
@@ -78,14 +108,30 @@ async fn executor_manage(app: AppHandle, window: WebviewWindow, action: String, 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default().manage(media::MediaPolicy::default());
+    let builder = tauri::Builder::default();
+    // Single instance first: a `ppomi://auth` deep link launched by the browser must reach this window, not a second one.
     #[cfg(not(target_os = "android"))]
-    let builder = builder.manage(desktop::Executor::default()).plugin(tauri_plugin_dialog::init());
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        if let Some(window) = app.get_webview_window("main") { let _ = window.set_focus(); }
+    }));
+    let builder = builder.manage(media::MediaPolicy::default());
+    #[cfg(not(target_os = "android"))]
+    let builder = builder.manage(desktop::Executor::default()).manage(account::SignInCallback::default())
+        .plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_opener::init()).plugin(tauri_plugin_deep_link::init());
     #[cfg(target_os = "android")]
     let builder = builder.plugin(tauri_plugin_ppomi_executor::init());
     let app = builder
         .invoke_handler(tauri::generate_handler![executor_request, executor_manage])
         .setup(|app| {
+            #[cfg(not(target_os = "android"))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                // Installers register ppomi:// too; registering here covers `tauri dev` and portable runs (no schemes are configured on macOS).
+                #[cfg(any(target_os = "windows", target_os = "linux"))]
+                let _ = app.deep_link().register_all();
+                let handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| { handle.state::<account::SignInCallback>().deliver(&event.urls()); });
+            }
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("뽀미").inner_size(1000.0, 780.0).min_inner_size(360.0, 480.0)
                 .incognito(true)
