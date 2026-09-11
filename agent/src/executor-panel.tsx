@@ -60,6 +60,13 @@ export function ExecutorPanel({ boot, active, refresh, children, manage = manage
     displayName: boot.authentication.displayName,
   } : undefined);
   const signedIn = account?.signedIn === true;
+  // A sign-in may also finish outside this panel's request: the shell hands a late ppomi://auth callback to the executor
+  // on its own. The status poll notices first; the bootstrap (banner) follows and a stale sign-in error is withdrawn.
+  useEffect(() => {
+    if (!boot || status?.account === undefined || status.account.signedIn === (boot.authentication?.signedIn === true)) return;
+    void refreshRef.current().catch(() => {});
+  }, [status?.account?.signedIn, boot?.authentication?.signedIn]);
+  useEffect(() => { if (signedIn) setError(""); }, [signedIn]);
   const canViewRecords = boot?.platform === "macos" || boot?.platform === "android";
   const canSignIn = boot?.executor?.googleSignIn === true;
   const developerImport = status?.capabilities?.developmentDeviceImport === true;
@@ -67,6 +74,9 @@ export function ExecutorPanel({ boot, active, refresh, children, manage = manage
     setSigningIn(true);
     void perform(() => manage("signIn")).finally(() => setSigningIn(false));
   };
+  // An open sheet is modal; the toolbar behind its overlay cannot show the outcome of the sheet's own action.
+  const errorLine = error ? <p className="executor-error" role="alert">{error}<button type="button" onClick={() => setError("")}>닫기</button></p> : null;
+  const sheetOpen = windows && (accountOpen || open);
   const topBar = <div className="executor-panel">
     <nav className="executor-toolbar" aria-label="앱 탐색">
       {canViewRecords && <button className="executor-nav-button" type="button" disabled={pending}
@@ -95,6 +105,7 @@ export function ExecutorPanel({ boot, active, refresh, children, manage = manage
         <AccountSection account={account} busy={pending || active} signingIn={signingIn} signIn={signIn}
           refresh={() => void perform(() => manage("refreshAccount"))}
           signOut={() => void perform(() => manage("signOut"))} />
+        {errorLine}
         {active && <p className="executor-hint">대화를 종료한 뒤 계정을 변경할 수 있습니다.</p>}
       </DialogContent>
     </Dialog>
@@ -109,9 +120,10 @@ export function ExecutorPanel({ boot, active, refresh, children, manage = manage
       {active && <p className="executor-hint">연결 설정과 앱 허용은 대화를 종료한 뒤 변경할 수 있습니다.</p>}
       {status?.availableApps && <ControlApps apps={status.availableApps} disabled={pending || active}
         save={(packageNames) => perform(() => manage("setControlApps", { packageNames }))} />}
+      {errorLine}
       </DialogContent>
     </Dialog>
-    {error && <p className="executor-error" role="alert">{error}<button type="button" onClick={() => setError("")}>닫기</button></p>}
+    {!sheetOpen && errorLine}
   </div>;
   const contentPane = approval && <section className="executor-approval" aria-label="사용자 확인" aria-live="polite">
     <p>{approval.text}</p>
