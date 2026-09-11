@@ -19,6 +19,15 @@ var CLICKABLE = {
 };
 var EDITABLE = { AXTextField: true, AXTextArea: true, AXComboBox: true, AXSearchField: true };
 var BUNDLES = { Safari: "com.apple.Safari", "Google Chrome": "com.google.Chrome" };
+// Tools.payWord without the lookbehind (JavaScriptCore on older macOS lacks it): the same list,
+// anchored to the end of a button's text, and "바로구매" only opens an order sheet.
+var PAY_WORD = /(결제|구매|주문|송금|이체|입금|충전|구독|가입)\s*(하기|완료|진행)?\s*$/;
+
+function isPayWord(text) {
+  var value = String(text == null ? "" : text).replace(/^\s+|\s+$/g, "");
+  var match = PAY_WORD.exec(value);
+  return !!match && !/바로$/.test(value.substring(0, match.index));
+}
 
 function fail(code, message) {
   var err = new Error(message);
@@ -148,6 +157,38 @@ function frontWindow(proc) {
   return best;
 }
 
+// The identity a node is checked and acted on: role, secure-field flag, and the composed text.
+// Shared by the read walk and the live re-check at tap/type time so both see the same string.
+function describe(el) {
+  var roleRaw = String(attr(el, "AXRole") || prop(el, "role") || "");
+  var subrole = String(attr(el, "AXSubrole") || "");
+  var password = roleRaw === "AXSecureTextField" || subrole === "AXSecureTextField";
+  var title = limit(attr(el, "AXTitle") || prop(el, "title") || prop(el, "name"));
+  var description = limit(attr(el, "AXDescription") || prop(el, "description"));
+  var value = password ? "" : limit(attr(el, "AXValue") || prop(el, "value"));
+  var parts = [];
+  if (password) parts.push(title ? title + " [protected]" : "[protected]");
+  else {
+    if (title) parts.push(title);
+    if (value && value !== title) parts.push(value);
+    if (description && description !== title && description !== value) parts.push(description);
+  }
+  return { roleRaw: roleRaw, password: password, text: limit(parts.join(" ")) };
+}
+
+// A node id only encodes a pre-order index; the tree may have changed since the read. Act only if the
+// live element still has the role and text the caller was allowed to act on.
+function verifyLive(el, cmd) {
+  var live = describe(el);
+  if (cmd.role !== undefined && shortRole(live.roleRaw) !== String(cmd.role)) {
+    fail("stale_screen", "stale_screen. role changed");
+  }
+  if (cmd.label !== undefined && live.text !== String(cmd.label)) {
+    fail("stale_screen", "stale_screen. text changed");
+  }
+  return live;
+}
+
 function walkWindow(win) {
   var nodes = [];
   var truncated = false;
@@ -161,12 +202,9 @@ function walkWindow(win) {
     }
     seen += 1;
     if (attr(el, "AXHidden") === true) return;
-    var roleRaw = String(attr(el, "AXRole") || prop(el, "role") || "");
-    var subrole = String(attr(el, "AXSubrole") || "");
-    var password = roleRaw === "AXSecureTextField" || subrole === "AXSecureTextField";
-    var title = limit(attr(el, "AXTitle") || prop(el, "title") || prop(el, "name"));
-    var description = limit(attr(el, "AXDescription") || prop(el, "description"));
-    var value = password ? "" : limit(attr(el, "AXValue") || prop(el, "value"));
+    var described = describe(el);
+    var roleRaw = described.roleRaw;
+    var password = described.password;
     var enabled = attr(el, "AXEnabled");
     if (enabled == null) enabled = prop(el, "enabled");
     if (enabled == null) enabled = true;
@@ -174,16 +212,9 @@ function walkWindow(win) {
     var acts = actions(el);
     var press = acts.indexOf("AXPress") >= 0 || !!CLICKABLE[roleRaw];
     var editable = !password && (!!EDITABLE[roleRaw] || acts.indexOf("AXConfirm") >= 0);
-    var parts = [];
-    if (password) parts.push(title ? title + " [protected]" : "[protected]");
-    else {
-      if (title) parts.push(title);
-      if (value && value !== title) parts.push(value);
-      if (description && description !== title && description !== value) parts.push(description);
-    }
     var web = roleRaw === "AXLink" || ancestors.indexOf("AXWebArea") >= 0;
     nodes.push({
-      text: limit(parts.join(" ")),
+      text: described.text,
       role: shortRole(roleRaw),
       clickable: !!(press && enabled && !password),
       editable: !!(editable && enabled),
@@ -277,15 +308,16 @@ function dispatch(cmd) {
   }
   if (op === "tap") {
     var el = elementAt(win, Number(cmd.index));
+    var live = verifyLive(el, cmd);
+    // The read-time check covered a node that may have changed; the live element decides.
+    if (live.password || isPayWord(live.text)) fail("protected_action", "protected_action. " + live.text);
     var box = boundsOf(el);
+    if (!(box.right - box.left >= 2 && box.bottom - box.top >= 2)) {
+      fail("stale_screen", "stale_screen. no live frame"); // never click a remembered point
+    }
     var x = (box.left + box.right) / 2;
     var y = (box.top + box.bottom) / 2;
-    if (!(box.right - box.left >= 2 && box.bottom - box.top >= 2)) {
-      x = Number(cmd.x);
-      y = Number(cmd.y);
-    }
-    var roleRaw = String(attr(el, "AXRole") || "");
-    var web = !!cmd.web || roleRaw === "AXLink";
+    var web = !!cmd.web || live.roleRaw === "AXLink";
     if (web) hidClick(x, y);
     else {
       try {
@@ -298,6 +330,8 @@ function dispatch(cmd) {
   }
   if (op === "type") {
     var field = elementAt(win, Number(cmd.index));
+    var liveField = verifyLive(field, cmd);
+    if (liveField.password) fail("protected_action", "protected_action. " + liveField.text);
     try {
       field.attributes.byName("AXValue").value = String(cmd.text);
     } catch (e) {
@@ -306,6 +340,8 @@ function dispatch(cmd) {
       } catch (ignored) {
         /* focus is best-effort */
       }
+      // Keystrokes land on whatever is focused: confirm it is this field, or refuse.
+      if (attr(field, "AXFocused") !== true) fail("stale_screen", "stale_screen. field did not take focus");
       Application("System Events").keystroke(String(cmd.text));
     }
     return { typed: true };

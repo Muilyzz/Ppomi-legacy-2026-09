@@ -7,6 +7,7 @@ import {
   isMacosPayWord,
   macosBrowserApp,
   type MacNativeTools,
+  type MacScreenBounds,
   type MacScreenNode,
   type MacScreenRead,
 } from "./macos-native-tools.ts";
@@ -23,6 +24,11 @@ export interface LiveAxNode {
   readonly bounds: { left: number; top: number; right: number; bottom: number };
 }
 
+/**
+ * `tap` / `type` carry the read-time identity (`role`, `label`) of the node they were checked
+ * against, never coordinates: the script re-resolves the element live, refuses with `stale_screen`
+ * when role/text no longer match or the element has no frame, and clicks the live frame only.
+ */
 export type LiveMacosCommand =
   | { readonly op: "trusted" }
   | { readonly op: "open"; readonly app: string; readonly url?: string }
@@ -32,10 +38,17 @@ export type LiveMacosCommand =
       readonly app: string;
       readonly index: number;
       readonly web: boolean;
-      readonly x: number;
-      readonly y: number;
+      readonly role: string;
+      readonly label: string;
     }
-  | { readonly op: "type"; readonly app: string; readonly index: number; readonly text: string };
+  | {
+      readonly op: "type";
+      readonly app: string;
+      readonly index: number;
+      readonly role: string;
+      readonly label: string;
+      readonly text: string;
+    };
 
 export interface LiveMacosOk {
   readonly ok: true;
@@ -72,7 +85,12 @@ interface StoredNode extends MacScreenNode {
   readonly index: number;
   readonly password: boolean;
   readonly web: boolean;
+  readonly role: string;
+  readonly bounds: MacScreenBounds;
 }
+
+/** Every C0/C1 control except `\t`, like `MacUI.parseType`: a typed `\n` would be Return (submit). */
+const CONTROL_CHARS = /[\u0000-\u0008\u000A-\u001F\u007F-\u009F]/;
 
 /**
  * `MacNativeTools` over live macOS Accessibility (System Events / AX).
@@ -146,17 +164,14 @@ export class LiveMacosNativeTools implements MacNativeTools {
     if (node.password || isMacosPayWord(node.text) || !node.clickable) {
       throw new MacosAdapterError("protected_action", `protected_action. ${node.text}`);
     }
-    const center = node.bounds;
-    const x = center === undefined ? 0 : (center.left + center.right) / 2;
-    const y = center === undefined ? 0 : (center.top + center.bottom) / 2;
     this.stored = null;
-    const reply = this.exec({ op: "tap", app: this.app, index: node.index, web: node.web, x, y });
+    const reply = this.exec({ op: "tap", app: this.app, index: node.index, web: node.web, role: node.role, label: node.text });
     if (!reply.ok) throw liveError(reply);
     return { invoked: true };
   }
 
   ui_type(args: { nodeId: string; text: string }): { typed: boolean } {
-    if (args.text.length > 4096 || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(args.text)) {
+    if (args.text.length > 4096 || CONTROL_CHARS.test(args.text)) {
       throw new MacosAdapterError("protected_action", "protected_action. text");
     }
     const node = this.requireAddressable(args.nodeId);
@@ -164,7 +179,7 @@ export class LiveMacosNativeTools implements MacNativeTools {
       throw new MacosAdapterError("protected_action", `protected_action. ${node.text}`);
     }
     this.stored = null;
-    const reply = this.exec({ op: "type", app: this.app, index: node.index, text: args.text });
+    const reply = this.exec({ op: "type", app: this.app, index: node.index, role: node.role, label: node.text, text: args.text });
     if (!reply.ok) throw liveError(reply);
     return { typed: true };
   }
@@ -240,17 +255,14 @@ export function skipCode(message: string): string {
 }
 
 function publicNode(node: StoredNode): MacScreenNode {
-  const published: MacScreenNode = {
+  return {
     id: node.id,
     text: node.text,
     clickable: node.clickable,
     editable: node.editable,
     role: node.role,
+    bounds: node.bounds,
   };
-  if (node.bounds !== undefined) {
-    return { ...published, bounds: node.bounds };
-  }
-  return published;
 }
 
 function liveError(reply: LiveMacosErr): MacosAdapterError {
@@ -262,12 +274,16 @@ export function liveAxRequested(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 const SMOKE_LINK = /more information|추가\s*정보/i;
+const SMOKE_PAGE = /example domain/i;
 
-/** Prefer example.com's "More information" (or 추가 정보). Never a pay word or menu chrome. */
+/**
+ * Only example.com's "More information" (or 추가 정보) link, and only when the snapshot shows the
+ * example.com page. Never an arbitrary link or button: with several browser windows the read may
+ * have landed on another tab, and a self-declared `effect: "navigate"` on an unknown control would
+ * make the runtime click it.
+ */
 export function pickLiveAxClickTarget(nodes: readonly MacScreenNode[]): MacScreenNode | undefined {
-  const clickable = nodes.filter(node =>
-    node.clickable && node.text.trim().length > 0 && !isMacosPayWord(node.text));
-  return clickable.find(node => SMOKE_LINK.test(node.text))
-    ?? clickable.find(node => node.role === "link")
-    ?? clickable.find(node => node.role === "button");
+  if (!nodes.some(node => SMOKE_PAGE.test(node.text))) return undefined;
+  return nodes.find(node =>
+    node.clickable && !isMacosPayWord(node.text) && SMOKE_LINK.test(node.text));
 }

@@ -98,7 +98,11 @@ export async function probeMacLive(): Promise<LiveProbe> {
 
   const node = pickLiveAxClickTarget(preview.nodes);
   if (node === undefined) {
-    return skipLines(lines, `${app} AX tree had no clickable link/button`, `nodes=${preview.nodes.length}`);
+    return skipLines(
+      lines,
+      `${app} front window is not example.com or has no "More information" link — nothing else is clicked`,
+      `nodes=${preview.nodes.length}`,
+    );
   }
 
   const oneStep: Playbook = {
