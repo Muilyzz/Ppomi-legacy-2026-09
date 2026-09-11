@@ -7,7 +7,7 @@
   "steps": [
     {
       "id": "human-login",
-      "title": "KB스타기업뱅킹 로그인은 당사자 (비밀번호·생체·OTP)",
+      "title": "KB스타기업뱅킹 로그인은 당사자",
       "kind": "human"
     },
     {

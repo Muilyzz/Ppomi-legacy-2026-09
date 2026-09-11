@@ -241,7 +241,7 @@ export function skipCode(message: string): string {
     return "accessibility";
   }
   if (/app_not_found|can’t get|can't get|not running|no window|no mirroring/i.test(message)) return "app_not_found";
-  if (/no_phone_cli|phone: not found|ENOENT/i.test(message)) return "no_phone_cli";
+  if (/no_phone_cli|phone CLI|phone: not found|ENOENT/i.test(message)) return "no_phone_cli";
   return "failed";
 }
 
@@ -330,12 +330,13 @@ function readAx(scriptPath: string): LiveIphoneReply {
   for (const app of AX_APP_NAMES) {
     const reply = runAx(scriptPath, { op: "read", app });
     if (reply.ok) {
+      const nodes = reply.result.nodes ?? [];
       return {
         ok: true,
         result: {
           appLabel: reply.result.appLabel ?? app,
           source: "ax",
-          nodes: reply.result.nodes,
+          nodes,
         },
       };
     }

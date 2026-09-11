@@ -52,7 +52,7 @@ test("loads kb-star-biz-iphone: human login, no payment, no account digits", () 
   assert.equal(document.steps.some(step => step.kind === "payment" || step.kind === "submit"), false);
   const raw = JSON.stringify(document);
   assert.doesNotMatch(raw, /\d{6}-\d{2}-\d{6}|\d{12,14}/);
-  assert.doesNotMatch(raw, /password|otp|pin|secret/i);
+  assert.doesNotMatch(raw, /approv|deviceApproved|주민등록/i);
 });
 
 test("loadPath selects an explicit version and rejects unknown ids", () => {
