@@ -357,6 +357,11 @@ enabled = false
 # user_pool_region = "us-east-1"
 
 # Use Clerk as a third-party provider alongside Supabase Auth.
+# Spike notes: docs/clerk-migration.md. Keep disabled until the real
+# Clerk Frontend API domain is known. Do not invent a domain.
+# After Dashboard → Authentication → Third-party → Clerk, set:
+#   enabled = true
+#   domain = "<app>.clerk.accounts.dev"   # or the custom Clerk domain
 [auth.third_party.clerk]
 enabled = false
 # Obtain from https://clerk.com/setup/supabase
