@@ -17,3 +17,7 @@
 기존 OCR 스티치(은행·인바디·임대)는 사이드바 **증거**. 테스트: `cd storybook && node --test evidence-fleet.test.mjs`.
 
 시크릿 트리(잠김 마스킹 / 열림 원문)는 UI만. Ppomi.app wire는 [MZZ-44](https://linear.app/muilyzz/issue/MZZ-44) 앱 셸 이후.
+
+- 잠김에서 뒷 4자리(`****뒷4`)가 보이는 잎은 **키가 계좌 키 허용 목록에 있는 것만**이다(`accountKeys`, 기본 `account`·`accountNumber`·`accountNo`·`acct`·`계좌`·`계좌번호`; 마지막 경로 토큰을 대소문자·공백·`_-` 무시로 비교, `ppomi/kb/account` → `account`). 값이 숫자로 보인다는 것은 근거가 아니다: OTP·PIN·전화·주민·사업자 모양의 숫자, 숫자 잎, `accountName` 은 전부 `••••`로 가리고 상단 칩에도 올리지 않는다.
+- 「인증하고 열기」는 스토리북의 step-up 흉내(Face ID 없음)이고, 복사는 `onCopy` 스텁만 부른다(클립보드 없음). 스토리의 액션 패널에는 원문 대신 잠김 표기만 기록된다.
+- 트리 깊이는 32에서 `…`로 자른다. 테스트: `cd storybook && node --test secrets.test.mjs`.
