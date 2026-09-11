@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><title>절차</title>
+<style>/*THEME*/
+/* 절차 = 계정과목표처럼 한 나무: 공공(부문 › 부처 › 기관) · 앱(분류) › 패키지 › 기능. 줄을 고르면 아래에 명세 나무(playbook.js). 트리맵 토글은 미검증 단계 수가 면적(facts.js). */
+body{margin:0;padding:.25rem 1rem 2rem}
+.tree{width:100%;border-collapse:collapse;margin-top:.25rem}
+.tree td{padding:.3rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
+.tree td:first-child{padding-left:calc(.5rem + var(--d,0)*1.25rem)}
+.tree td.n{text-align:right;white-space:nowrap;color:var(--fg-2);font-variant-numeric:tabular-nums}
+.tree tr.kid{cursor:pointer} .tree tr.sel td{background:color-mix(in srgb,var(--fg) 8%,var(--surface))}
+.tree tr.pkg td:first-child{font-weight:500}
+.tw{display:inline-block;width:1.1rem;color:var(--fg-2)}
+.meta{color:var(--fg-2)} .sec h2{font-size:inherit}
+.pb svg,.fx svg{display:block;width:100%;height:auto;color:var(--fg);margin:.25rem 0 1rem}
+.pb .pb-step,.fx [data-path]{cursor:pointer} .pb .pb-step.you text,.pb .pb-walk.you text{font-style:italic}
+.pb .pb-step.fail rect{stroke:var(--accent)} .pb .pb-step.fail text{fill:var(--accent)}
+.fx-table{width:100%;border-collapse:collapse} .fx-table td,.fx-table th{padding:.25rem .5rem;border-bottom:1px solid var(--line);text-align:left;font-weight:normal}
+details{margin:.5rem 0} summary{cursor:pointer;color:var(--fg-2)}
+</style>
+</head>
+<body>
+<main aria-label="절차">
+<header class="sec"><h2>절차</h2><div class="r"><span class="meta" id="sum"></span><nav class="nav"><button type="button" id="mapToggle" aria-pressed="false">트리맵</button></nav></div></header>
+<div id="list"></div>
+<div id="map" hidden></div>
+<div id="detail"></div>
+</main>
+<script>/*PLAYBOOK_JS*/</script>
+<script>
+var D=/*PLAYBOOKS*/null,P=window.Playbook,X=window.Facts,byId={};
+function post(m){if(window.webkit&&webkit.messageHandlers&&webkit.messageHandlers.ppomi)webkit.messageHandlers.ppomi.postMessage(m);}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;'}[c];});}
+var OPEN=null,VIEW='list',SEL=null;try{OPEN=JSON.parse(localStorage.getItem('pbopen')||'null');VIEW=localStorage.getItem('pbview')||'list';}catch(e){}
+if(!OPEN)OPEN={'공공':1,'앱':1};   // 처음엔 두 큰 가지만 펼친다
+function save(){try{localStorage.setItem('pbopen',JSON.stringify(OPEN));localStorage.setItem('pbview',VIEW);}catch(e){}}
+// ---- 나무: 자리(path) 마디 › 패키지 › 기능
+function tree(){var root={name:'',key:'',children:{},list:[],pkgs:[]};
+  (D.packages||[]).forEach(function(p){byId[p.id]=p;var at=root,key='';(p.path||'기타').split('/').forEach(function(seg){key=key?key+'/'+seg:seg;if(!at.children[seg]){at.children[seg]={name:seg,key:key,children:{},list:[],pkgs:[]};at.list.push(at.children[seg]);}at=at.children[seg];});at.pkgs.push(p);});
+  return root;}
+function vsum(p){var v=p.verification||{};return {caps:(p.manifest.capabilities||[]).length,total:v.total||0,ok:v.ok||0,changed:v.changed||0,fail:v.fail||0,unverified:v.unverified||0,pkgs:1};}
+function csum(p,c){var st=p.verification&&p.verification.steps||{},r={total:0,ok:0,changed:0,fail:0};(c.steps||[]).forEach(function(s){var o=st[c.id+'/'+s.id];r.total++;if(o&&r[o.outcome]!=null)r[o.outcome]++;});r.unverified=r.total-r.ok-r.changed-r.fail;return r;}
+function nsum(n){var c={caps:0,total:0,ok:0,changed:0,fail:0,unverified:0,pkgs:0};(function walk(m){m.pkgs.forEach(function(p){var v=vsum(p);Object.keys(c).forEach(function(k){c[k]+=v[k];});});m.list.forEach(walk);})(n);return c;}
+function marks(c,unit){var m=[];if(c.ok)m.push('✓'+c.ok);if(c.changed)m.push('△'+c.changed);if(c.fail)m.push('✗'+c.fail);return (unit?unit+' · ':'')+(c.total?'단계 '+c.total+' · ':'')+(m.length?m.join(' ')+' · ':'')+'미검증 '+c.unverified;}
+function drawList(){var root=tree(),h='';
+  function row(key,depth,cls,name,meta,n,has,open){return '<tr class="'+cls+(has?' kid'+(open?' open':''):'')+(SEL&&SEL.key===key?' sel':'')+'" data-key="'+esc(key)+'" style="--d:'+depth+'"><td><span class="tw">'+(has?(open?'▾':'▸'):'')+'</span>'+esc(name)+(meta?' <span class="meta">'+esc(meta)+'</span>':'')+'</td><td class="n">'+esc(n)+'</td></tr>';}
+  (function walk(node,depth){node.list.forEach(function(m){var c=nsum(m),open=!!OPEN[m.key];h+=row(m.key,depth,'cat',m.name,'',marks(c,'플레이북 '+c.pkgs),true,open);if(open)walk(m,depth+1);});
+    node.pkgs.forEach(function(p){var key='pkg:'+p.id,open=!!OPEN[key],c=vsum(p);h+=row(key,depth,'pkg',p.name,p.target+' · v'+p.version,marks(c,'기능 '+c.caps),true,open);
+      if(open)(p.manifest.capabilities||[]).forEach(function(cap){var k=key+'/'+cap.id;h+=row(k,depth+1,'cap',cap.title||cap.id,'',marks(csum(p,cap)),false,false);});});})(root,0);
+  document.getElementById('list').innerHTML='<table class="tree"><tbody>'+h+'</tbody></table>';
+  var all=nsum(root);document.getElementById('sum').textContent='플레이북 '+all.pkgs+' · 기능 '+all.caps+' · 단계 '+all.total+' · ✓'+all.ok+' △'+all.changed+' ✗'+all.fail+' · 미검증 '+all.unverified;
+  document.querySelectorAll('#list tr').forEach(function(tr){tr.addEventListener('click',function(){var key=tr.dataset.key;
+    if(key.indexOf('pkg:')===0){var m=/^pkg:([^\/]+)(?:\/(.+))?$/.exec(key);SEL={key:key,pkg:m[1],cap:m[2]||''};if(!m[2]){if(OPEN[key])delete OPEN[key];else OPEN[key]=1;}}
+    else{if(OPEN[key])delete OPEN[key];else OPEN[key]=1;}
+    save();drawList();drawDetail();});});}
+// ---- 트리맵: 기능 하나 = 기록 하나, 면적 = 미검증 단계(남은 검증 일)
+function drawMap(){var recs=[];(D.packages||[]).forEach(function(p){(p.manifest.capabilities||[]).forEach(function(c){var s=csum(p,c);recs.push({id:p.id+'/'+c.id,fields:{name:c.title||c.id,path:(p.path||'기타')+'/'+p.name+'/'+(c.title||c.id),unverified:s.unverified,total:s.total,ok:s.ok,changed:s.changed,fail:s.fail,pkg:p.id}});});});
+  var schema={fields:[{key:'name',title:'기능',type:'text'},{key:'path',title:'자리',type:'path'},{key:'unverified',title:'미검증',type:'amount',unit:'단계'},{key:'total',title:'단계',type:'amount'},{key:'ok',title:'✓',type:'amount'},{key:'changed',title:'△',type:'amount'},{key:'fail',title:'✗',type:'amount'},{key:'pkg',title:'플레이북',type:'ref'}]};
+  var paths={};recs.forEach(function(r){paths[r.fields.path]=r;});
+  X.mount(document.getElementById('map'),{records:recs,schema:schema,depth:2,onSelect:function(s){var r=paths[s.path];if(r){SEL={key:'pkg:'+r.fields.pkg+'/'+r.id.split('/')[1],pkg:r.fields.pkg,cap:r.id.split('/')[1]};drawDetail();}}});}
+function drawDetail(){var el=document.getElementById('detail');if(!SEL||!byId[SEL.pkg]){el.innerHTML='<div class="sec">명세</div><p class="meta">줄을 고르면 명세 나무가 여기에</p>';return;}
+  var p=byId[SEL.pkg];el.innerHTML='';var box=document.createElement('div');el.appendChild(box);
+  P.mount(box,{manifest:p.manifest,verification:p.verification,footprints:p.footprints||[],cap:SEL.cap||''});
+  var more='';if(p.openable)more+='<p><button type="button" id="openPkg">'+esc(p.target)+'에서 열기</button></p>';
+  if((p.humanSteps||[]).length)more+='<details><summary>사람 차례</summary><ul>'+p.humanSteps.map(function(s){return '<li>'+esc(s)+'</li>';}).join('')+'</ul></details>';
+  if(p.guide)more+='<details><summary>사용법</summary><pre style="white-space:pre-wrap;font:inherit">'+esc(p.guide)+'</pre></details>';
+  el.insertAdjacentHTML('beforeend',more);var b=document.getElementById('openPkg');if(b)b.addEventListener('click',function(){post({open:p.id});});}
+function setView(v){VIEW=v;save();var b=document.getElementById('mapToggle');b.classList.toggle('on',v==='map');b.setAttribute('aria-pressed',String(v==='map'));document.getElementById('list').hidden=v==='map';document.getElementById('map').hidden=v!=='map';if(v==='map')drawMap();}
+document.getElementById('mapToggle').addEventListener('click',function(){setView(VIEW==='map'?'list':'map');});
+if(D){drawList();drawDetail();setView(VIEW);}
+</script>
+</body>
+</html>

@@ -117,7 +117,7 @@ final class MCPServer {
                                  "windows_screen", "windows_click", "windows_type", "windows_key", "windows_scroll", "windows_open", "browser_open", "screen_inspect",
                                  "profile_save", "profile_status", "profile_delete", "profile_fill",
                                  "pay_preference", "confirm_payment", "record_spend", "balances", "today_spending", "ask_choice",
-                                 "health_records", "record_health", "inbody_capture", "bank_profile_capture"] + AccountingTools.names.sorted() + AndroidTools.names.sorted() + SharedTools.names.sorted()
+                                 "health_records", "record_health", "inbody_capture", "bank_profile_capture", "registry_read"] + AccountingTools.names.sorted() + AndroidTools.names.sorted() + SharedTools.names.sorted()
     static let tools: [ToolSpec] = reused.compactMap { n in Tools.specs.first { $0.name == n } } + [
         Tools.T("transactions", "최근 days 일의 거래(ts, amount, merchant, card, kind, uid, status) JSON 배열, 최신순 최대 300행.", ["days": ("integer", "기본 30")]),
         Tools.T("sql", "장부(SQLite)에 읽기 전용 SQL. SELECT/WITH 만. 결과 {columns, rows}, 200행 상한. 테이블: transactions, snapshots, holdings, state, later, facts.",

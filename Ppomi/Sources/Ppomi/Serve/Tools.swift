@@ -50,8 +50,8 @@ final class Tools {
     /// Test hook, a fake phone: `screen` replaces Phone.screen, `hand` swallows tap/key/type/scroll/open, the gate skips the mirror check.
     static var fake: (screen: () throws -> [OCR.Word], hand: ([String]) throws -> Void)? = nil
     /// Buttons that move money: a tap on one of these needs an unused approval, whatever the prompt says.
-    static let payWords = "결제|구매|주문|송금|이체|입금|충전|구독|가입"                    // the one list; Footprint.isPayTarget uses it unanchored
-    static let payWord = Re(#"("# + payWords + #")\s*(하기|완료|진행)?\s*$"#)   // a button's text ("406,600원 결제하기"), not any line mentioning 결제
+    static let payWords = "결제|구매|주문|송금|이체|입금|충전|구독|가입"                    // the one list; Footprint.isPayTarget uses it unanchored. 매수|매도 stay out: mPOP's order tabs carry the same word, so that button is a 👤 step
+    static let payWord = Re(#"(?<!바로)("# + payWords + #")\s*(하기|완료|진행)?\s*$"#)   // a button's text ("406,600원 결제하기"), not any line mentioning 결제; 쿠팡's 바로구매 only opens the order sheet
     static func isPayWord(_ t: String) -> Bool { payWord.search(t) != nil }
 
     init(db: DB) throws {
@@ -314,6 +314,8 @@ final class Tools {
     static let specs: [ToolSpec] = [
         T("bank_profile_capture", "iPhone의 KB스타기업뱅킹 계좌 상세 화면(계좌번호가 보이는 화면)을 비공개로 한 번 읽어 예금주명·계좌번호를 키체인 은행정보에 저장한다. 값은 돌려주지 않고 등록 여부와 끝 4자리만 알린다. 계좌가 여럿 보이면 하나의 상세 화면으로 들어간 뒤 부른다. 저장 뒤 profile_fill(kb_id_lookup, bank_id: kb) 로 입력한다.",
           ["bank_id": ("string", "kb"), "profile_id": ("string", "기본 self")]),
+        T("registry_read", "부동산 등기사항전부증명서(등기부등본) PDF 파일을 읽어 사실만 돌려준다: 소재지, 갑구의 소유자(이름 첫 글자만)·지분·거래가액·접수일·원인, 을구의 근저당(순위·채권최고액·근저당권자·설정일·말소 여부). 주민번호는 읽지 않는다. 취득가 = 거래가액 + 취득세·중개수수료.",
+          ["path": ("string", "PDF 파일 경로"), "password": ("string", "PDF 비밀번호(있을 때)")], ["path"]),
         T("note_later", "미루고 있는 답장/대화를 적어둔다. 사용자가 누군가에게 답을 미루고 있다고 말하면 제안 후 사용.",
           ["who": ("string", nil), "topic": ("string", nil), "tags": ("string", "#돈 #업무 #감정 같은 태그, 공백 구분")], ["who"]),
         T("list_later", "미루고 있는 대화 목록과 며칠째인지."),
@@ -695,6 +697,8 @@ final class Tools {
             case "weekly_review": return String((String(data: try JSONSerialization.data(withJSONObject: summary()), encoding: .utf8) ?? "{}").prefix(3800))
             case "health_records": return try HealthTools.records(a, store: LifeStore(path: healthStorePath))
             case "record_health": return try HealthTools.record(a, store: LifeStore(path: healthStorePath))
+            case "registry_read":
+                return try RegistryExtract.read(path: str("path"), password: str("password").isEmpty ? nil : str("password"))
             case "bank_profile_capture":
                 if let g = gate(name) { return g }
                 return try BankProfileCapture.capture(profileID: str("profile_id").isEmpty ? "self" : str("profile_id"), bankID: str("bank_id").isEmpty ? "kb" : str("bank_id"), store: .shared)
