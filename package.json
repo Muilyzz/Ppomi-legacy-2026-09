@@ -5,7 +5,10 @@
     "packages/ppomi-body",
     "packages/ppomi-path",
     "packages/playbook-runtime",
-    "packages/ppomi-body-windows"
+    "packages/ppomi-body-windows",
+    "packages/ppomi-body-macos",
+    "packages/ppomi-body-android",
+    "packages/ppomi-body-iphone-mirroring"
   ],
   "scripts": {
     "test": "npm test --workspaces --if-present",
