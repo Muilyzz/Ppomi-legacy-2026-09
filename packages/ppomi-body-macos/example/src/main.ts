@@ -9,6 +9,7 @@ import {
   MacosDriver,
   type FixtureMacosWindow,
 } from "../../src/index.ts";
+import { probeMacLive, writeLiveProbe } from "./live-probe.ts";
 
 const window: FixtureMacosWindow = {
   appLabel: "Demo App",
@@ -23,7 +24,7 @@ const oneStep: Playbook = {
   steps: [{ id: "open-next", kind: "click", target: "Next", effect: "navigate" }],
 };
 
-async function main(): Promise<void> {
+async function runFixtureStep(): Promise<void> {
   const tools = new FixtureMacosNativeTools(window);
   const result = await new Runtime(
     new OsSurface(new MacosDriver(tools)),
@@ -38,13 +39,11 @@ async function main(): Promise<void> {
   process.stdout.write("  step     click Next (effect: navigate) via Runtime + FixtureMacosNativeTools\n");
   process.stdout.write(`  driver   ${result.stepResults[0]?.driver ?? "?"}\n`);
   process.stdout.write(`  status   ${result.status}\n`);
-  if (process.platform !== "darwin") {
-    process.stdout.write(`  live     SKIP (not macOS; ${process.platform})\n`);
-  } else if (process.env.PPOMI_BODY_LIVE !== "1") {
-    process.stdout.write("  live     off (set PPOMI_BODY_LIVE=1 for AX / Automation)\n");
-  } else {
-    process.stdout.write("  live     requested — fixture 1-step is the v0.1 merge proof; live AX is a follow-up\n");
-  }
+}
+
+async function main(): Promise<void> {
+  await runFixtureStep();
+  writeLiveProbe(probeMacLive());
 }
 
 main().catch(error => {
