@@ -83,6 +83,11 @@ final class BrowserLaunchTests: XCTestCase {
         let result = tool.execute("browser_open", ["app": "public-web"])
         XCTAssertTrue(result.contains("Chrome을 설치"), result)
         XCTAssertTrue(MCPServer.tools.contains { $0.name == "browser_open" })
+        for name in ["screen_read", "ui_tap", "ui_type"] {
+            XCTAssertTrue(MCPServer.tools.contains { $0.name == name }, name)
+        }
+        XCTAssertEqual(try MacBrowser.bundleID(for: "safari"), "com.apple.Safari")
+        XCTAssertEqual(try MacBrowser.displayName(for: "safari"), "Safari")
     }
 
     func testWindowsOpenRemainsAnExplicitFallbackForBrowserPackages() throws {

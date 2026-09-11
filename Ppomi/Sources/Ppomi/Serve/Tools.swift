@@ -33,6 +33,7 @@ final class Tools {
     var androidCapture: () throws -> URL = { try AndroidRuntime.capture() }
     var lastAndroidPNG: URL?
     var openBrowser: (URL) throws -> Void = { try MacBrowser.open($0) }
+    var openNamedBrowser: (URL, String) throws -> Void = { try MacBrowser.open($0, browser: $1) }
     var visualAssistanceEnabled: () -> Bool = { true }   // 모델·비용은 서버가 정한다; 사용자 스위치 없음
     var captureVisualScreen: (Bool) throws -> (png: URL, words: [OCR.Word]) = { try Phone.screen(windows: $0) }
     private lazy var visualInspector = VisualInspector()
@@ -338,7 +339,10 @@ final class Tools {
         T("phone_key", "아이폰에 키를 보낸다: home, spotlight, return, escape, delete, selectall, space, down.", ["name": ("string", nil)], ["name"]),
         T("phone_type", "아이폰의 현재 입력창에 글자를 친다. 한글·영문·숫자 그대로 주면 된다.", ["text": ("string", nil)], ["text"]),
         T("phone_open", "플레이북의 실행 정보로 폰 앱을 연다. app에 ID 또는 이름을 주면 검색어를 자동으로 읽는다. launch.target=browser인 웹 플레이북은 browser_open, launch.target=windows인 플레이북은 windows_open을 쓴다. 미등록 앱은 title/search로 열 수 있다. 설치는 사용자가 직접 한다.", ["app": ("string", "플레이북 ID 또는 앱 이름"), "title": ("string", "미등록 앱의 화면 이름"), "search": ("string", "미등록 앱의 Spotlight 검색어")]),
-        T("browser_open", "Mac의 Google Chrome에서 웹 플레이북 또는 HTTP(S) 주소를 연다. 탐색만 하며 페이지 읽기·입력·로그인·자동 재생은 제공하지 않는다. 후속 조작은 호스트의 브라우저 도구로 한다.", ["app": ("string", "launch.target=browser인 플레이북 ID 또는 이름"), "url": ("string", "사용자명·비밀번호 없는 HTTP(S) 주소")]),
+        T("browser_open", "Mac의 Google Chrome(기본) 또는 Safari에서 웹 플레이북 또는 HTTP(S) 주소를 연다. 탐색만 하며 로그인·자동 재생은 제공하지 않는다. 페이지 읽기·클릭·입력은 screen_read / ui_tap / ui_type으로 한다.", ["app": ("string", "launch.target=browser인 플레이북 ID 또는 이름"), "url": ("string", "사용자명·비밀번호 없는 HTTP(S) 주소"), "browser": ("string", "chrome(기본) 또는 safari")]),
+        T("screen_read", "전면 또는 지정한 Mac 브라우저(Chrome/Safari)의 Accessibility 트리를 읽는다. Windows screen_read와 같은 JSON: snapshotId, packageName, appLabel, nodes[].id/parentId/text/role/clickable/editable/visible/enabled/password/bounds, truncated. 최대 500노드·20깊이. 비밀번호 칸은 [protected]. nodeId는 이 스냅샷과 이어지는 ui_tap/ui_type에만 유효하다.", ["app": ("string", "생략하면 전면 Chrome/Safari. chrome, safari, Google Chrome, Safari, 또는 번들 ID")]),
+        T("ui_tap", "방금 screen_read로 읽은 nodes[].id를 AX Press로 누르거나, 같은 스냅샷 창 안의 화면 좌표(x,y, AX bounds와 같은 점)를 클릭한다. nodeId와 x,y를 함께 쓰지 않는다. 결제·구매 버튼과 비밀번호 칸은 거부한다. 누른 뒤 screen_read로 확인한다.", ["nodeId": ("string", "최신 screen_read의 nodes[].id"), "x": ("number", "화면 좌표, bounds.left/right와 같은 점"), "y": ("number", "화면 좌표, bounds.top/bottom과 같은 점")]),
+        T("ui_type", "포커스된 입력칸 또는 방금 screen_read의 editable nodeId에 최대 4096자를 넣는다. AX Value를 쓰고, 불가하면 유니코드 키 이벤트로 이어간다. 비밀번호 칸·제어문자는 거부한다. 클립보드를 쓰지 않는다.", ["nodeId": ("string", "선택: 최신 screen_read의 editable id. 없으면 포커스된 칸"), "text": ("string", "넣을 글자, 최대 4096")], ["text"]),
         T("phone_scroll", "아이폰 화면을 스크롤한다. dy 음수 = 아래로(내용이 위로).", ["dy": ("integer", "픽셀, 예: -430"), "y": ("number", "포인터 위치 0~1, 기본 0.6")], ["dy"]),
         // Explicit Parallels fallback for steps confirmed unavailable in the Mac browser; read the playbook first.
         T("windows_screen", "Parallels의 Windows 창을 OCR로 읽는다. 행마다 y(0~1)와 글자를 준다. 조건: Parallels에서 Windows가 창 모드로 열려 있어야 한다(전체 화면·Coherence 아님)."),
@@ -659,6 +663,7 @@ final class Tools {
         do {
             if SharedTools.names.contains(name) { return try SharedTools.execute(name, a) }
             if AndroidTools.names.contains(name) { return try executeAndroid(name, a) }
+            if MacUI.names.contains(name) { return try executeMacUI(name, a) }
             if AccountingTools.names.contains(name) {
                 return try AccountingTools.execute(name, a, path: accountingStorePath)
             }
@@ -782,9 +787,13 @@ final class Tools {
                     target = definition.manifest.launch.search
                 } else { target = str("url") }
                 guard let url = PlaybookManifest.Launch.webURL(target) else { return "오류: 사용자명·비밀번호 없는 HTTP(S) url 또는 웹 플레이북 app이 필요하다." }
-                do { try openBrowser(url) }
-                catch { return "오류: \(error.localizedDescription)" }
-                return "Mac의 Google Chrome에 열었다. 페이지 확인·입력은 호스트의 브라우저 도구로 이어가라. 뽀미는 브라우저 DOM 조작·로그인·자동 재생을 제공하지 않는다."
+                let browser = str("browser")
+                do {
+                    if browser.isEmpty { try openBrowser(url) }
+                    else { try openNamedBrowser(url, browser) }
+                } catch { return "오류: \(error.localizedDescription)" }
+                let opened = (try? MacBrowser.displayName(for: browser.isEmpty ? nil : browser)) ?? "Google Chrome"
+                return "Mac의 \(opened)에 열었다. 페이지 확인·입력은 screen_read / ui_tap / ui_type으로 이어가라. 로그인·자동 재생은 제공하지 않는다."
             case "windows_open":
                 let record = str("app").isEmpty ? nil : catalog(str("app"))
                 let target = record?.manifest.launch.search ?? str("target")

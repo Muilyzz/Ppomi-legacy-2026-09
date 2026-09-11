@@ -15,7 +15,7 @@ Package titles are domain-specific. Do not add `core`, `common`, `engine`, `util
 
 This package is `playbook-runtime` only. It ships `OsAdapter` and a `DummyAdapter` so the contract can be tested without Windows UI Automation, Mac Accessibility, or hub login.
 
-A later `adapter-windows` package should wrap the existing `executors/windows` tools (`screen_read`, `ui_tap`, `ui_type`, `app_open`). `adapter-macos` maps the same port onto Mac native names (`browser_open` where it exists; `screen_read` / `ui_tap` / `ui_type` as AX-class names). Do not grow a second `playbook-runtime`.
+A later `adapter-windows` package should wrap the existing `executors/windows` tools (`screen_read`, `ui_tap`, `ui_type`, `app_open`). `adapter-macos` maps the same port onto Mac MCP names (`browser_open`, `screen_read`, `ui_tap`, `ui_type`). Do not grow a second `playbook-runtime`.
 
 Ppomi onboarding and playbook packages have **no device-approval or Mac-approver gate**. Do not add approved-device checks to `playbook-runtime`, `adapter-windows`, `adapter-macos`, `playbook-kr-cert`, or their tests.
 

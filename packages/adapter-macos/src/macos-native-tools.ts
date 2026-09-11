@@ -1,8 +1,7 @@
 /**
  * Mac tools this adapter may call.
- * `browser_open` exists in Swift MCP (`Tools.browser_open` / `MacBrowser.open`).
- * `screen_read` / `ui_tap` / `ui_type` are the same AX-class names as the Windows
- * executor and Android voice bridge; Mac MCP does not expose them yet.
+ * Same names as Swift MCP (`Tools.swift` / `MCP.swift`) and the Windows executor:
+ * `browser_open`, `screen_read`, `ui_tap`, `ui_type`.
  * Not a device-approval, sign-in, or Mac-approver surface.
  */
 export type MacNativeToolName = "browser_open" | "screen_read" | "ui_tap" | "ui_type";
@@ -22,10 +21,10 @@ export interface MacScreenRead {
 }
 
 export interface MacNativeTools {
-  browser_open(args: { app?: string; url?: string }): { opened: boolean; app: string };
-  screen_read(): MacScreenRead;
-  ui_tap(args: { nodeId: string }): { invoked: boolean };
-  ui_type(args: { nodeId: string; text: string }): { typed: boolean };
+  browser_open(args: { app?: string; url?: string; browser?: string }): { opened: boolean; app: string };
+  screen_read(args?: { app?: string }): MacScreenRead;
+  ui_tap(args: { nodeId?: string; x?: number; y?: number }): { invoked: boolean };
+  ui_type(args: { nodeId?: string; text: string }): { typed: boolean };
 }
 
 export class MacosAdapterError extends Error {
