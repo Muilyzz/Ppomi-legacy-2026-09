@@ -83,6 +83,8 @@ export class PageSurface implements UiDriver<PageSnapshot, PageRef, PagePlaybook
       case "goto": {
         const url = step.url;
         if (url === undefined || url.length === 0) return unmet("url_required", "goto step url is required");
+        // An automated runtime only navigates where the playbook says it may; declare origins from the Catalog launch URL.
+        if (this.allowedOrigins === undefined) return unmet("origins_required", "goto needs the playbook's allowedOrigins");
         const refusal = navigationRefusal(url, this.allowedOrigins);
         if (refusal !== null) return unmet("navigation_refused", refusal);
         return { ok: true, ref: { kind: "goto", url } };

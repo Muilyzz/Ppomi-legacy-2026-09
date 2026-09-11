@@ -119,6 +119,7 @@ test("proposal 3: target.url is origin + pathname only", () => {
   const adapter = new DummyPageAdapter(page);
   const result = new PagePlaybookRuntime(adapter, all).run({
     id: "url-target",
+    allowedOrigins: ["https://shop.test"],
     steps: [{ id: "open", kind: "goto", url: "https://shop.test/form?lang=ko#top", effect: "navigate" }],
   });
   assert.deepEqual(result.stepResults[0]?.target, { kind: "url", url: "https://shop.test/form" });

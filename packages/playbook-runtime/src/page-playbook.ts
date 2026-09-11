@@ -25,8 +25,9 @@ export interface PagePlaybookStep {
 export interface PagePlaybook {
   readonly id: string;
   /**
-   * Origins `goto` may open and later steps may run on. When declared, any other
-   * origin (including one reached by redirect) fails the next step's precondition.
+   * Origins `goto` may open and later steps may run on. `goto` is refused
+   * (`origins_required`) until they are declared; any other origin, including one
+   * reached by redirect, fails the next step's precondition.
    */
   readonly allowedOrigins?: readonly string[];
   readonly steps: readonly PagePlaybookStep[];

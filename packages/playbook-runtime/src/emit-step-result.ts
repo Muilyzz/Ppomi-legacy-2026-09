@@ -29,6 +29,7 @@ export type RuntimeCode =
   | "locator_required"
   | "locator_not_on_page"
   | "url_required"
+  | "origins_required"
   | "navigation_refused";
 
 export interface Decision {

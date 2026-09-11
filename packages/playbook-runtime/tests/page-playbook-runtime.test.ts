@@ -24,6 +24,8 @@ const page: PageSnapshot = {
 
 const happy: PagePlaybook = {
   id: "fixture-page-happy",
+  // Differs from #18: goto requires the playbook to declare where it may navigate.
+  allowedOrigins: ["https://example.test"],
   steps: [
     { id: "open-form", kind: "goto", url: "https://example.test/form" },
     { id: "wait-next", kind: "waitFor", locator: "#next" },
