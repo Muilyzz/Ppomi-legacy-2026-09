@@ -11,3 +11,12 @@ npm run dev                  # http://127.0.0.1:3000
 ```
 
 키 없이 띄우면 설정 안내만 보인다. 비밀키는 커밋하지 않는다. 설계·대시보드 체크리스트·롤백은 [docs/clerk-migration.md](../docs/clerk-migration.md).
+
+v0.1 DoD probe (does not complete Google OAuth):
+
+```sh
+node --experimental-strip-types web/scripts/live-account-probe.ts
+PPOMI_BODY_LIVE=1 node --experimental-strip-types web/scripts/live-account-probe.ts
+```
+
+Keys present + `npm run dev` → operator Google sign-in must land on `/account`.

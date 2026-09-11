@@ -9,6 +9,7 @@ import {
   WindowsDriver,
   type FixtureWindowsWindow,
 } from "../../src/index.ts";
+import { probeWindowsLive, writeLiveProbe } from "./live-probe.ts";
 
 const window: FixtureWindowsWindow = {
   appLabel: "Demo App",
@@ -41,23 +42,9 @@ async function runFixtureStep(): Promise<void> {
   process.stdout.write(`  status   ${result.status}\n`);
 }
 
-function liveNote(): void {
-  const live = process.env.PPOMI_BODY_LIVE === "1";
-  if (process.platform !== "win32") {
-    process.stdout.write(`  live     SKIP (not Windows; ${process.platform})\n`);
-    process.stdout.write("           real UIA: npm --prefix packages/ppomi-body-windows run smoke:live\n");
-    return;
-  }
-  if (!live) {
-    process.stdout.write("  live     off (set PPOMI_BODY_LIVE=1 for isolated Edge + ppomi-executor)\n");
-    return;
-  }
-  process.stdout.write("  live     requested — use npm --prefix packages/ppomi-body-windows run smoke:live\n");
-}
-
 async function main(): Promise<void> {
   await runFixtureStep();
-  liveNote();
+  writeLiveProbe(probeWindowsLive());
 }
 
 main().catch(error => {

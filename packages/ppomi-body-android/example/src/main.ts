@@ -9,6 +9,7 @@ import {
   FixtureAndroidNativeTools,
   type FixtureAndroidWindow,
 } from "../../src/index.ts";
+import { probeAndroidLive, writeLiveProbe } from "./live-probe.ts";
 
 const window: FixtureAndroidWindow = {
   appLabel: "Demo App",
@@ -39,7 +40,7 @@ async function main(): Promise<void> {
   process.stdout.write("  step     click Next (effect: navigate) via Runtime + FixtureAndroidNativeTools\n");
   process.stdout.write(`  driver   ${result.stepResults[0]?.driver ?? "?"}\n`);
   process.stdout.write(`  status   ${result.status}\n`);
-  process.stdout.write("  live     SKIP (fixture 1-step is the v0.1 merge proof)\n");
+  writeLiveProbe(probeAndroidLive());
 }
 
 main().catch(error => {
