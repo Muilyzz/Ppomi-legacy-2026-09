@@ -37,6 +37,10 @@ Android는 앱이 보이는 상태에서 사용자가 시작한 대화를 유지
 
 접근성 미연결·허용하지 않은 앱·설치되지 않은 앱·변경된 화면·보호 동작은 구분된 실패로 모델에 전달한다. 기기 예외 원문은 전달하지 않는다. 금융·인증·권한 변경 등 보호 동작은 현재 음성 실행기로 승인할 수 없으며 사용자가 직접 처리한다. 화면 읽기와 실제 결과 확인 없이 완료를 주장하지 않는다.
 
+## 플레이북 스텝 기록 뷰 (DI)
+
+`src/ui/highlight-overlay.tsx`와 `src/ui/step-timeline.tsx`는 `StepResult` / `Evidence`를 props로만 받는다. 픽스처 JSON은 `src/ui/fixtures/`. 스토리는 `storybook/step-result-views.stories.jsx`. 작업대 제어 자리·라이브 캡처·런타임 방출은 아직 붙이지 않는다. 오케스트레이터가 나중에 조합한다.
+
 ## 개발
 
 ```sh

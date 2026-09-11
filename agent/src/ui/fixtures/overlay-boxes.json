@@ -1,0 +1,15 @@
+{
+  "open-next": {
+    "boxes": [
+      { "id": "next", "x": 0.70, "y": 0.78, "width": 0.22, "height": 0.10, "label": "#next" }
+    ],
+    "selectedBoxId": "next",
+    "imageSrc": "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 260'%3E%3Crect width='400' height='260' fill='%23e8eef8'/%3E%3Crect x='20' y='20' width='360' height='48' fill='%23ffffff'/%3E%3Crect x='20' y='84' width='240' height='16' fill='%23d5deee'/%3E%3Crect x='20' y='112' width='180' height='16' fill='%23d5deee'/%3E%3Crect x='280' y='200' width='90' height='36' rx='4' fill='%232f6fe0'/%3E%3C/svg%3E"
+  },
+  "confirm": {
+    "boxes": [
+      { "id": "pin", "x": 0.22, "y": 0.38, "width": 0.56, "height": 0.14, "label": "인증서 PIN" }
+    ],
+    "selectedBoxId": "pin"
+  }
+}

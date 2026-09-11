@@ -43,7 +43,8 @@ Ppomi onboarding and playbook packages have **no device-approval or Mac-approver
 - Before an OS mutation, `PlaybookRuntime` reads the screen and checks declared screen/target/focus preconditions. Before a page mutation, `PagePlaybookRuntime` reads the page and checks declared url/text/locator preconditions (`waitFor` is the wait and is not fail-closed on locator presence).
 - Permission denial or a failed precondition **stops the run**. Later steps are not sent to the adapter.
 - Evidence records each attempted step and its outcome. `completed` means declared steps finished. It is not a business-result claim and does not write a journal.
-- `StepResult` / `Evidence` is the stable per-step schema for a later workbench timeline (and for an LLM that only reads `status`). `dumpStepResults` writes one run as a JSON array. Runtimes still return `StepEvidence` on `RunResult`; emitting `StepResult` from `PagePlaybookRuntime` / `PlaybookRuntime` is the next slice. No workbench UI, OCR/CU, or `playbook-kr-cert` in this package yet.
+- `StepResult` / `Evidence` is the stable per-step schema for a later workbench timeline (and for an LLM that only reads `status`). `dumpStepResults` writes one run as a JSON array. Runtimes still return `StepEvidence` on `RunResult`; emitting `StepResult` from `PagePlaybookRuntime` / `PlaybookRuntime` is a parallel slice. No workbench UI, OCR/CU, or `playbook-kr-cert` in this package.
+- Presentational workbench pieces live in `agent/src/ui` (`HighlightOverlay`, `StepTimeline`). They take `StepResult` / `Evidence` as props (DI fixtures only). The workbench orchestrator will compose them later. They do not call AX, Playwright, screen capture, or a live runtime.
 
 ```ts
 import { dumpStepResults, type StepResult } from "playbook-runtime";
