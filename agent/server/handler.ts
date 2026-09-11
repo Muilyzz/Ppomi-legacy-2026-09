@@ -211,8 +211,11 @@ export function createHandler(dependencies: { fetch?: Fetcher; env?: Environment
       const context = await rpc('ppomi_context', {}) as Context;
       if (!context?.workspace || !UUID.test(context.workspace.id) || !context.device || !UUID.test(context.device.id))
         throw new SafeError(401, 'unauthorized', '등록된 기기의 인증을 확인하지 못했습니다.');
-      // 등록만 된 기기(승인 대기)는 모델·기억에 닿지 못한다. 소유자가 Mac 에서 승인해야 한다.
-      if (context.device.approved === false) throw new SafeError(403, 'device_unapproved', '이 기기는 아직 승인되지 않았습니다. Mac 에서 기기를 승인해 주세요.');
+      // Memory list is membership (MZZ-27): no Mac approval gate. Tool execution
+      // and other native-only paths may still require an approved device.
+      if (context.device.approved === false && path !== '/v1/memories/list') {
+        throw new SafeError(403, 'device_unapproved', '이 기기는 아직 승인되지 않았습니다. Mac 에서 기기를 승인해 주세요.');
+      }
       if (!(request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) invalid();
       const body = object(await boundedJson(request, path === '/v1/responses' ? 4_000_000 : 16_384));   // a Responses turn carries instructions, tools and history — or the Mac's one screenshot for the VLM
       let result: unknown;

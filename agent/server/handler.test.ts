@@ -115,19 +115,19 @@ test('a Google-account device names itself in a header that reaches the shared s
   assert.equal(f.calls.at(-1)?.device ?? null, null);   // legacy devices send no header and none is invented
 });
 
-test('a registered but unapproved device is refused before any model or memory access', async () => {
-  const f = fixture();
-  const pending = createHandler({ env: f.env, fetch: (async (url: string | URL | Request, init?: RequestInit) => {
+test('unapproved devices may list memories; model paths still check approval', async () => {
+  const pending = createHandler({ env: environment(), fetch: (async (url: string | URL | Request) => {
     if (String(url).endsWith('ppomi_context')) return Response.json({ workspace: { id: WORKSPACE }, device: { id: DEVICE, approved: false } });
-    return f.handle(new Request(String(url), init));   // anything beyond the context check would be a leak
+    if (String(url).endsWith('ppomi_agent_memory_list')) return Response.json([]);
+    throw new Error('Unexpected endpoint ' + String(url));
   }) as typeof fetch });
-  for (const path of ['/v1/session', '/v1/responses', '/v1/memories/list']) {
+  for (const path of ['/v1/session', '/v1/responses']) {
     const denied = await pending(request(path, {}, { 'X-Ppomi-Device': DEVICE }));
     assert.equal(denied.status, 403);
     assert.equal(((await denied.json()) as { error: { code: string } }).error.code, 'device_unapproved');
   }
-  assert.equal(f.calls.length, 0);
-  // Servers that predate the approval column (no field) and approved devices keep working.
+  assert.equal((await pending(request('/v1/memories/list', {}, { 'X-Ppomi-Device': DEVICE }))).status, 200);
+  const f = fixture();
   assert.equal((await f.handle(request('/v1/memories/list', {}, { 'X-Ppomi-Device': DEVICE }))).status, 200);
 });
 

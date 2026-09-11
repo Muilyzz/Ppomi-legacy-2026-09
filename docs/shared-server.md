@@ -37,7 +37,7 @@ Mac·에뮬레이터·실기기는 서로 다른 Supabase Auth 계정과 기기 
 
 연결 정보는 `url`, `publishableKey`, `email`, `password`, `deviceId` 다섯 필드다. Mac은 전용 Keychain 항목에, Android는 Android Keystore 키로 암호화한 저장소에 보관한다. 클라이언트에는 프로젝트 관리 키나 `service_role` 키를 넣지 않는다. 토큰·암호는 상태 화면과 MCP 응답에 표시하지 않으며, 인증 요청의 HTTP 리디렉션을 허용하지 않는다.
 
-구글 계정 기기(Mac·iPad·Windows·웹)는 `ppomi_register_device`로 등록되지만 **승인 대기**로 시작한다(`20260911100000_device_approval.sql`). 이미 승인된 네이티브 기기(보통 Mac)가 `ppomi_devices_pending`으로 목록을 보고 `ppomi_device_approve`/`ppomi_device_revoke`로 결정한다. 승인 전 기기는 자기 등록 갱신·`ppomi_context`(`device.approved:false`)·`ppomi_key_get`(`found:false`)만 할 수 있고, 기록 읽기·공유 작업·문서·키 감싸기와 에이전트 서버(`device_unapproved`)는 거절된다. `ppomi_devices_waiting`은 승인된 기기만 돌려주므로 Mac의 자동 키 교환(1분마다)은 승인된 기기에게만 감싼 사본을 올린다. 새 작업 공간을 만든 첫 기기만 스스로 승인되고, 이 마이그레이션 이전에 등록된 기기는 모두 승인된 것으로 옮겼다. 해지된 기기가 다시 등록하면 다시 승인 대기이며 옛 감싼 사본은 지운다. 검증은 [기기 승인 회귀 검사](../supabase/tests/device_approval_regression.sql)다.
+구글 계정 기기(Mac·iPad·Windows·웹)는 `ppomi_register_device`로 등록되지만 **승인 대기**로 시작한다(`20260911100000_device_approval.sql`). 이미 승인된 네이티브 기기(보통 Mac)가 `ppomi_devices_pending`으로 목록을 보고 `ppomi_device_approve`/`ppomi_device_revoke`로 결정한다. 이 승인은 **장부 감싼 키** 전달용이다. 채팅 transcript와 기억 읽기는 승인 기기가 필요 없고, 작업 공간 구성원(`auth.uid` / `ppomi_members`)이면 된다. 승인 전 기기는 자기 등록 갱신·`ppomi_context`(`device.approved:false`)·`ppomi_key_get`(`found:false`)만 할 수 있고, 장부 암호문 읽기·공유 작업·문서·키 감싸기는 거절된다. `ppomi_devices_waiting`은 승인된 기기만 돌려주므로 Mac의 자동 키 교환(1분마다)은 승인된 기기에게만 감싼 사본을 올린다. 새 작업 공간을 만든 첫 기기만 스스로 승인되고, 이 마이그레이션 이전에 등록된 기기는 모두 승인된 것으로 옮겼다. 해지된 기기가 다시 등록하면 다시 승인 대기이며 옛 감싼 사본은 지운다. 검증은 [기기 승인 회귀 검사](../supabase/tests/device_approval_regression.sql)다.
 
 **기존 장부·거래·건강 기록·인증 프로필·로컬 작업 기록은 자동 업로드하지 않는다.** 현재 서버 도입은 공유 작업과 공용 문서부터 검증하는 단계다. 모든 뽀미 데이터를 서버 SSOT로 옮기는 작업, 기존 자료의 명시적 이전, 원본 증빙 공유, 범용 원격 실행은 별도 설계와 구현이 남아 있다. Android의 서버 조회는 앱 프로세스에서 주기적으로 수행하며, 푸시 알림이나 항상 실행되는 백그라운드 서비스까지 구현한 것은 아니다.
 
@@ -125,7 +125,7 @@ dist/Ppomi.app/Contents/MacOS/Ppomi --verify-records
 
 Realtime은 암호문 INSERT/UPDATE만 밀어 준다. 웹은 이를 신호로 `ppomi_transcript_turns`를 다시 불러 복호화된 turn을 합친다. Mac은 같은 RPC로 쓰고, 창이 다시 보일 때 `transcriptOpen`으로 합친다.
 
-키(MZZ-28): Vault 비밀 `ppomi-at-rest-key`(별칭 `ppomi-transcript-key`). SQL 검사는 `app.ppomi_at_rest_key` 또는 `app.ppomi_transcript_key`(32바이트 base64). 회전은 `vault.update_secret` 뒤 기존 봉투를 다시 봉하는 별도 작업이다. 대화는 이 헬퍼로 봉한다. 기억 **읽기**는 이중이다(`20260911131000_memory_dual_read.sql`): at-rest 봉투는 `ppomi_agent_memory_list`가 열고, 옛 AES-GCM 봉투는 에이전트가 `PPOMI_AGENT_MEMORY_KEY`로 연다. 기억 **쓰기**는 아직 에이전트 GCM이다.
+키(MZZ-28): Vault 비밀 `ppomi-at-rest-key`(별칭 `ppomi-transcript-key`). SQL 검사는 `app.ppomi_at_rest_key` 또는 `app.ppomi_transcript_key`(32바이트 base64). 회전은 `vault.update_secret` 뒤 기존 봉투를 다시 봉하는 별도 작업이다. 대화는 이 헬퍼로 봉한다. 기억 **읽기**는 이중이다(`20260911131000_memory_dual_read.sql` + `20260911132000_memory_list_membership.sql`): at-rest 봉투는 `ppomi_agent_memory_list`가 열고, 옛 AES-GCM 봉투는 에이전트가 `PPOMI_AGENT_MEMORY_KEY`로 연다. 목록 권한은 transcript와 같이 **구성원**이다. 기기 승인·Mac 게이트가 아니다. 기억 **쓰기**는 아직 에이전트 GCM + `ppomi_private_device`다.
 
 검증: [서버 회귀](../supabase/tests/encrypted_transcripts_regression.sql)는 공유 seal/open 왕복·AAD 바인딩·별칭 GUC, RPC 복호화·직접 SELECT에 평문 없음·웹·대기 기기·헤더 없는 JWT 쓰기, 비구성원 거부, 작업 공간 격리, tombstone, 익명 거부를 롤백한다. 허브는 payload 검증과 Realtime join(신호)을 검사한다.
 

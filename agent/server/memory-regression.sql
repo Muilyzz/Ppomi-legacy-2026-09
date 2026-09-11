@@ -30,14 +30,21 @@ $$;
 
 insert into auth.users(id) values
  ('97a00000-0000-4000-8000-000000000001'), ('97a00000-0000-4000-8000-000000000002'),
- ('97a00000-0000-4000-8000-000000000003'), ('97a00000-0000-4000-8000-000000000004');
+ ('97a00000-0000-4000-8000-000000000003'), ('97a00000-0000-4000-8000-000000000004'),
+ ('97a00000-0000-4000-8000-000000000005');
 insert into public.ppomi_workspaces(id,name) values
  ('97b00000-0000-4000-8000-000000000001','Synthetic memory A'), ('97b00000-0000-4000-8000-000000000002','Synthetic memory B');
+insert into public.ppomi_members(workspace_id,auth_user_id) values
+ ('97b00000-0000-4000-8000-000000000001','97a00000-0000-4000-8000-000000000001'),
+ ('97b00000-0000-4000-8000-000000000001','97a00000-0000-4000-8000-000000000002'),
+ ('97b00000-0000-4000-8000-000000000002','97a00000-0000-4000-8000-000000000003'),
+ ('97b00000-0000-4000-8000-000000000001','97a00000-0000-4000-8000-000000000005');
 insert into public.ppomi_devices(id,workspace_id,auth_user_id,label,platform,revoked_at,approved_at) values
  ('97c00000-0000-4000-8000-000000000001','97b00000-0000-4000-8000-000000000001','97a00000-0000-4000-8000-000000000001','Synthetic Mac','macos',null,statement_timestamp()),
  ('97c00000-0000-4000-8000-000000000002','97b00000-0000-4000-8000-000000000001','97a00000-0000-4000-8000-000000000002','Synthetic Android','android',null,statement_timestamp()),
  ('97c00000-0000-4000-8000-000000000003','97b00000-0000-4000-8000-000000000002','97a00000-0000-4000-8000-000000000003','Other workspace','android',null,statement_timestamp()),
- ('97c00000-0000-4000-8000-000000000004','97b00000-0000-4000-8000-000000000001','97a00000-0000-4000-8000-000000000004','Revoked','android',statement_timestamp(),statement_timestamp());
+ ('97c00000-0000-4000-8000-000000000004','97b00000-0000-4000-8000-000000000001','97a00000-0000-4000-8000-000000000004','Revoked','android',statement_timestamp(),statement_timestamp()),
+ ('97c00000-0000-4000-8000-000000000005','97b00000-0000-4000-8000-000000000001','97a00000-0000-4000-8000-000000000005','Pending web','web',null,null);
 set local role authenticated;
 select set_config('request.jwt.claim.sub','97a00000-0000-4000-8000-000000000001',true);
 select pg_temp.agent_assert(public.ppomi_agent_memory_list()='[]'::jsonb,'new workspace list empty');
@@ -46,6 +53,14 @@ select pg_temp.agent_assert(
     public.ppomi_agent_memory_list()->0 ? 'envelope'
     and not public.ppomi_agent_memory_list()->0 ? 'payload',
     'legacy GCM list row stays an envelope for the agent');
+select set_config('request.jwt.claim.sub','97a00000-0000-4000-8000-000000000005',true);
+select set_config('request.headers','{"x-ppomi-device":"97c00000-0000-4000-8000-000000000005"}',true);
+select pg_temp.agent_assert(jsonb_array_length(public.ppomi_agent_memory_list())=1,
+    'pending web member may list memories without device approval');
+select set_config('request.headers','',true);
+select pg_temp.agent_assert(jsonb_array_length(public.ppomi_agent_memory_list())=1,
+    'member JWT without a device header may list memories');
+select set_config('request.jwt.claim.sub','97a00000-0000-4000-8000-000000000001',true);
 select pg_temp.agent_assert(public.ppomi_agent_memory_save('97d00000-0000-4000-8000-000000000001',jsonb_set(pg_temp.agent_envelope(),'{nonce}','"BBBBBBBBBBBBBBBB"'),repeat('a',64))->'envelope'->>'nonce'='AAAAAAAAAAAAAAAA','retry returns original ciphertext');
 select pg_temp.agent_assert((select count(*) from public.ppomi_agent_memories)=1,'retry did not duplicate row');
 select pg_temp.agent_error($q$select public.ppomi_agent_memory_save('97d00000-0000-4000-8000-000000000001',pg_temp.agent_envelope(),repeat('b',64))$q$,'PT409','changed content digest conflicts');
@@ -72,7 +87,7 @@ select pg_temp.agent_assert((select count(*) from public.ppomi_agent_memories)=0
 select pg_temp.agent_error($q$select public.ppomi_agent_memory_delete('97d00000-0000-4000-8000-000000000001')$q$,'PT404','cross workspace delete hidden');
 select pg_temp.agent_error($q$select public.ppomi_agent_memory_save('97d00000-0000-4000-8000-000000000003',pg_temp.agent_envelope(),repeat('c',64),'97d00000-0000-4000-8000-000000000001')$q$,'PT404','cross workspace replacement hidden');
 select set_config('request.jwt.claim.sub','97a00000-0000-4000-8000-000000000004',true);
-select pg_temp.agent_error($q$select public.ppomi_agent_memory_list()$q$,'42501','revoked device read denied');
+select pg_temp.agent_error($q$select public.ppomi_agent_memory_list()$q$,'42501','non-member cannot list memories');
 select pg_temp.agent_error($q$select public.ppomi_agent_memory_delete('97d00000-0000-4000-8000-000000000002')$q$,'42501','revoked device delete denied');
 select pg_temp.agent_error($q$select public.ppomi_agent_memory_save('97d00000-0000-4000-8000-000000000003',pg_temp.agent_envelope(),repeat('c',64))$q$,'42501','revoked device save denied');
 select set_config('request.jwt.claim.sub','97a00000-0000-4000-8000-000000000001',true);
