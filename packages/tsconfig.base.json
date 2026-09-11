@@ -1,0 +1,21 @@
+{
+  // Shared by every package under packages/. Node globals (URL, timers) come from
+  // @types/node installed in playbook-runtime; no package relies on the DOM lib.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "exactOptionalPropertyTypes": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"],
+    "typeRoots": ["./playbook-runtime/node_modules/@types"]
+  }
+}

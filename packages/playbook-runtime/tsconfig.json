@@ -1,19 +1,4 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    // DOM only for the WHATWG URL and timer globals; this package has no @types/node dependency.
-    "lib": ["ES2022", "DOM"],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true,
-    "verbatimModuleSyntax": true,
-    "erasableSyntaxOnly": true,
-    "exactOptionalPropertyTypes": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "allowImportingTsExtensions": true
-  },
-  "include": ["src"]
+  "extends": "../tsconfig.base.json",
+  "include": ["src", "tests"]
 }
