@@ -1,12 +1,12 @@
 # driver-windows
 
-Windows `OsAdapter` for `playbook-runtime`. Maps focus / click / type / read-screen onto the existing `executors/windows` tools.
+Windows `OsUiDriver` for `playbook-runtime`. Maps focus / click / type / read-screen onto the existing `executors/windows` tools.
 
-This is not a second playbook runner, and it is not a generic `adapter` package.
+This is not a second playbook runner, and it is not a generic `driver` package.
 
 ## Mapping
 
-| `OsAdapter` | `executors/windows` tool | measured reply |
+| `OsUiDriver` | `executors/windows` tool | measured reply |
 | --- | --- | --- |
 | `focus(target)` | `app_open` `{ target }` | `{ packageName, activated: true }` |
 | `readScreen()` | `screen_read` | `{ snapshotId, packageName, appLabel, nodes[], truncated }` |
@@ -21,7 +21,7 @@ This is not a second playbook runner, and it is not a generic `adapter` package.
 | --- | --- | --- |
 | Backend | in-memory window + nodes | the real `ppomi-executor.exe` over its JSONL protocol |
 | Use | unit tests, playbook-runtime smoke | live runs and the Edge smoke below |
-| Process | none | spawns `ppomi-executor --executor --owner-pid <pid>` (default owner: the Node process) in a worker thread; the sync `OsAdapter` contract is kept by blocking on `Atomics.wait` per request |
+| Process | none | spawns `ppomi-executor --executor --owner-pid <pid>` (default owner: the Node process) in a worker thread; the synchronous `WindowsExecutorTools` contract is kept by blocking on `Atomics.wait` per request |
 | Extra API | `calls` log | `listApps(query)`, `allowApps(packageNames)`, `close()` |
 
 Both follow the semantics measured against the real executor (Windows 11 ARM64, Edge):
@@ -30,19 +30,19 @@ Both follow the semantics measured against the real executor (Windows 11 ARM64, 
 | --- | --- |
 | `nodeId` = `"<snapshotId>:<index>"`; every `screen_read` yields a new `snapshotId` | `snapshotIdOf()`; a node from an older snapshot → `stale_screen` before any request is sent |
 | Only the latest snapshot is addressable; it expires after 15 s (`WINDOWS_SNAPSHOT_TTL_MS`) | client-side expiry check → `stale_screen` |
-| `ui_tap` / `ui_type` return `requiresScreenRead: true` and spend the snapshot | both implementations invalidate after an action; the next addressed action without a fresh read → `stale_screen`. `WindowsAdapter` already re-reads before each action |
+| `ui_tap` / `ui_type` return `requiresScreenRead: true` and spend the snapshot | both implementations invalidate after an action; the next addressed action without a fresh read → `stale_screen`. `WindowsDriver` already re-reads before each action |
 | `executeTool` needs an active session; `setControlApps` is **idle-only** (`protected_action` while active) | `allowApps()` pauses the session, sets the allowlist, resumes. Order matters: active → `app_list` → idle → `setControlApps` → active → tools |
 | Allowlist and snapshots are per executor **process** (memory only) | one `LiveWindowsExecutorTools` = one process; restarting the executor requires `allowApps()` again |
-| Non-invokable / non-editable node → `protected_action`; unknown app → `app_not_allowed` | error codes are rethrown unchanged as `WindowsAdapterError.code` |
+| Non-invokable / non-editable node → `protected_action`; unknown app → `app_not_allowed` | error codes are rethrown unchanged as `WindowsDriverError.code` |
 | Chromium exposes web-page fields to UIA only with `--force-renderer-accessibility` | without it `screen_read` on Edge shows just the browser chrome (address bar, tabs) |
 
 Live UI Automation stays in `executors/windows`. This package talks to that tool surface and never calls `beginSignIn`, `completeSignIn`, `configureDevice`, or any approval RPC.
 
 ## What PR #7 should absorb
 
-The base branch's `WindowsAdapter` and fixture predate the measured semantics encoded here. When #7 folds them in it must:
+The base branch's `WindowsDriver` and fixture predate the measured semantics encoded here. When #7 folds them in it must:
 
-- Re-read before every addressed action: `FixtureWindowsExecutorTools` no longer keeps a spent snapshot addressable, so any consumer that re-used a `nodeId` after an action now gets `stale_screen`, matching the real executor. `WindowsAdapter` already re-reads.
+- Re-read before every addressed action: `FixtureWindowsExecutorTools` no longer keeps a spent snapshot addressable, so any consumer that re-used a `nodeId` after an action now gets `stale_screen`, matching the real executor. `WindowsDriver` already re-reads.
 - Update hand-written `WindowsExecutorTools` implementations for `ui_tap`/`ui_type` now returning `requiresScreenRead`.
 - Call `allowApps` only while the session is idle; never `setControlApps` during an active session.
 - Honour `app_open`'s `activated` flag in `focus()`: treat `activated: false` as a failed focus (throw) instead of silently continuing, since the executor reports `activated` as `GetForegroundWindow() == window`, which can be `false`.
@@ -63,23 +63,24 @@ npm run smoke:live
 - Device-approval / Mac-approver / hub login (`beginSignIn`, `completeSignIn`, `configureDevice`, …)
 - `playbook-kr-cert` content
 - A second `playbook-runtime`
-- Package titles `core`, `common`, `engine`, `util`, `shared`, `adapter`, or `runtime`
+- Package titles `core`, `common`, `engine`, `util`, `shared`, `driver`, or `runtime`
 
 ```ts
-import { FixedPermissionGate, PlaybookRuntime } from "../playbook-runtime/src/index.ts";
-import { LiveWindowsExecutorTools, WindowsAdapter } from "driver-windows";
+import { FixedPermissionGate, OsSurface, Runtime } from "../playbook-runtime/src/index.ts";
+import { LiveWindowsExecutorTools, WindowsDriver } from "driver-windows";
 
 const tools = LiveWindowsExecutorTools.start({ executorPath: "C:/path/to/ppomi-executor.exe" });
 const edge = tools.listApps("").apps.find(app => app.label === "msedge")!;
 tools.allowApps([edge.packageName]);            // idle-only on the executor; handled here
-const result = new PlaybookRuntime(
-  new WindowsAdapter(tools),
+// Live tools bind to Runtime + OsSurface, never a wrapper; mutations declare their effect.
+const result = await new Runtime(
+  new OsSurface(new WindowsDriver(tools)),
   new FixedPermissionGate(["ui.read", "ui.control"]),
 ).run({
   id: "demo",
   steps: [
     { id: "go", kind: "focus", target: edge.packageName },
-    { id: "type", kind: "type", target: "입력 상자:", text: "hello" },
+    { id: "type", kind: "type", target: "입력 상자:", text: "hello", effect: "input" },
   ],
 });
 tools.close();

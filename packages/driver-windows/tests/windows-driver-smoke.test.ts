@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   FixedPermissionGate,
-  PlaybookRuntime,
+  OsSurface,
+  Runtime,
   type Playbook,
 } from "../../playbook-runtime/src/index.ts";
 import {
   FixtureWindowsExecutorTools,
-  WindowsAdapter,
+  WindowsDriver,
   fixtureToolNames,
   type FixtureWindowsWindow,
 } from "../src/index.ts";
@@ -22,12 +23,13 @@ const window: FixtureWindowsWindow = {
   ],
 };
 
+// Mutations declare their effect so the core runs them instead of handing off; nothing here commits.
 const smoke: Playbook = {
   id: "fixture-windows-smoke",
   steps: [
     { id: "focus-app", kind: "focus", target: "Demo App" },
-    { id: "open-next", kind: "click", target: "Next" },
-    { id: "fill-name", kind: "type", target: "Name", text: "fixture" },
+    { id: "open-next", kind: "click", target: "Next", effect: "navigate" },
+    { id: "fill-name", kind: "type", target: "Name", text: "fixture", effect: "input" },
     { id: "confirm-screen", kind: "read", require: { screen: ["Demo App", "Next"] } },
   ],
 };
@@ -41,17 +43,19 @@ const approvalTools = [
   "setControlApps",
 ];
 
-test("smoke: playbook-runtime drives Windows executor tools through driver-windows", () => {
+test("smoke: the runtime core drives Windows executor tools through driver-windows", async () => {
   const tools = new FixtureWindowsExecutorTools(window);
-  const runtime = new PlaybookRuntime(
-    new WindowsAdapter(tools),
+  const runtime = new Runtime(
+    new OsSurface(new WindowsDriver(tools)),
     new FixedPermissionGate(["ui.read", "ui.control"]),
   );
-  const result = runtime.run(smoke);
+  const result = await runtime.run(smoke);
 
   assert.equal(result.status, "completed");
   assert.equal(result.stopReason, null);
   assert.deepEqual(result.evidence.map(row => row.outcome), ["ok", "ok", "ok", "ok"]);
+  // The driver's kind flows onto every StepResult.
+  assert.deepEqual(result.stepResults.map(row => row.driver), ["os-windows", "os-windows", "os-windows", "os-windows"]);
   assert.deepEqual(fixtureToolNames(tools.calls), [
     "screen_read",
     "app_open",
@@ -75,9 +79,9 @@ test("smoke: playbook-runtime drives Windows executor tools through driver-windo
 
 test("missing click target does not call ui_tap", () => {
   const tools = new FixtureWindowsExecutorTools(window);
-  const adapter = new WindowsAdapter(tools);
-  adapter.readScreen();
-  assert.throws(() => adapter.click("Submit"), error =>
+  const driver = new WindowsDriver(tools);
+  driver.readScreen();
+  assert.throws(() => driver.click("Submit"), error =>
     error instanceof Error && "code" in error && error.code === "target_not_on_screen");
   assert.deepEqual(fixtureToolNames(tools.calls), ["screen_read"]);
 });

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { LiveWindowsExecutorTools, WindowsAdapterError, type LiveWindowsExecutorOptions } from "../src/index.ts";
+import { LiveWindowsExecutorTools, WindowsDriverError, type LiveWindowsExecutorOptions } from "../src/index.ts";
 
 const faultyFake = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "fake-ppomi-executor-faults.mjs");
 const sleep = (ms: number): Promise<void> => new Promise(done => setTimeout(done, ms));
@@ -21,7 +21,7 @@ function caught(block: () => unknown): { code: string | undefined; message: stri
     block();
     return null;
   } catch (error) {
-    return { code: error instanceof WindowsAdapterError ? error.code : undefined, message: (error as Error).message };
+    return { code: error instanceof WindowsDriverError ? error.code : undefined, message: (error as Error).message };
   }
 }
 
@@ -49,7 +49,7 @@ test("faults: close() reaps a wedged executor and a broken write surfaces as an 
   assert.equal(typeof pid, "number");
   tools.listApps("wedge"); // replies once, then stops reading stdin and stays alive
   const blocked = caught(() => tools.listApps(""));
-  assert.ok(blocked !== null && blocked.code !== undefined, `expected a WindowsAdapterError, got ${JSON.stringify(blocked)}`);
+  assert.ok(blocked !== null && blocked.code !== undefined, `expected a WindowsDriverError, got ${JSON.stringify(blocked)}`);
   tools.close(); // closes stdin, then force-kills because EOF is never observed
   await sleep(200);
   assert.throws(() => process.kill(pid!, 0), /ESRCH/); // the executor process is gone, not leaked

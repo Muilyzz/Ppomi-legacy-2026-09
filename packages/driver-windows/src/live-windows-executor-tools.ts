@@ -5,7 +5,7 @@ import type {
   WindowsScreenNode,
   WindowsScreenRead,
 } from "./windows-executor-tools.ts";
-import { WINDOWS_SNAPSHOT_TTL_MS, WindowsAdapterError, snapshotIdOf } from "./windows-executor-tools.ts";
+import { WINDOWS_SNAPSHOT_TTL_MS, WindowsDriverError, snapshotIdOf } from "./windows-executor-tools.ts";
 
 export interface LiveWindowsExecutorOptions {
   /** Path to the real `ppomi-executor.exe` (the same binary the Tauri shell packages). */
@@ -64,9 +64,9 @@ const CLOSE_TIMEOUT_MS = 5_000;
  * - `ui_tap` / `ui_type` return `requiresScreenRead: true`; the snapshot is invalidated locally so the
  *   next addressed action without a fresh `screen_read` fails fast with `stale_screen`.
  * - Every other executor error code (`app_not_allowed`, `protected_action`, `session_ended`, …) is
- *   rethrown unchanged as `WindowsAdapterError`.
+ *   rethrown unchanged as `WindowsDriverError`.
  *
- * The `OsAdapter` contract is synchronous, so the async child process lives in a worker thread and each
+ * The `OsUiDriver` contract is synchronous, so the async child process lives in a worker thread and each
  * call blocks on `Atomics.wait` until that worker posts the reply.
  */
 export class LiveWindowsExecutorTools implements WindowsExecutorTools {
@@ -84,7 +84,7 @@ export class LiveWindowsExecutorTools implements WindowsExecutorTools {
   private addressable = false;
   private childPid: number | undefined = undefined;
   /** Set when the worker thread itself fails; every later call rethrows it instead of hanging. */
-  private workerError: WindowsAdapterError | null = null;
+  private workerError: WindowsDriverError | null = null;
 
   /** PID of the spawned executor process (diagnostics/tests); `undefined` before it starts. */
   get executorPid(): number | undefined {
@@ -121,7 +121,7 @@ export class LiveWindowsExecutorTools implements WindowsExecutorTools {
     worker.on("error", error => tools.onWorkerError(error));
     if (Atomics.wait(flag, 0, 0, START_TIMEOUT_MS) === "timed-out") {
       void worker.terminate();
-      throw new WindowsAdapterError("native_unavailable", "executor did not start in time");
+      throw new WindowsDriverError("native_unavailable", "executor did not start in time");
     }
     if (tools.workerError !== null) {
       void worker.terminate();
@@ -130,7 +130,7 @@ export class LiveWindowsExecutorTools implements WindowsExecutorTools {
     const ready = receiveMessageOnPort(port1)?.message as { ready: boolean; pid?: number; error?: { code?: string; message?: string } } | undefined;
     if (ready === undefined || !ready.ready) {
       void worker.terminate();
-      throw new WindowsAdapterError(ready?.error?.code ?? "native_unavailable", ready?.error?.message ?? "executor failed to start");
+      throw new WindowsDriverError(ready?.error?.code ?? "native_unavailable", ready?.error?.message ?? "executor failed to start");
     }
     tools.childPid = ready.pid;
     return tools;
@@ -226,21 +226,21 @@ export class LiveWindowsExecutorTools implements WindowsExecutorTools {
 
   private requireAddressable(nodeId: string): void {
     if (!this.addressable || this.latestSnapshotId === null) {
-      throw new WindowsAdapterError("stale_screen", "screen_read is required before an addressed action");
+      throw new WindowsDriverError("stale_screen", "screen_read is required before an addressed action");
     }
     if (snapshotIdOf(nodeId) !== this.latestSnapshotId) {
-      throw new WindowsAdapterError("stale_screen", "nodeId does not belong to the latest snapshot");
+      throw new WindowsDriverError("stale_screen", "nodeId does not belong to the latest snapshot");
     }
     if (this.now() - this.latestReadAt > this.snapshotTtlMs) {
       this.addressable = false;
-      throw new WindowsAdapterError("stale_screen", "snapshot expired");
+      throw new WindowsDriverError("stale_screen", "snapshot expired");
     }
   }
 
   /** One synchronous round trip: post the request, block until the worker signals, read this seq's reply. */
   private request(method: string, args: unknown): unknown {
     if (this.workerError !== null) throw this.workerError;
-    if (this.closed) throw new WindowsAdapterError("native_unavailable", "executor tools are closed");
+    if (this.closed) throw new WindowsDriverError("native_unavailable", "executor tools are closed");
     this.seq += 1;
     const seq = this.seq;
     const deadline = Date.now() + this.requestTimeoutMs;
@@ -254,20 +254,20 @@ export class LiveWindowsExecutorTools implements WindowsExecutorTools {
       }
       if (message !== undefined) {
         const { error, result } = message.reply;
-        if (error !== undefined) throw new WindowsAdapterError(error.code ?? "tool_failed", error.message);
+        if (error !== undefined) throw new WindowsDriverError(error.code ?? "tool_failed", error.message);
         return result;
       }
       if (this.workerError !== null) throw this.workerError;
       const remaining = deadline - Date.now();
       if (remaining <= 0 || Atomics.wait(this.flag, 0, seen, remaining) === "timed-out") {
-        throw new WindowsAdapterError("bridge_timeout", `${method} did not answer within ${this.requestTimeoutMs} ms`);
+        throw new WindowsDriverError("bridge_timeout", `${method} did not answer within ${this.requestTimeoutMs} ms`);
       }
       seen = Atomics.load(this.flag, 0);
     }
   }
 
   private onWorkerError(error: Error): void {
-    if (this.workerError === null) this.workerError = new WindowsAdapterError("native_unavailable", `executor worker failed: ${error.message}`);
+    if (this.workerError === null) this.workerError = new WindowsDriverError("native_unavailable", `executor worker failed: ${error.message}`);
     Atomics.add(this.flag, 0, 1);
     Atomics.notify(this.flag, 0);
   }

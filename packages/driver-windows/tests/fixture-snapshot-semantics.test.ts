@@ -3,7 +3,7 @@ import { test } from "node:test";
 import {
   FixtureWindowsExecutorTools,
   WINDOWS_SNAPSHOT_TTL_MS,
-  WindowsAdapter,
+  WindowsDriver,
   fixtureToolNames,
   snapshotIdOf,
   type FixtureWindowsWindow,
@@ -58,13 +58,13 @@ test("non-invokable / non-editable nodes fail like the executor: protected_actio
   assert.throws(() => tools.ui_type({ nodeId: screen.nodes[0]!.id, text: "no" }), error => code(error) === "protected_action");
 });
 
-test("WindowsAdapter re-reads before each addressed action, so invalidation never trips it", () => {
+test("WindowsDriver re-reads before each addressed action, so invalidation never trips it", () => {
   const tools = new FixtureWindowsExecutorTools(window);
-  const adapter = new WindowsAdapter(tools);
-  adapter.focus("Demo App");
-  adapter.click("Next");
-  adapter.type("Name", "fixture");
-  adapter.click("Next");
+  const driver = new WindowsDriver(tools);
+  driver.focus("Demo App");
+  driver.click("Next");
+  driver.type("Name", "fixture");
+  driver.click("Next");
   assert.deepEqual(fixtureToolNames(tools.calls), [
     "app_open",
     "screen_read",

@@ -1,16 +1,17 @@
-import type { OsAdapter, ScreenSnapshot } from "../../playbook-runtime/src/index.ts";
+import type { OsUiDriver, ScreenSnapshot } from "../../playbook-runtime/src/index.ts";
 import type {
   WindowsExecutorTools,
   WindowsScreenNode,
   WindowsScreenRead,
 } from "./windows-executor-tools.ts";
-import { WindowsAdapterError } from "./windows-executor-tools.ts";
+import { WindowsDriverError } from "./windows-executor-tools.ts";
 
 /**
- * `OsAdapter` over `app_open` / `screen_read` / `ui_tap` / `ui_type`.
+ * `OsUiDriver` over `app_open` / `screen_read` / `ui_tap` / `ui_type`, bound to the runtime by `OsSurface`.
  * Does not talk to UIA itself and has no device-approval input.
  */
-export class WindowsAdapter implements OsAdapter {
+export class WindowsDriver implements OsUiDriver {
+  readonly kind = "os-windows" as const;
   private readonly tools: WindowsExecutorTools;
   private lastFocused: string | null = null;
   private lastScreen: WindowsScreenRead | null = null;
@@ -74,9 +75,9 @@ function resolveNode(
   need: "clickable" | "editable",
 ): WindowsScreenNode {
   const matches = screen.nodes.filter(node => node.text === target);
-  if (matches.length === 0) throw new WindowsAdapterError("target_not_on_screen", `target not on screen: ${target}`);
+  if (matches.length === 0) throw new WindowsDriverError("target_not_on_screen", `target not on screen: ${target}`);
   const usable = matches.filter(node => (need === "clickable" ? node.clickable : node.editable));
-  if (usable.length === 0) throw new WindowsAdapterError("protected_action", `target not ${need}: ${target}`);
-  if (usable.length !== 1) throw new WindowsAdapterError("ambiguous_target", `ambiguous target: ${target}`);
+  if (usable.length === 0) throw new WindowsDriverError("protected_action", `target not ${need}: ${target}`);
+  if (usable.length !== 1) throw new WindowsDriverError("ambiguous_target", `ambiguous target: ${target}`);
   return usable[0]!;
 }

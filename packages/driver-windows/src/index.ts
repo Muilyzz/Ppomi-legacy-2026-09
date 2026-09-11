@@ -1,4 +1,4 @@
-export { WindowsAdapter } from "./windows-adapter.ts";
+export { WindowsDriver } from "./windows-driver.ts";
 export {
   FixtureWindowsExecutorTools,
   fixtureToolNames,
@@ -13,7 +13,7 @@ export {
 } from "./live-windows-executor-tools.ts";
 export {
   WINDOWS_SNAPSHOT_TTL_MS,
-  WindowsAdapterError,
+  WindowsDriverError,
   snapshotIdOf,
   type WindowsActionResult,
   type WindowsExecutorToolName,

@@ -5,7 +5,7 @@ import type {
   WindowsScreenNode,
   WindowsScreenRead,
 } from "./windows-executor-tools.ts";
-import { WINDOWS_SNAPSHOT_TTL_MS, WindowsAdapterError } from "./windows-executor-tools.ts";
+import { WINDOWS_SNAPSHOT_TTL_MS, WindowsDriverError } from "./windows-executor-tools.ts";
 
 export interface FixtureWindowsWindow {
   readonly appLabel: string;
@@ -49,7 +49,7 @@ export class FixtureWindowsExecutorTools implements WindowsExecutorTools {
   app_open(args: { target: string }): { packageName: string; activated: boolean } {
     this.calls.push({ name: "app_open", args: { target: args.target } });
     if (args.target !== this.window.appLabel && args.target !== this.window.packageName) {
-      throw new WindowsAdapterError("app_not_found");
+      throw new WindowsDriverError("app_not_found");
     }
     this.lastNodes = [];
     return { packageName: this.window.packageName, activated: true };
@@ -79,7 +79,7 @@ export class FixtureWindowsExecutorTools implements WindowsExecutorTools {
   ui_tap(args: { nodeId: string }): WindowsActionResult & { invoked: boolean } {
     this.calls.push({ name: "ui_tap", args: { nodeId: args.nodeId } });
     const node = this.addressable(args.nodeId);
-    if (!node.clickable) throw new WindowsAdapterError("protected_action");
+    if (!node.clickable) throw new WindowsDriverError("protected_action");
     this.lastNodes = [];
     return { invoked: true, requiresScreenRead: true };
   }
@@ -87,16 +87,16 @@ export class FixtureWindowsExecutorTools implements WindowsExecutorTools {
   ui_type(args: { nodeId: string; text: string }): WindowsActionResult & { typed: boolean } {
     this.calls.push({ name: "ui_type", args: { nodeId: args.nodeId, text: args.text } });
     const node = this.addressable(args.nodeId);
-    if (!node.editable) throw new WindowsAdapterError("protected_action");
+    if (!node.editable) throw new WindowsDriverError("protected_action");
     this.lastNodes = [];
     return { typed: true, requiresScreenRead: true };
   }
 
   /** The node must belong to the latest, unexpired, not-yet-acted-on snapshot. */
   private addressable(nodeId: string): WindowsScreenNode {
-    if (this.now() - this.lastReadAt > this.snapshotTtlMs) throw new WindowsAdapterError("stale_screen", "snapshot expired");
+    if (this.now() - this.lastReadAt > this.snapshotTtlMs) throw new WindowsDriverError("stale_screen", "snapshot expired");
     const node = this.lastNodes.find(item => item.id === nodeId);
-    if (node === undefined) throw new WindowsAdapterError("stale_screen", "nodeId is not in the latest snapshot");
+    if (node === undefined) throw new WindowsDriverError("stale_screen", "nodeId is not in the latest snapshot");
     return node;
   }
 }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { LiveWindowsExecutorTools, WindowsAdapter, WindowsAdapterError, type LiveWindowsExecutorOptions } from "../src/index.ts";
+import { LiveWindowsExecutorTools, WindowsDriver, WindowsDriverError, type LiveWindowsExecutorOptions } from "../src/index.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "fake-ppomi-executor.mjs");
 
@@ -16,7 +16,7 @@ function start(extra: Partial<LiveWindowsExecutorOptions> = {}): LiveWindowsExec
 }
 
 function code(error: unknown): string | undefined {
-  return error instanceof WindowsAdapterError ? error.code : undefined;
+  return error instanceof WindowsDriverError ? error.code : undefined;
 }
 
 test("live bridge: idle-only setControlApps ordering, then app_open / screen_read / ui_type / ui_tap", () => {
@@ -73,17 +73,17 @@ test("live bridge: a nodeId from an older or expired snapshot is refused before 
   }
 });
 
-test("live bridge: WindowsAdapter runs focus / type / click / read over the real protocol shape", () => {
+test("live bridge: WindowsDriver runs focus / type / click / read over the real protocol shape", () => {
   const tools = start();
   try {
     tools.allowApps(["win:4242:1"]);
-    const adapter = new WindowsAdapter(tools);
-    adapter.focus("win:4242:1");
-    adapter.type("Name", "adapter");
-    adapter.click("Go");
-    const screen = adapter.readScreen();
+    const driver = new WindowsDriver(tools);
+    driver.focus("win:4242:1");
+    driver.type("Name", "driver");
+    driver.click("Go");
+    const screen = driver.readScreen();
     assert.equal(screen.title, "fakeapp");
-    assert.ok(screen.texts.includes("Name adapter"));
+    assert.ok(screen.texts.includes("Name driver"));
     assert.ok(screen.texts.includes("tapped"));
   } finally {
     tools.close();

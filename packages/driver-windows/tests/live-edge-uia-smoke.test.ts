@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { LiveWindowsExecutorTools, WindowsAdapterError } from "../src/index.ts";
+import { LiveWindowsExecutorTools, WindowsDriverError } from "../src/index.ts";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const executorPath = process.env.PPOMI_EXECUTOR
@@ -78,8 +78,8 @@ test("live: Edge read → type → tap → re-read through the real executor", {
 
     const unique = `ppomiuiasmoke${Date.now()}`;
     assert.deepEqual(tools.ui_type({ nodeId: input.id, text: unique }), { typed: true, requiresScreenRead: true });
-    // The snapshot the type was addressed against is gone; the adapter must read again first.
-    assert.throws(() => tools.ui_tap({ nodeId: input.id }), error => error instanceof WindowsAdapterError && error.code === "stale_screen");
+    // The snapshot the type was addressed against is gone; the driver must read again first.
+    assert.throws(() => tools.ui_tap({ nodeId: input.id }), error => error instanceof WindowsDriverError && error.code === "stale_screen");
 
     const afterType = tools.screen_read();
     assert.ok(afterType.nodes.some(node => node.editable && node.text.includes(unique)), "typed text not visible after re-read");

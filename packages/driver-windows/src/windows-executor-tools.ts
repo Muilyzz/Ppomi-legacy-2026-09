@@ -1,5 +1,5 @@
 /**
- * The four `executors/windows` tools this adapter may call.
+ * The four `executors/windows` tools this driver may call.
  * Not a device-approval, sign-in, or Mac-approver surface.
  *
  * Contracts below were measured against the real `ppomi-executor` (Windows 11 ARM64, Edge target):
@@ -49,12 +49,12 @@ export function snapshotIdOf(nodeId: string): string | null {
   return nodeId.slice(0, separator);
 }
 
-export class WindowsAdapterError extends Error {
+export class WindowsDriverError extends Error {
   readonly code: string;
 
   constructor(code: string, message?: string) {
     super(message ?? code);
-    this.name = "WindowsAdapterError";
+    this.name = "WindowsDriverError";
     this.code = code;
   }
 }
