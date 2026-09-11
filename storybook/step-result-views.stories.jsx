@@ -80,6 +80,11 @@ export const RuntimeRun = {
   render: () => mount(<div className="step-result-story"><StepRecordPreview /></div>),
 };
 
+export const RuntimeRunPage = {
+  name: '런타임 실행 · 페이지',
+  render: () => mount(<div className="step-result-story"><StepRecordPreview surface="page" /></div>),
+};
+
 export const PanelFixture = {
   name: '패널 · 픽스처 증빙',
   render: () => mount(<div className="step-result-story">

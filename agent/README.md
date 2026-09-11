@@ -43,7 +43,7 @@ Android는 앱이 보이는 상태에서 사용자가 시작한 대화를 유지
 
 `src/ui/step-record-panel.tsx`의 `StepRecordPanel`(「스텝 기록」)이 둘을 조합한다. `RunResult.stepResults`를 `steps`로 받고 선택 상태를 스스로 갖는다(카드 클릭, ↑↓·Home·End). 증빙 스크린샷은 `screenshots` 리졸버가 브라우저가 그릴 수 있는 URL(object/data/https)로 바꿔 줄 때만 보이고, 기록된 경로 문자열은 DOM에 넣지 않는다. 라이브 대화·에이전트 루프에는 아직 연결하지 않는다 — 오케스트레이터가 나중에 붙인다.
 
-`src/ui/step-record-fixture-run.ts`의 `runFixturePlaybook()`은 ppomi-body 런타임(`PlaybookRuntime`)이 작은 픽스처 ppomi-path 를 인메모리 드라이버로 실행해 방출한 `RunResult.stepResults`를 돌려준다. 픽스처 페이지 `StepRecordPreview`와 스토리 「스텝 기록 / 런타임 실행」이 이 결과를 그려 emit → 뷰를 라이브 드라이버 없이 확인한다.
+`src/ui/step-record-fixture-run.ts`의 `runFixturePlaybook(surface)`은 ppomi-body 런타임이 작은 픽스처 ppomi-path 를 인메모리 드라이버로 실행해 방출한 `RunResult.stepResults`를 그대로 돌려준다 — `"os"`는 `PlaybookRuntime`(확인 버튼 시간 초과), `"page"`는 `PagePlaybookRuntime`(결제 금액 확인 실패로 결제 클릭 전 정지). 런타임이 남기지 않은 증빙은 붙이지 않는다. 픽스처 페이지 `StepRecordPreview`와 스토리 「스텝 기록 / 런타임 실행」·「런타임 실행 · 페이지」가 이 결과를 그려 emit → 뷰를 라이브 드라이버 없이 확인한다.
 
 ## 개발
 

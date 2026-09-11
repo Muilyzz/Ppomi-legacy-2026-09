@@ -9,6 +9,7 @@ import {
   type StepResultStatus,
 } from "../../packages/playbook-runtime/src/step-result";
 import {
+  fixturePagePlaybook,
   fixturePlaybook,
   fixtureTimeoutTarget,
   runFixture,
@@ -69,6 +70,37 @@ test("the fixture run is schema-clean and records no evidence it did not capture
   assert.ok(steps.every(step => !("evidence" in step)), "no screenshots were taken, so none are recorded");
   assert.doesNotMatch(json, /"x":|"bounds":|"nodeId":/);
   assert.equal(runFixture().stepResults.length, steps.length, "re-running the fixture is deterministic");
+});
+
+test("the page-surface fixture goes through the same path: rows as emitted, stop before the pay click", () => {
+  const result = runFixture("page");
+  const steps = runFixturePlaybook("page");
+  assert.deepEqual(steps, result.stepResults);
+  assert.deepEqual(steps.map(step => step.stepId), fixturePagePlaybook.steps.map(step => step.id));
+  assert.ok(steps.every(step => step.adapter === "page" && step.playbookId === fixturePagePlaybook.id));
+  assert.deepEqual(steps.map(step => step.status), ["ok", "ok", "ok", "failed", "failed"]);
+  assert.deepEqual(steps.map(step => step.attempt), ["executed", "executed", "executed", "not_executed", "not_executed"]);
+  assert.deepEqual(steps[0]?.target, { kind: "url", url: "https://example.test/form" });
+  assert.deepEqual(steps[1]?.target, { kind: "locator", locator: "#name" });
+  assert.deepEqual(steps[4]?.target, { kind: "locator", locator: "#pay" });
+  assert.equal(result.status, "stopped");
+  assert.equal(result.stopReason, "precondition_failed");
+  assert.match(steps[3]?.observation.summary ?? "", /결제 금액/);
+
+  for (const entry of result.evidence) {
+    const row = steps.find(step => step.stepId === entry.stepId);
+    assert.ok(row, `no StepResult for ${entry.stepId}`);
+    assert.equal(row.status, statusForOutcome(entry.outcome), entry.stepId);
+  }
+  assert.ok(steps.every(step => !("evidence" in step)), "the dummy page driver captures nothing, so no evidence is attached");
+  assert.deepEqual(parseStepResultsJson(dumpStepResults(steps)), steps);
+
+  const html = renderToStaticMarkup(createElement(StepRecordPanel, { steps }));
+  assert.equal((html.match(/data-step-id="/g) ?? []).length, steps.length);
+  assert.match(html, /https:\/\/example.test\/form/);
+  assert.match(html, /data-status="failed" data-step-id="pay"/);
+  assert.match(html, /선택한 스텝에는 증빙 화면이 없습니다/);
+  assert.match(renderToStaticMarkup(createElement(StepRecordPanel, { steps: [] })), /기록된 스텝이 없습니다/);
 });
 
 test("StepRecordPanel renders the runtime's rows end to end", () => {
