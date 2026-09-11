@@ -19,28 +19,42 @@ Do **not** replace the OS adapters with Playwright. A Korean certificate window,
 
 ## Device-local execution
 
-Runs on the user's machine (or a device-local VM). This is **not** a Vercel / cloud browser. Slice 1 does not launch Chromium; tests use `FixturePlaywrightPage`. Slice 2 may start a local Chrome/Edge. Do not add a hosted browser service here.
+Runs on the user's machine (or a device-local VM). This is **not** a Vercel / cloud browser. Do not add a hosted browser service here.
+
+`npm test` is fixture-only and does not download browsers, start Chrome, or call a cloud browser. Live Chromium is a separate script.
 
 ## Mapping
 
-| `BrowserPageAdapter` | Playwright page (slice 2) | Slice 1 fixture |
+| `BrowserPageAdapter` | Live Playwright (`LivePlaywrightPage`) | Fixture (`FixturePlaywrightPage`) |
 | --- | --- | --- |
 | `goto(url)` | `page.goto(url)` | switch in-memory document |
 | `click(locator)` | `page.locator(locator).click()` | click a fixture node |
 | `fill(locator, text)` | `page.locator(locator).fill(text)` | fill a fixture node |
 | `waitFor(locator)` | `page.locator(locator).waitFor()` | require a visible fixture node |
-| `readPage()` | url / title / visible locator texts | in-memory snapshot |
+| `readPage()` | url / title / visible `h1` text | in-memory snapshot |
 
-Live Playwright stays out of this slice. Tests use `FixturePlaywrightPage` (in-memory documents + locators). They do not download browsers, start Chrome, or call a cloud browser.
+`PlaywrightPageAdapter` stays a sync `BrowserPageAdapter` for fixtures and `PagePlaybookRuntime`. Live callers `await` `LivePlaywrightPage` (Playwright's `Page` is async).
 
 ## Out of scope
 
-- Live Chrome / Edge smoke (slice 2)
 - AI SDK tool wrapping
 - `playbook-kr-cert` content
 - Replacing `adapter-windows` / `adapter-macos`
 - Device-approval / Mac-approver / hub login
+- OS vs Playwright playbook selection rules (later slice)
 - Package titles `core`, `common`, `engine`, `util`, `shared`, `adapter`, `runtime`, or `browser-util`
+
+```ts
+import { chromium } from "playwright";
+import { LivePlaywrightPage } from "adapter-playwright";
+
+const browser = await chromium.launch();
+const tools = new LivePlaywrightPage(await browser.newPage());
+await tools.goto({ url: "https://example.com/" });
+await tools.waitFor({ locator: "h1" });
+const page = await tools.readPage();
+await browser.close();
+```
 
 ```ts
 import { FixedPermissionGate, PagePlaybookRuntime } from "../playbook-runtime/src/index.ts";
@@ -64,6 +78,18 @@ const result = new PagePlaybookRuntime(
 
 ## Tests
 
+Hermetic unit tests (no browser):
+
 ```sh
 npm --prefix packages/adapter-playwright test
+```
+
+Live Chromium smoke on this machine (`https://example.com` → `waitFor(h1)` → read title). Installs Playwright's Chromium if it is missing. Not a Vercel browser.
+
+```sh
+npm --prefix packages/adapter-playwright install
+npx --prefix packages/adapter-playwright playwright install chromium
+npm --prefix packages/adapter-playwright run test:live
+# or
+PLAYWRIGHT_LIVE=1 npm --prefix packages/adapter-playwright run test:live
 ```
