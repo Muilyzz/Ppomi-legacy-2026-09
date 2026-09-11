@@ -1,17 +1,34 @@
 /**
  * Masked account capture for iPhone Mirroring reads.
- * Same KB shapes as `BankProfileCapture.accountPattern`. Raw digits stay off
- * StepResult / logs; the next slice (secret store) takes them via `handoff`.
+ * Capture keeps the KB shapes of `BankProfileCapture.accountPattern`; masking is
+ * wider (any 10–16 digit run) because OCR does not promise a shape. Separators
+ * are whatever OCR renders between digit groups: ASCII or Unicode dashes, a
+ * space, NBSP. Raw digits stay off StepResult / logs; the next slice (secret
+ * store) takes them via `handoff`.
  */
 
-/** KB: 6-2-6, 4-2-6, 3-2-4-3, or 12–14 pasted digits. */
-const KB_ACCOUNT_SOURCE =
-  String.raw`(?<!\d)(?:\d{6}-\d{2}-\d{6}|\d{4}-\d{2}-\d{6}|\d{3}-\d{2}-\d{4}-\d{3}|\d{12,14})(?!\d)`;
+/** One separator: a dash (optionally spaced) or one space-like character. */
+const SEPARATOR =
+  String.raw`(?:[ \u00A0\u2007\u202F]?[-\u2010\u2011\u2012\u2013\u2014\u2212\uFF0D][ \u00A0\u2007\u202F]?|[ \u00A0\u2007\u202F])`;
+
+/** KB: 6-2-6, 4-2-6, 3-2-4-3 with separators, or 12–14 pasted digits. Captured as the account. */
+const KB_ACCOUNT_SOURCE = String.raw`(?<!\d)(?:\d{6}${SEPARATOR}\d{2}${SEPARATOR}\d{6}|\d{4}${SEPARATOR}\d{2}${SEPARATOR}\d{6}|\d{3}${SEPARATOR}\d{2}${SEPARATOR}\d{4}${SEPARATOR}\d{3}|\d{12,14})(?!\d)`;
+
+/**
+ * Masked, never captured: any 10–16 digit run (Korean account lengths plus
+ * 15–16 digit cards) with optional separators, bounded by non-digits. Amounts
+ * keep their thousands commas, dates have 8 digits, times have colons.
+ */
+const DIGIT_RUN_SOURCE = String.raw`(?<!\d)\d(?:${SEPARATOR}?\d){9,15}(?!\d)`;
 
 export const KB_ACCOUNT_PATTERN = new RegExp(KB_ACCOUNT_SOURCE, "g");
 
-function accountRe(): RegExp {
+function kbAccountRe(): RegExp {
   return new RegExp(KB_ACCOUNT_SOURCE, "g");
+}
+
+function digitRunRe(): RegExp {
+  return new RegExp(DIGIT_RUN_SOURCE, "g");
 }
 
 export interface MaskedAccountCapture {
@@ -29,15 +46,17 @@ export function maskAccountNumber(account: string): string {
   return `****${digits.slice(-4)}`;
 }
 
+/** True for anything that gets masked, not only KB shapes: such a row is never tappable. */
 export function isAccountText(text: string): boolean {
-  return findAccountNumbers([text]).length > 0;
+  return digitRunRe().test(text);
 }
 
+/** KB-shaped accounts only; the capture value must not absorb a neighbouring digit token. */
 export function findAccountNumbers(texts: readonly string[]): string[] {
   const found: string[] = [];
   const seen = new Set<string>();
   for (const text of texts) {
-    const matches = text.matchAll(accountRe());
+    const matches = text.matchAll(kbAccountRe());
     for (const match of matches) {
       const raw = match[0] ?? "";
       const digits = digitsOf(raw);
@@ -49,9 +68,43 @@ export function findAccountNumbers(texts: readonly string[]): string[] {
   return found;
 }
 
-/** Replace every KB-shaped account in `text` with `****last4`. */
+/** Replace every account-length digit run in `text` with `****last4`. */
 export function maskAccountText(text: string): string {
-  return text.replace(accountRe(), match => maskAccountNumber(match));
+  return text.replace(digitRunRe(), match => maskAccountNumber(match));
+}
+
+/**
+ * Mask across the texts of one visual line: OCR may split `001234-56-789012`
+ * into `001234-56` and `789012`, which no single text matches. The texts are
+ * joined with one space; a run that spans several texts masks each of them
+ * (`****` on the leading parts, `****last4` on the last).
+ */
+export function maskAccountRows(texts: readonly string[]): string[] {
+  const out = [...texts];
+  const offsets: number[] = [];
+  let position = 0;
+  for (const text of texts) {
+    offsets.push(position);
+    position += text.length + 1;
+  }
+  const joined = texts.join(" ");
+  const matches = [...joined.matchAll(digitRunRe())].reverse();
+  for (const match of matches) {
+    const start = match.index;
+    const end = start + match[0].length;
+    const mask = maskAccountNumber(match[0]);
+    const hit = texts
+      .map((text, index) => ({ index, from: offsets[index]!, to: offsets[index]! + text.length }))
+      .filter(row => row.from < end && start < row.to);
+    hit.forEach((row, order) => {
+      const localStart = Math.max(start, row.from) - row.from;
+      const localEnd = Math.min(end, row.to) - row.from;
+      const current = out[row.index]!;
+      const replacement = order === hit.length - 1 ? mask : "****";
+      out[row.index] = current.slice(0, localStart) + replacement + current.slice(localEnd);
+    });
+  }
+  return out;
 }
 
 /**
