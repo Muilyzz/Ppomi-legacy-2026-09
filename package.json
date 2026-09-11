@@ -9,7 +9,8 @@
     "packages/ppomi-body-macos",
     "packages/ppomi-body-android",
     "packages/ppomi-body-iphone-mirroring",
-    "packages/ppomi-brain"
+    "packages/ppomi-brain",
+    "packages/ppomi-secrets"
   ],
   "scripts": {
     "test": "npm test --workspaces --if-present",
