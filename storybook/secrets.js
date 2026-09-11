@@ -48,15 +48,15 @@ function node(value, path, st) {
   value = unwrap(value);
   if (isObj(value)) {
     var keys = kidKeys(value), label = path.length ? path[path.length - 1] : 'blob';
-    return '<details' + (st.expanded ? ' open' : '') + '><summary>' + esc(label) + ' <small class="meta">' + keys.length + '</small></summary>' +
-      keys.map(function (k) { return node(value[k], path.concat(k), st); }).join('') + '</details>';
+    return '<details' + (st.expanded ? ' open' : '') + '><summary>' + esc(label) + ' <small class="meta">' + keys.length + '</small></summary><ul>' +
+      keys.map(function (k) { return '<li>' + node(value[k], path.concat(k), st) + '</li>'; }).join('') + '</ul></details>';
   }
   var key = path.length ? path[path.length - 1] : 'value';
   var secret = typeof value === 'string' || typeof value === 'number';
   var text = value == null ? '—' : secret && !st.unlocked ? maskLeaf(path, value) : String(value);
   var copy = st.unlocked && secret ? ' <button type="button" data-copy="' + esc(JSON.stringify(path)) + '">복사</button>' : '';
-  return '<p><span class="lbl">' + esc(key) + '</span> ' +
-    (st.unlocked || !secret ? '<code>' + esc(text) + '</code>' : '<span class="mute">' + esc(text) + '</span>') + copy + '</p>';
+  return '<span class="lbl">' + esc(key) + '</span> ' +
+    (st.unlocked || !secret ? '<code>' + esc(text) + '</code>' : '<span class="mute">' + esc(text) + '</span>') + copy;
 }
 
 function html(st) {
