@@ -6,6 +6,7 @@ Pick the port from the **surface**, not the app name or site. One playbook-runti
 | --- | --- | --- | --- |
 | In-page web DOM, forms, locator waits | `PagePlaybookRuntime` | `BrowserPageAdapter` (`goto` / `click` / `fill` / `waitFor` / `readPage`) | `adapter-playwright` |
 | Native windows, system dialogs, cert UI, non-DOM chrome | `PlaybookRuntime` | `OsAdapter` (`readScreen` / `focus` / `click` / `type`) | `adapter-windows` (UIA), `adapter-macos` (AX) |
+| iPhone Mirroring window on Mac (OCR + pointer/key forwarding) | `PlaybookRuntime` | `OsAdapter` (`readScreen` / `focus` / `click` / `type`) | `adapter-iphone-mirroring` (`phone_*`). Not on-device iOS AX. Not `adapter-macos` desktop AX. |
 
 Same `ui.read` / `ui.control`, fail-closed stop, and evidence. Different step shape: page `locator` / `url` vs OS `target`.
 
@@ -23,12 +24,13 @@ An in-page "Next" button is Playwright. Do not drive that button through UIA/AX 
 
 ## Native / system chrome → OS adapter
 
-Use `PlaybookRuntime` + `adapter-windows` or `adapter-macos` when the control is outside the page DOM:
+Use `PlaybookRuntime` + `adapter-windows` or `adapter-macos` when the control is outside the page DOM. Use `adapter-iphone-mirroring` when the control is the **iPhone Mirroring** window on Mac (`phone_screen` / `phone_tap` / `phone_type` / `phone_open`). That is not Mac desktop AX and not on-device iOS AX.
 
 - Native application windows
 - System dialogs (file picker, permission, print)
 - Certificate / security-module UI (including Korean cert helper windows)
 - Browser chrome that is not DOM (OS dialogs attached to the browser process)
+- iPhone Mirroring window on Mac (`adapter-iphone-mirroring` / `phone_*`) — not desktop AX, not on-device iOS AX
 
 Those steps use screen text / focus `target`, not CSS locators. Do not replace the OS adapters with Playwright. A cert window, a native file picker, or a browser OS dialog is still UIA/AX.
 
@@ -63,6 +65,7 @@ Vision, OCR, and VLM (`screen_inspect`) are **fallbacks** when the DOM or access
 - A large abstraction layer before a real hybrid flow exists (compose the two runtimes; do not invent a third)
 - Timeout = "not executed" → automatic retry, especially on signing
 - Implementing Playwright as `OsAdapter`, or replacing UIA/AX with Playwright
+- Treating iPhone Mirroring (`phone_*` / `adapter-iphone-mirroring`) as Mac desktop AX (`adapter-macos`)
 - Elevating one multi-platform automation library as the playbook contract
 
 ## Local AI SDK tools (in-page only)

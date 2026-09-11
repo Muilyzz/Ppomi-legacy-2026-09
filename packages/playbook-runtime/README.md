@@ -11,14 +11,15 @@ Package titles are domain-specific. Do not add `core`, `common`, `engine`, `util
 | `playbook-runtime` | one | Steps, permissions, stop, evidence. No OS or browser calls of its own. |
 | `playbook-kr-cert` | later, one of many | Korean certificate content (scenario + fixtures). Not this slice. |
 | `adapter-windows` | later, one OS | Windows click / type / read-screen / focus. Not this slice. |
-| `adapter-macos` | later, one OS | macOS click / type / read-screen / focus. Sibling OS package. |
+| `adapter-macos` | later, one OS | macOS click / type / read-screen / focus. Sibling OS package. Desktop AX, not iPhone Mirroring. |
+| `adapter-iphone-mirroring` | one phone | iPhone Mirroring on Mac (`phone_*`). Lives in `packages/adapter-iphone-mirroring`. Not on-device iOS AX. Not `adapter-macos`. |
 | `adapter-playwright` | one page | In-page web `goto` / `click` / `fill` / `waitFor`. Lives in `packages/adapter-playwright`. |
 
 This package is `playbook-runtime` only. It ships `OsAdapter` + `DummyAdapter` and `BrowserPageAdapter` + `DummyPageAdapter` so each contract can be tested without UIA, Accessibility, a live browser, or hub login.
 
 `OsAdapter` is native chrome: `readScreen` / `focus` / `click` / `type`. `BrowserPageAdapter` is the in-page port: `readPage` / `goto` / `click` / `fill` / `waitFor`. Do not implement Playwright as `OsAdapter`. Do not grow a second `playbook-runtime` package. `PagePlaybookRuntime` in this package runs page steps.
 
-A later `adapter-windows` package should wrap the existing `executors/windows` tools (`screen_read`, `ui_tap`, `ui_type`, `app_open`). `adapter-macos` maps the same OS port onto Mac native names. `adapter-playwright` implements `BrowserPageAdapter` and exposes those page operations as local Vercel AI SDK tools (`createPlaywrightPageAiTools`). Native / cert UI stays on `OsAdapter`.
+A later `adapter-windows` package should wrap the existing `executors/windows` tools (`screen_read`, `ui_tap`, `ui_type`, `app_open`). `adapter-macos` maps the same OS port onto Mac desktop AX names. `adapter-iphone-mirroring` maps the same `OsAdapter` port onto existing `phone_*` tools for the iPhone Mirroring window on Mac (`StepResult.adapter` is `"phone"`). `adapter-playwright` implements `BrowserPageAdapter` and exposes those page operations as local Vercel AI SDK tools (`createPlaywrightPageAiTools`). Native / cert UI stays on `OsAdapter`.
 
 ## Playwright vs OS adapter
 
@@ -28,6 +29,7 @@ Pick the port from the **surface**, not the app name. Full rules: [docs/adapter-
 | --- | --- | --- | --- |
 | In-page web DOM, forms, locator waits | `PagePlaybookRuntime` | `BrowserPageAdapter` | `adapter-playwright` |
 | Native windows, system dialogs, cert UI, non-DOM chrome | `PlaybookRuntime` | `OsAdapter` | `adapter-windows` (UIA), `adapter-macos` (AX) |
+| iPhone Mirroring window on Mac (not on-device iOS AX) | `PlaybookRuntime` | `OsAdapter` | `adapter-iphone-mirroring` (`phone_*`) |
 
 An in-page "Next" button is Playwright. A Korean certificate window, a native file picker, or a browser OS dialog is UIA/AX. Do not replace the OS adapters with Playwright.
 
@@ -35,7 +37,7 @@ An in-page "Next" button is Playwright. A Korean certificate window, a native fi
 
 Permanent contracts are page locators / URL and OS accessibility text (`target`). Do **not** store coordinates, pixel boxes, or session node IDs as playbook selectors. Vision, OCR, and VLM are fallbacks when the DOM or accessibility tree is missing — not the default path.
 
-Ppomi onboarding and playbook packages have **no device-approval or Mac-approver gate**. Do not add approved-device checks to `playbook-runtime`, `adapter-windows`, `adapter-macos`, `adapter-playwright`, `playbook-kr-cert`, or their tests.
+Ppomi onboarding and playbook packages have **no device-approval or Mac-approver gate**. Do not add approved-device checks to `playbook-runtime`, `adapter-windows`, `adapter-macos`, `adapter-iphone-mirroring`, `adapter-playwright`, `playbook-kr-cert`, or their tests.
 
 ## Contract
 

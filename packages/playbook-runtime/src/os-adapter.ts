@@ -1,4 +1,4 @@
-/** Native / system-chrome port (`PlaybookRuntime`). Not in-page DOM. See `docs/adapter-selection.md`. No device-approval input. */
+/** Native / system-chrome / iPhone-Mirroring port (`PlaybookRuntime`). Not in-page DOM. See `docs/adapter-selection.md`. No device-approval input. */
 export interface ScreenSnapshot {
   readonly title: string;
   readonly texts: readonly string[];
