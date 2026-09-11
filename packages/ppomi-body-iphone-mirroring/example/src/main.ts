@@ -9,6 +9,7 @@ import {
   IphoneMirroringDriver,
   type FixtureIphoneMirroringScreen,
 } from "../../src/index.ts";
+import { probeIphoneMirroringLive, writeLiveProbe } from "./live-probe.ts";
 
 const screen: FixtureIphoneMirroringScreen = {
   appLabel: "Demo App",
@@ -38,11 +39,7 @@ async function main(): Promise<void> {
   process.stdout.write("  step     click Next (effect: navigate) via Runtime + FixtureIphoneMirroringTools\n");
   process.stdout.write(`  driver   ${result.stepResults[0]?.driver ?? "?"}\n`);
   process.stdout.write(`  status   ${result.status}\n`);
-  if (process.platform !== "darwin") {
-    process.stdout.write(`  live     SKIP (not macOS; ${process.platform}) — live phone_* is a Mac follow-up\n`);
-  } else {
-    process.stdout.write("  live     fixture 1-step is the v0.1 merge proof\n");
-  }
+  writeLiveProbe(probeIphoneMirroringLive());
 }
 
 main().catch(error => {
