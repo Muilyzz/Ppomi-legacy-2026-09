@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   CEO_GATEWAY_PROMPT,
+  GATEWAY_FAIL_TEXT,
   SECRETS_CATALOG_INTENT,
+  defaultComplete,
   fixtureIntent,
   fixtureResponses,
   functionCallOf,
@@ -24,9 +26,11 @@ const secretsView: SpineView = {
   body: { status: "completed", steps: [{ stepId: "read-account", status: "ok", note: "****7890 ppomi/kb-star-biz/account" }] },
 };
 
-test("CEO Gateway prompt is not a local-only regex match", () => {
-  assert.equal(previewSpine(CEO_GATEWAY_PROMPT).status, "path_not_found");
+test("CEO paraphrase and catalog intent both select the secrets path", () => {
+  assert.equal(previewSpine(CEO_GATEWAY_PROMPT).pathId, "path-secrets-account");
+  assert.equal(previewSpine("내 사업자 KB계좌번호 알아?").pathId, "path-secrets-account");
   assert.equal(fixtureIntent(CEO_GATEWAY_PROMPT), SECRETS_CATALOG_INTENT);
+  assert.equal(fixtureIntent("내 사업자 KB계좌번호 알아?"), SECRETS_CATALOG_INTENT);
 });
 
 test("fixture model calls run_path; ToolCard is from that call, not linesFromSpine(user text)", async () => {
@@ -53,33 +57,57 @@ test("fixture model calls run_path; ToolCard is from that call, not linesFromSpi
   assert.doesNotMatch(dumped, /1234567890/);
 });
 
-test("unset Gateway falls back to the local matcher without crashing", async () => {
+test("unset Gateway still hits secrets for the CEO paraphrase", async () => {
   const turn = await sendChat(CEO_GATEWAY_PROMPT, {
     complete: async () => null,
     runPath: async intent => previewSpine(intent),
   });
   assert.equal(turn.mode, "local");
-  assert.deepEqual(turn.lines, [{
-    kind: "bubble",
-    role: "assistant",
-    text: "그 일에 맞는 경로가 아직 없습니다.",
-  }]);
+  assert.equal(turn.lines[0]?.kind, "tool");
+  assert.equal(turn.lines[1]?.kind, "bubble");
+  if (turn.lines[0]?.kind !== "tool" || turn.lines[1]?.kind !== "bubble") return;
+  assert.equal(turn.lines[0].tool.label, "path-secrets-account");
+  assert.equal(turn.lines[1].text, "저장된 사업자 계좌는 `****7890`입니다.");
 });
 
-test("gateway proxy IPC failure is Korean path_not_found, not Rust invalid JSON", async () => {
+test("configured gateway error throws; unset gateway returns null", async () => {
+  const bag = globalThis as { __TAURI__?: { core?: { invoke: (cmd: string, args: Record<string, unknown>) => Promise<unknown> } } };
+  const previous = bag.__TAURI__;
+  bag.__TAURI__ = {
+    core: {
+      invoke: async () => ({ configured: true, error: "model_unavailable" }),
+    },
+  };
+  try {
+    await assert.rejects(defaultComplete({ input: "x" }), /model_unavailable/);
+    bag.__TAURI__ = {
+      core: {
+        invoke: async () => ({ configured: false }),
+      },
+    };
+    assert.equal(await defaultComplete({ input: "x" }), null);
+  } finally {
+    if (previous === undefined) delete bag.__TAURI__;
+    else bag.__TAURI__ = previous;
+  }
+});
+
+test("gateway proxy IPC failure is a distinct error, not path_not_found", async () => {
   const turn = await sendChat("지금 데이터 뭐 있어?", {
     complete: async () => {
       throw new Error("node host returned invalid JSON");
     },
-    runPath: async intent => previewSpine(intent),
+    runPath: async () => {
+      throw new Error("run_path should not run after gateway ipc fail");
+    },
   });
-  assert.equal(turn.mode, "local");
+  assert.equal(turn.mode, "gateway");
   assert.deepEqual(turn.lines, [{
     kind: "bubble",
     role: "assistant",
-    text: "그 일에 맞는 경로가 아직 없습니다.",
+    text: GATEWAY_FAIL_TEXT,
   }]);
-  assert.doesNotMatch(JSON.stringify(turn), /invalid JSON|node host/i);
+  assert.doesNotMatch(JSON.stringify(turn), /invalid JSON|node host|그 일에 맞는 경로/i);
 });
 
 test("local fallback still paints the CEO regex intent as a secrets card", async () => {

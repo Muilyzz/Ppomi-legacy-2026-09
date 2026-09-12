@@ -39,7 +39,7 @@ type Invoke = (cmd: string, args: Record<string, unknown>) => Promise<unknown>;
 const MATCH_HOME = /^(다음|browse|next|열어|home)$/i;
 const MATCH_KB = /kb스타기업뱅킹|kb\s*사업자\s*홈|path_cold_start|kb-enterprise/i;
 const MATCH_SECRETS =
-  /사업자\s*계좌|사업자\s*kb|kb\s*계좌|kb\s*account|계좌번호|통장번호|account\s*number|\baccount\b|계좌/i;
+  /사업자\s*계좌|사업자\s*kb|kb\s*계좌|kb\s*account|계좌번호|통장번호|account\s*number|\baccount\b|계좌|스타비즈|넣어둔\s*번호|마지막만/i;
 
 const KB_PATH_ID = "kb-star-biz-iphone";
 const SECRETS_PATH_ID = "path-secrets-account";
@@ -119,7 +119,15 @@ export async function invokeRunPath(intent: string, body = "macos", live = false
   try {
     return await invoke("run_path", { intent, body, live }) as SpineView;
   } catch {
-    return previewSpine(intent, body);
+    return {
+      status: "failed",
+      pathId: null,
+      note: "run_path ipc failed",
+      bodyKind: body,
+      live,
+      hook: "",
+      body: null,
+    };
   }
 }
 

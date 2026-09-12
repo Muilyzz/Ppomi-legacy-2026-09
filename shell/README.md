@@ -32,7 +32,7 @@ LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
 open --env PPOMI_CHAT=fixture /Applications/뽀미.app
 ```
 
-Prefixing `PPOMI_CHAT=fixture open …` does **not** pass env into the GUI app. `지금 데이터 뭐 있어?` should be the Korean path-not-found bubble (or fixture tool + that text), never `node host returned invalid JSON`. Node spawn clears inherited `NODE_PATH` / Grok Electron injects.
+Prefixing `PPOMI_CHAT=fixture open …` does **not** pass env into the GUI app. A true miss (`지금 데이터 뭐 있어?`) is the Korean path-not-found bubble. Gateway/`run_path` IPC failure is a distinct Korean error (`모델 연결에 실패했습니다.` / `실행에 실패했습니다.`), never `node host returned invalid JSON` and never disguised as path-not-found. Node spawn clears inherited `NODE_PATH` / Grok Electron injects.
 
 The window is the **agent conversation shell** (`agent/src/ui/shell.tsx`)
 inside Tauri — same visual family as Storybook 「대화 셸」. Placeholder verb
@@ -46,12 +46,12 @@ no fixture: same local matcher as before (offline, no crash). Chat never
 prints a plaintext account — masked `****last4` only.
 
 Type `다음` or `browse`: `run_path` → `path-home-next` → `ppomi-body-macos`
-fixture click on `Next`. `내 사업자 KB계좌번호 알아?` still matches locally
-and through fixture Gateway (`****7890`). `KB스타기업뱅킹 열어` /
-`KB 사업자 홈` / `path_cold_start` load `kb-star-biz-iphone` from the
-`ppomi-path` catalog (Home → KB, stop at Face ID / human-login).
-`KB스타비즈에 넣어둔 번호 마지막만 보여줘` does **not** match the local
-regex — that prompt is how you prove the Gateway/fixture tool loop.
+fixture click on `Next`. `내 사업자 KB계좌번호 알아?` and
+`KB스타비즈에 넣어둔 번호 마지막만 보여줘` both hit `path-secrets-account`
+(local aliases + fixture/Gateway `run_path(사업자 계좌번호)`).
+`KB스타기업뱅킹 열어` / `KB 사업자 홈` / `path_cold_start` load
+`kb-star-biz-iphone` from the `ppomi-path` catalog (Home → KB, Face ID).
+`지금 데이터 뭐 있어?` has no catalog path yet.
 
 No IA header, no empty-state chips, no greeting — composer-only empty
 inside the real shell chrome.
