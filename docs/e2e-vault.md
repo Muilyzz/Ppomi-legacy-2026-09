@@ -10,14 +10,15 @@ Status: accepted for slice 1 (Mac↔Win ciphertext sync).
 
 | Piece | Lock |
 | --- | --- |
-| Data seal | libsodium **XChaCha20-Poly1305** (`crypto_aead_xchacha20poly1305_ietf`). Random 32-byte vault **DEK**. AAD `ppomi-vault-v1\|identityId\|keyId` |
-| Device wrap | `crypto_box_seal` of the DEK to a device / auth-request X25519 pubkey |
-| Recovery wrap | **Argon2id** (`crypto_pwhash` ALG_ARGON2ID13) → AEAD-wrap the DEK. Server keeps wrapped DEK + salt + non-decrypting verifier |
-| Remote store | `{ kind, v, identityId, id, box }` plus, when needed, `salt` / `verifier` / pairing `publicKey` + `fingerprint` + `expiresAt` |
+| Data seal | libsodium **XChaCha20-Poly1305** (`crypto_aead_xchacha20poly1305_ietf`). Random 32-byte vault **DEK**. AAD `ppomi-vault-v1\|identityId\|keyId\|seq` — `seq` is monotonic per key; the store refuses a non-increasing `seq`, a client refuses a `seq` older than one it has seen |
+| Device wrap | **Authenticated** `crypto_box_easy` from the approver's device key to the recipient's X25519 pubkey: `senderPub \|\| nonce \|\| box`. The recipient checks `senderPub` against a phrase read from the approver's screen before opening |
+| Recovery wrap | **Argon2id** (`crypto_pwhash` ALG_ARGON2ID13) → AEAD-wrap the DEK. Default `MODERATE`; floor `INTERACTIVE` on wrap, open and store. Server keeps wrapped DEK + salt + `kdf { alg, opsLimit, memLimit }` + non-decrypting verifier |
+| Remote store | `{ kind, v, identityId, id }` plus `seq` + `box` (payload), `box` (dek-device), `box` / `salt` / `verifier` / `kdf` (dek-recovery), `publicKey` / `expiresAt` (pair-request). **No fingerprint column** |
 | Identity | Stub string now (Clerk `user_…` later). Account/meta may stay Clerk + server-key |
-| Daily unlock | OS lock holds the **device private key** (MZZ-47 Keychain / CredMan). Unwrap DEK locally. No server master key |
-| Pairing | **Bitwarden-style existing-device approve + fingerprint phrase.** QR is **out** of this PR |
-| Package | `ppomi-vault` (`libsodium-wrappers-sumo` — sumo is required for `crypto_pwhash`) |
+| Daily unlock | OS lock holds the **device private key** (MZZ-47 Keychain / CredMan). `openDeviceDek` on this device's own wrap `ppomi/vault/dek/device/<fingerprint>`. No server master key |
+| Pairing | **Existing-device approve with two out-of-band phrases** (new device's → approver; approver's → new device). QR is **out** of this PR |
+| Key ids | Payload ids `ppomi/<id>`; `ppomi/vault/` is reserved for vault records and refused by the payload API |
+| Package | `ppomi-vault` (`libsodium-wrappers-sumo@0.8.4`; the standard `libsodium-wrappers@0.8.4` also exports `crypto_pwhash` — switching is a runtime check, not done here) |
 | Later | **age** for large evidence blobs — not in this PR |
 
 `crypto_secretbox` is an allowed stand-in per the lock; this slice uses XChaCha20-Poly1305 AEAD so payload AAD binds identity + key id.
@@ -27,21 +28,24 @@ Mac `SharedRecordCrypto` (AES-GCM records vault) is a different store. Do not mi
 ## Pairing (Mac→Win)
 
 ```text
-Win                                      server / mock store                         Mac
+Win (new)                                server / mock store                         Mac (existing)
   createAuthRequest()
     one-time box keypair
-    fingerprint = generichash(pubkey)
-  persist public meta+pubkey only  ──►  pair-request
+    screen: win phrase = fp(win pub)
+  persist pubkey + expiry only     ──►  pair-request (no phrase)
                                                                               read request
-                                                                              show fingerprint
-                                                                              person confirms
-                                                                              box_seal(DEK, win pubkey)
-                                        dek-device wrap                ◄────  approve
-  unwrap locally with request sk   ◄──  wrapped DEK
+                                                                              person types the WIN phrase
+                                                                              refuse unless fp(relayed pub) == typed
+                                                                              box_easy(DEK, win pub, mac sk)
+                                        dek-device wrap (senderPub‖nonce‖box) ◄──  approve; pair-request consumed
+                                                                              screen: mac phrase = fp(mac pub)
+  person types the MAC phrase
+  refuse unless fp(senderPub) == typed
+  box_open_easy with request sk    ◄──  wrapped DEK
   ClientVault.get(keyId)           ◄──  payload ciphertext
 ```
 
-Fingerprint phrase is eight hex bytes of `crypto_generichash(pubkey)` as `xxxx-xxxx-xxxx-xxxx`. Server may store that public material. Mac refuses wrap unless the spoken/typed phrase matches the recomputed hash.
+Fingerprint phrase is eight hex bytes of `crypto_generichash(pubkey)` as `xxxx-xxxx-xxxx-xxxx`. It is **never stored or relayed**: the approver recomputes the new device's phrase from the relayed public key and compares it with what the person read off the new device's screen (`approveAuthRequest(request, fingerprintReadFromNewDevice)`); the new device recomputes the approver's phrase from the wrap's sender key and compares it with what the person read off the approver's screen (`acceptAuthApproval(wrapped, request, approverFingerprint)`). Passing a relayed value into either parameter defeats the check — the store carries none, so there is nothing to pass.
 
 QR / mobile proximity is a later slice (same wrap blob, different transport).
 
@@ -51,16 +55,17 @@ QR / mobile proximity is a later slice (same wrap blob, different transport).
 - master passphrase / recovery key plaintext
 - decrypted account numbers, balances, evidence, AX DOM/screens
 - bank passwords / OTP / cert PINs
+- fingerprint phrases (they are the out-of-band channel)
 - support dumps of decrypted data
 
-The mock store rejects those field names and fails tests if any of the fixture secrets appear in a snapshot.
+The mock store refuses those field names, a `fingerprint` column, a payload body that is bare or dashed digits, a non-increasing `seq`, a change of row `kind`, and Argon2id parameters below `INTERACTIVE`. That is a **tripwire**, not a control: digits with a prefix, base64/UTF-16/JSON-wrapped digits and any non-numeric secret pass it. The guarantee that a row is ciphertext is that every client seals before `put`; tests assert the fixture secrets (account, DEK, passphrase, private keys) are absent from every snapshot as UTF-8 and base64.
 
 ## Server OK
 
-- ciphertext blobs + nonce/version (`box`)
+- ciphertext blobs + nonce/version + `seq` (`box`)
 - wrapped DEK (`kind: dek-device` \| `dek-recovery`)
-- KDF salt, non-decrypting auth verifier, Clerk user id (`identityId`)
-- pairing request: pubkey, expiry, public fingerprint material
+- KDF salt + parameters (`kdf`), non-decrypting auth verifier, Clerk user id (`identityId`)
+- pairing request: pubkey, expiry
 
 ## Why not the alternatives
 
@@ -83,11 +88,11 @@ The mock store rejects those field names and fails tests if any of the fixture s
 
 **Untrusted.** Remote store, logs, chat, Linear, git, `StepResult`, agent memory, support exports. They may see the Server-OK columns. They must not see the Never list.
 
-**In scope.** Store operator dumps every row. Log scraper. Mistaken `StepResult` print. Tests fail if the mock store can see fixture digits, the DEK, the recovery passphrase, or a device private key.
+**In scope.** Store operator dumps every row. Store operator swaps the pairing public key for its own (refused: the approver compares the new device's phrase). Store operator hands the new device a wrap of its own DEK (refused: the new device compares the approver's phrase; `crypto_box_open_easy` fails for any other sender). Store operator re-labels an envelope to another key id / identity / `seq` (AAD). Store operator rewinds a key to an older envelope while a client that saw the newer one is running (`rollback`). Log scraper. Mistaken `StepResult` print or `JSON.stringify(request)` (private keys are omitted). Tests fail if the mock store can see fixture digits, the DEK, the recovery passphrase, or a device private key.
 
-**Out of scope.** Compromised OS user. Approved-but-malicious second device. Offline brute-force of a weak recovery passphrase given salt+verifier. Lost-all-devices with no recovery passphrase.
+**Out of scope.** Compromised OS user. Approved-but-malicious second device. A person who "confirms" without reading the other screen. Offline brute-force of a weak recovery passphrase given salt+verifier (Argon2id `MODERATE` by default). Rewind served to a **fresh** process that has no `seq` history (persist `seq` per key if needed). Withheld or deleted rows. Lost-all-devices with no recovery passphrase.
 
-**Breaks if.** A client puts UTF-8 digits as `box`. Approve skips fingerprint. Fill writes digits into chat/`StepResult`. Support copies a decrypted dump to the server.
+**Breaks if.** A client puts UTF-8 digits as `box`. A UI passes anything the store relayed as either fingerprint parameter. Fill writes digits into chat/`StepResult`. Support copies a decrypted dump to the server.
 
 ## Hook points (no chat transfer)
 
@@ -100,7 +105,7 @@ Stable key id, same string as MZZ-47: `ppomi/kb-star-biz/account`.
 
 `ppomi-secrets` = local OS cache + device-key unlock. `ppomi-vault` = sync. Wiring those calls is follow-up on those tickets.
 
-Argon2id ops/mem default in tests/example is `OPSLIMIT_MIN` / `MEMLIMIT_MIN`. Production callers use `interactiveKdfLimits()`.
+Argon2id defaults to `crypto_pwhash_*_MODERATE` (≈0.5 s in the WASM build); tests and the example pass `interactiveKdfLimits()` explicitly. Anything below `INTERACTIVE` is refused (`weak_kdf`) on wrap, on open, and by the store. The parameters used are stored in the `dek-recovery` record, so a later open never guesses.
 
 ## Out
 
