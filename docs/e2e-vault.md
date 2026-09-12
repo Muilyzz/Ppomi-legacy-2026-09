@@ -1,60 +1,93 @@
 # ADR: client E2E vault (MZZ-49)
 
-Status: accepted for slice 1 (Mac↔Win ciphertext sync). Not a library freeze — replace the box if a later slice needs a different primitive; do not add a second box beside this one.
+Status: accepted for slice 1 (Mac↔Win ciphertext sync).
+
+**Lock source:** PM-confirmed researcher input (2026-09-12). This file is that lock, not a menu.
 
 ## Decision
 
-**Sealed box + ciphertext sync. Node `node:crypto` only.**
+**libsodium AEAD + wrapped DEK sync. Server stores ciphertext only.**
 
-| Piece | Choice |
+| Piece | Lock |
 | --- | --- |
-| Payload seal | AES-256-GCM, 32-byte vault key, 12-byte nonce, AAD `ppomi-vault-v1\|identityId\|keyId` |
-| Device approve | X25519 ephemeral + HKDF-SHA256 + AES-256-GCM wrap of the vault key (`ppomi-vault-wrap-v1`) |
-| Remote store | Opaque envelope `{ v, identityId, id, box }`. `box` is nonce\|\|ciphertext\|\|tag (base64). No plaintext field |
-| Identity | Stub string (Clerk `user_…` later). Account/meta may stay Clerk + server-key |
-| Daily unlock | OS lock holds the vault key (Keychain / Credential Manager via MZZ-47 `ppomi-secrets`). Face ID unlocks the OS store — Ppomi does not keep a server master key |
-| Pairing path | **Existing-device approve** (one). QR is the same wrap blob on a camera later — not built here |
-| Package | New `ppomi-vault`. Does not extend unmerged `ppomi-secrets` (#55/#57) |
+| Data seal | libsodium **XChaCha20-Poly1305** (`crypto_aead_xchacha20poly1305_ietf`). Random 32-byte vault **DEK**. AAD `ppomi-vault-v1\|identityId\|keyId` |
+| Device wrap | `crypto_box_seal` of the DEK to a device / auth-request X25519 pubkey |
+| Recovery wrap | **Argon2id** (`crypto_pwhash` ALG_ARGON2ID13) → AEAD-wrap the DEK. Server keeps wrapped DEK + salt + non-decrypting verifier |
+| Remote store | `{ kind, v, identityId, id, box }` plus, when needed, `salt` / `verifier` / pairing `publicKey` + `fingerprint` + `expiresAt` |
+| Identity | Stub string now (Clerk `user_…` later). Account/meta may stay Clerk + server-key |
+| Daily unlock | OS lock holds the **device private key** (MZZ-47 Keychain / CredMan). Unwrap DEK locally. No server master key |
+| Pairing | **Bitwarden-style existing-device approve + fingerprint phrase.** QR is **out** of this PR |
+| Package | `ppomi-vault` (`libsodium-wrappers-sumo` — sumo is required for `crypto_pwhash`) |
+| Later | **age** for large evidence blobs — not in this PR |
 
-Same shape as Mac `SharedRecordCrypto` / `KeyWrap` (AES-GCM + X25519 wrap). Those stay on the records vault. This package is the TypeScript port for bank/evidence **payloads** that must cross Mac→Win without chat.
+`crypto_secretbox` is an allowed stand-in per the lock; this slice uses XChaCha20-Poly1305 AEAD so payload AAD binds identity + key id.
+
+Mac `SharedRecordCrypto` (AES-GCM records vault) is a different store. Do not mix keys.
+
+## Pairing (Mac→Win)
+
+```text
+Win                                      server / mock store                         Mac
+  createAuthRequest()
+    one-time box keypair
+    fingerprint = generichash(pubkey)
+  persist public meta+pubkey only  ──►  pair-request
+                                                                              read request
+                                                                              show fingerprint
+                                                                              person confirms
+                                                                              box_seal(DEK, win pubkey)
+                                        dek-device wrap                ◄────  approve
+  unwrap locally with request sk   ◄──  wrapped DEK
+  ClientVault.get(keyId)           ◄──  payload ciphertext
+```
+
+Fingerprint phrase is eight hex bytes of `crypto_generichash(pubkey)` as `xxxx-xxxx-xxxx-xxxx`. Server may store that public material. Mac refuses wrap unless the spoken/typed phrase matches the recomputed hash.
+
+QR / mobile proximity is a later slice (same wrap blob, different transport).
+
+## Server must NEVER see
+
+- vault DEK / device private keys / age identity secrets
+- master passphrase / recovery key plaintext
+- decrypted account numbers, balances, evidence, AX DOM/screens
+- bank passwords / OTP / cert PINs
+- support dumps of decrypted data
+
+The mock store rejects those field names and fails tests if any of the fixture secrets appear in a snapshot.
+
+## Server OK
+
+- ciphertext blobs + nonce/version (`box`)
+- wrapped DEK (`kind: dek-device` \| `dek-recovery`)
+- KDF salt, non-decrypting auth verifier, Clerk user id (`identityId`)
+- pairing request: pubkey, expiry, public fingerprint material
 
 ## Why not the alternatives
 
 | Option | Rejected because |
 | --- | --- |
-| libsodium / tweetnacl / `@noble/ciphers` | Extra dep for AES-GCM + X25519 that Node 22 already has |
-| Server-held vault master key (Clerk, Supabase Vault, KMS) | Server can open the warehouse. Lock forbids it |
+| Node `aes-256-gcm` only (slice-0 draft) | PM lock is libsodium AEAD + Argon2id wrap |
+| Server-held vault master key | Server can open the warehouse |
 | Same-device `ppomi-secrets` only | KB path is acquire-on-Mac, fill-on-Win |
-| Nitro / enclave decrypt | Explicitly out. Enclave plaintext is not E2E |
-| Chat / StepResult / Linear handoff of digits | Forbidden channel |
-| Put NPKI cert blobs in this vault | Certs stay in NPKI. This vault is account/evidence plaintext, not a cert substitute |
+| Nitro / enclave decrypt | Out. Enclave plaintext is not E2E |
+| Chat / StepResult / Linear digits | Forbidden channel |
+| QR pairing in this PR | Mobile/proximity later |
+| age in this PR | Optional later for large evidence |
+| NPKI cert blobs in this vault | Certs stay in NPKI |
 
 ## Threat model (one page)
 
-**Assets.** Vault master key (32 bytes). Sealed payloads (account numbers, later evidence). Wrap blobs (key for a new device).
+**Assets.** Vault DEK. Device/auth-request private keys. Recovery passphrase. Sealed payloads.
 
-**Trusted.** The two client processes that hold the vault key after unlock. The first device that created the key. The approving device that wraps for a published X25519 public key.
+**Trusted.** Client processes that hold the DEK after unlock. The existing device that confirms a fingerprint and wraps.
 
-**Untrusted.** The remote store, logs, chat, Linear, git, `StepResult`, agent memory, any server process. They may see envelopes and wrap blobs. They must not see vault keys or payload plaintext.
+**Untrusted.** Remote store, logs, chat, Linear, git, `StepResult`, agent memory, support exports. They may see the Server-OK columns. They must not see the Never list.
 
-**In scope (this slice).** A curious store operator who dumps every row. A log scraper. A mistaken `console.log` of `StepResult`. Tests fail if the mock store can see the fixture digits.
+**In scope.** Store operator dumps every row. Log scraper. Mistaken `StepResult` print. Tests fail if the mock store can see fixture digits, the DEK, the recovery passphrase, or a device private key.
 
-**Out of scope (this slice).** Compromised OS user (same as `ppomi-secrets`: same-user processes can read Keychain). Malicious second device that the person approved. Recovery if every device is lost (no server recovery key — by design). Traffic analysis of key ids.
+**Out of scope.** Compromised OS user. Approved-but-malicious second device. Offline brute-force of a weak recovery passphrase given salt+verifier. Lost-all-devices with no recovery passphrase.
 
-**Breaks if.** A client `put`s UTF-8 digits as `box`. A wrap is logged next to the device private key. Fill writes digits into `StepResult` or chat. A future “sync” copies Keychain items through a server-readable API.
-
-## Pairing (existing-device approve)
-
-```text
-Win (new)                         Mac (existing)                    store
-  createDeviceKeyPair()
-  publish publicKey  ──────────►  wrapVaultKey(vaultKey, pub)
-                                  store.put wrap envelope  ───►  ciphertext only
-  unwrapVaultKey(box, priv) ◄──── store.get wrap
-  ClientVault.get(keyId)    ◄──── store.get payload
-```
-
-Daily use after pairing: OS unlock → load vault key → `get` / `put`. No re-approve.
+**Breaks if.** A client puts UTF-8 digits as `box`. Approve skips fingerprint. Fill writes digits into chat/`StepResult`. Support copies a decrypted dump to the server.
 
 ## Hook points (no chat transfer)
 
@@ -63,10 +96,12 @@ Stable key id, same string as MZZ-47: `ppomi/kb-star-biz/account`.
 | Ticket | When | Call | Must not |
 | --- | --- | --- | --- |
 | **MZZ-47 put** | After iPhone-mirroring handoff / `SecretStore.put` on Mac | `vault.put("ppomi/kb-star-biz/account", digits)` then drop `digits` | Chat, Linear, git, `StepResult` raw, server logs |
-| **MZZ-48 fill** | Windows Edge KB cert path, account field only | `digits = vault.get("ppomi/kb-star-biz/account")` → fill sink → drop `digits`. Evidence = `vaultEvidence` mask | Chat transfer Mac→Win; NPKI cert import via this vault |
+| **MZZ-48 fill** | Windows Edge KB cert path, account field only | `digits = vault.get(...)` → fill sink → drop. Evidence = `vaultEvidence` mask | Chat transfer Mac→Win; NPKI via this vault |
 
-`ppomi-secrets` remains the **local** OS cache and the daily-unlock holder of the vault key. `ppomi-vault` is the **sync** layer. Wiring those two calls is a follow-up on those tickets, not this PR.
+`ppomi-secrets` = local OS cache + device-key unlock. `ppomi-vault` = sync. Wiring those calls is follow-up on those tickets.
+
+Argon2id ops/mem default in tests/example is `OPSLIMIT_MIN` / `MEMLIMIT_MIN`. Production callers use `interactiveKdfLimits()`.
 
 ## Out
 
-Nitro, full-product E2E for Clerk meta, payment automation, real Clerk session, Mac/Win UI, QR camera, live Supabase table.
+Nitro, age blobs, QR camera, full-product E2E for Clerk meta, payment automation, real Clerk session, Mac/Win UI, live Supabase table.
