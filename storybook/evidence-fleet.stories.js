@@ -27,7 +27,8 @@ export const PeerOffline = {name: '피어 오프라인 · 비활성', args: {ite
 export const Eligible = {name: '적격 · 연결/미연결', args: {items: pick(['ev_tax_001', 'ev_card_002', 'ev_cash_003', 'ev_bill_004']), layers: []}};
 export const Auxiliary = {name: '보조만 · 스냅샷·StepResult', args: {items: pick(['ev_snap_1', 'ev_step_1']), layers: []}};
 export const Presence = {name: '기기 presence · Mac/Win/Phone', args: {items: [], layers: [], server: {memo: '서버 메타만', evidence_ids: []}}};
-export const Hover = {name: 'hover · 미리보기', args: {hover: 'ev_tax_001', items: pick(['ev_tax_001']), layers: []}};
-export const Spinner = {name: '수신 중 · 스피너', args: {hover: 'ev_card_002', inflight: {ev_card_002: true}, items: pick(['ev_card_002']), layers: []}};
-export const EncryptedCache = {name: '오프라인 · 암호문 캐시', args: {hover: 'ev_step_1', items: pick(['ev_step_1']), layers: []}};
-export const SessionCache = {name: '세션 캐시 · re-hover 즉시', args: {hover: 'ev_card_002', session: {ev_card_002: true}, items: pick(['ev_card_002']), layers: []}};
+const one = (id, extra) => ({server: {memo: '소액현금 9월', amount: 164000, unit: '원', evidence_ids: [id]}, items: pick([id]), layers: [], ...extra});
+export const Hover = {name: 'hover · 미리보기', args: one('ev_tax_001', {hover: 'ev_tax_001'})};
+export const Spinner = {name: '수신 중 · 스피너', args: one('ev_card_002', {hover: 'ev_card_002', inflight: {ev_card_002: true}})};
+export const EncryptedCache = {name: '오프라인 · 암호문 캐시', args: one('ev_step_1', {hover: 'ev_step_1'})};
+export const SessionCache = {name: '세션 캐시 · re-hover 즉시', args: one('ev_card_002', {hover: 'ev_card_002', session: {ev_card_002: true}})};

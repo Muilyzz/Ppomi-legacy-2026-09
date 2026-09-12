@@ -69,7 +69,7 @@ tr[data-event]:hover td,tr[data-record]:hover td,tr[aria-selected="true"] td{bac
 .ev-fleet td{overflow:visible}
 .ev-hover{position:relative;display:inline-block}
 .ev-tip{display:none;position:absolute;left:0;top:calc(100% + 4px);z-index:3;margin:0;min-width:256px;max-width:352px;white-space:normal}
-.ev-hover:hover .ev-tip,.ev-hover:focus-within .ev-tip,.ev-hover[data-show] .ev-tip{display:block}
+.ev-hover:hover .ev-tip,.ev-hover:has(:focus-visible) .ev-tip,.ev-hover[data-show] .ev-tip{display:block}
 .ev-pop-preview{min-height:96px;margin:12px 0 0;display:flex;align-items:center;justify-content:center;gap:6px;background:#f4f4f4;border:1px dashed #e5e5e5;border-radius:4px}
 .ev-spin{display:inline-block;width:16px;height:16px;border:2px solid #ccc;border-top-color:#111;border-radius:50%;animation:ev-spin .7s linear infinite}
 @keyframes ev-spin{to{transform:rotate(360deg)}}
