@@ -13,6 +13,7 @@ const tailwindcss = (await import(agentModule("@tailwindcss/vite/dist/index.mjs"
 
 export default defineConfig({
   base: "./",
+  esbuild: { jsx: "automatic" },
   plugins: [tailwindcss()],
   resolve: {
     alias: [
