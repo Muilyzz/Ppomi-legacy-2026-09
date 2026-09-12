@@ -4,9 +4,9 @@
 
 상태 큰 면(유휴 / 시크릿 잠김 / 시크릿 열림): http://localhost:6006 → 사이드바 **상태**. 툴바 **스타일 = 뽀미 테마**.
 
-- `상태--유휴-큰-면` — 기기·연결 요약 + 시크릿 자리
-- `상태--시크릿-잠김` — 같은 면, 트리 마스킹·접힘
-- `상태--시크릿-열림` — 같은 면, 원문 트리
+- http://localhost:6006/?path=/story/상태--idle — 기기·연결 요약 + 시크릿 자리
+- http://localhost:6006/?path=/story/상태--locked — 같은 면, 트리 마스킹·접힘
+- http://localhost:6006/?path=/story/상태--unlocked — 같은 면, 원문 트리
 
 앱 「상태·비밀」 wire는 [MZZ-54](https://linear.app/muilyzz/issue/MZZ-54). 이 모듈은 Storybook만.
 
