@@ -1,6 +1,7 @@
 // storybook/evidence-fleet.js — 2026-09-12 증빙 잠금 면. 서버=분개·숫자. 파일은 기기/E2E. id는 디버그에서만.
-// 링크: 기기 · 종류. 클릭=미리보기 팝오버. 로컬 즉시 / 피어 온라인이면 E2E / 오프면 비활성(또는 암호문 캐시).
-// 적격 4종 vs 보조(스냅샷/StepResult). 앱 wire·실제 E2E 암호는 없음. CSS 없음: .ev-fleet .jtitle .sec .card .lbl .meta .key .nav table .ev-pop.
+// 링크: 기기 · 종류. hover=미리보기. 클릭=열기/받기(미리보기 아님). 로컬 즉시 / 피어 온라인이면 E2E+스피너 / 오프면 비활성(또는 암호문 캐시).
+// 세션 미리보기 캐시: E2E 1회 후 re-hover 즉시. 원문 바이트 없음. 앱 wire·실제 E2E 암호는 없음.
+// CSS 없음: .ev-fleet .jtitle .sec .card .lbl .meta .key .nav table .ev-hover .ev-tip .ev-spin.
 (function (root) {
 'use strict';
 
@@ -8,6 +9,15 @@ var OFFICIAL = ['세금계산서', '카드', '현금영수증', '계산서'];
 var AUX = ['스냅샷', 'StepResult'];
 var LINK = {open: '열기', e2e: 'E2E', cache: '암호문 캐시', disabled: '오프라인'};
 var HOST = {mac: 'Mac', win: 'Win', phone: 'Phone'};
+var PREVIEW = {
+  empty: '미리보기 없음 · 기기 미부착',
+  receive: '수신 중',
+  session: '세션 미리보기 · 바이트 없음',
+  ciphertext: '암호문 캐시 · 오프라인 · 원문 없음',
+  offline: '오프라인 · 미리보기 불가',
+  e2e: '미리보기 · E2E · 바이트 없음',
+  local: '미리보기 · 파일은 기기 · 바이트 없음',
+};
 
 function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;'}[c]; }); }
 
@@ -54,6 +64,22 @@ function linkState(item, fleet, here) {
 
 function linkLabel(state) { return LINK[state] || LINK.disabled; }
 
+function flagged(map, id) { return !!(map && map[id]); }
+
+function previewKind(it, st) {
+  if (!it) return 'empty';
+  var id = it.evidence_id;
+  if (flagged(st && st.inflight, id)) return 'receive';
+  if (flagged(st && st.session, id)) return 'session';
+  var link = linkState(it, st.fleet, st.here);
+  if (link === 'cache') return 'ciphertext';
+  if (link === 'disabled') return 'offline';
+  if (link === 'e2e') return 'e2e';
+  return 'local';
+}
+
+function previewCopy(kind) { return PREVIEW[kind] || PREVIEW.local; }
+
 function presence(fleet, here) {
   if (!fleet || !fleet.length) return '<p class="meta">기기 없음</p>';
   return '<div class="grid3">' + fleet.map(function (d) {
@@ -76,44 +102,47 @@ function itemById(items, id) {
   return null;
 }
 
-function popover(it, st, i) {
-  var state = linkState(it, st.fleet, st.here);
-  var host = it.host || st.here || 'local';
-  var title = it.title || itemLabel(it, st);
-  var ms = collectedAt(it);
-  var when = ms == null ? '' : ' · ' + timeFull(ms);
-  return '<div class="card ev-pop" popover id="ev-pop-' + i + '" data-pop="' + esc(it.evidence_id) + '">' +
-    '<div class="jtitle"><span class="lbl">' + esc(title) + '</span></div>' +
-    '<div>' + esc(it.kind) + ' · ' + esc(gradeOf(it.kind)) + '</div>' +
-    '<p class="meta">' + esc(hostLabel(st.fleet, host)) + ' · ' + esc(linkLabel(state)) + ' · ' +
-    esc(it.linked ? '연결' : '미연결') + when + debugId(it.evidence_id, st.debug) + '</p>' +
-    '<div class="ev-pop-preview"><span class="meta">미리보기 · 파일은 기기 · 바이트 없음</span></div>' +
-    '<p><button type="button" class="entry" popovertarget="ev-pop-' + i + '" popovertargetaction="hide">닫기</button></p></div>';
+function previewPane(kind) {
+  var spin = kind === 'receive' ? '<span class="ev-spin" aria-hidden="true"></span>' : '';
+  return '<div class="ev-pop-preview">' + spin + '<span class="meta">' + esc(previewCopy(kind)) + '</span></div>';
 }
 
-function missPopover(id, i, st) {
-  return '<div class="card ev-pop" popover id="ev-miss-' + i + '" data-pop="' + esc(id) + '">' +
-    '<div class="jtitle"><span class="lbl">미부착</span></div>' +
-    '<div>서버 메타만</div>' +
-    '<p class="meta">기기 없음 · 미리보기 불가' + debugId(id, st.debug) + '</p>' +
-    '<div class="ev-pop-preview"><span class="meta">미리보기 없음 · 기기 미부착</span></div>' +
-    '<p><button type="button" class="entry" popovertarget="ev-miss-' + i + '" popovertargetaction="hide">닫기</button></p></div>';
+function tip(it, st, id) {
+  var kind = previewKind(it, st);
+  var title = it ? (it.title || itemLabel(it, st)) : '미부착';
+  var host = it ? hostLabel(st.fleet, it.host || st.here || 'local') : '기기 없음';
+  var state = it ? linkLabel(linkState(it, st.fleet, st.here)) : '없음';
+  var ms = it ? collectedAt(it) : null;
+  var when = ms == null ? '' : ' · ' + timeFull(ms);
+  var grade = it ? (esc(it.kind) + ' · ' + esc(gradeOf(it.kind))) : '서버 메타만';
+  var link = it ? esc(it.linked ? '연결' : '미연결') : '미연결';
+  return '<div class="card ev-tip" role="tooltip" data-tip="' + esc(id) + '" data-preview="' + esc(kind) + '"' +
+    (kind === 'receive' ? ' aria-busy="true"' : '') + '>' +
+    '<div class="jtitle"><span class="lbl">' + esc(title) + '</span></div>' +
+    '<div>' + grade + '</div>' +
+    '<p class="meta">' + esc(host) + ' · ' + esc(state) + ' · ' + link + when + debugId(id, st.debug) + '</p>' +
+    previewPane(kind) + '</div>';
+}
+
+function hoverWrap(inner, id, st, it) {
+  return '<span class="ev-hover"' + (st.hover === id ? ' data-show="1"' : '') +
+    ' data-hover="' + esc(id) + '">' + inner + tip(it, st, id) + '</span>';
 }
 
 function links(st) {
   var items = st.items || [];
   if (!items.length) return '<p class="meta">증빙 없음</p>';
-  var rows = items.map(function (it, i) {
+  var rows = items.map(function (it) {
     var state = linkState(it, st.fleet, st.here);
     var note = state === 'cache' ? ' <small class="meta">암호문만 · 원문 없음</small>' : '';
     var off = state === 'disabled';
     var ms = collectedAt(it);
+    var btn = '<button type="button" class="entry" data-open="' + esc(it.evidence_id) + '"' +
+      (off ? ' disabled' : '') + '>' + esc(itemLabel(it, st)) + '</button>' + note;
     return '<tr data-evidence="' + esc(it.evidence_id) + '" data-link="' + esc(state) + '"' +
       ' data-host="' + esc(it.host || st.here || 'local') + '"' +
       (ms == null ? '' : ' data-collected="' + ms + '"') + '>' +
-      '<td><button type="button" class="entry" data-open="' + esc(it.evidence_id) + '"' +
-      (off ? ' disabled' : ' popovertarget="ev-pop-' + i + '"') + '>' +
-      esc(itemLabel(it, st)) + '</button>' + note + popover(it, st, i) + '</td>' +
+      '<td>' + hoverWrap(btn, it.evidence_id, st, it) + '</td>' +
       '<td>' + badges(it) + ' · ' + esc(linkLabel(state)) + '</td>' +
       (st.debug ? '<td><code>' + esc(it.evidence_id) + '</code></td>' : '') + '</tr>';
   }).join('');
@@ -134,16 +163,18 @@ function serverMeta(st) {
   var s = st.server || {};
   var ids = s.evidence_ids || [];
   var amt = s.amount == null ? '' : '<span class="key n">' + Number(s.amount).toLocaleString('ko-KR') + '</span> <small class="meta">' + esc(s.unit || '원') + '</small>';
-  var refs = ids.map(function (id, i) {
-    var it = itemById(st.items, id), idx = it ? (st.items || []).indexOf(it) : -1;
+  var refs = ids.map(function (id) {
+    var it = itemById(st.items, id);
     if (it) {
       var off = linkState(it, st.fleet, st.here) === 'disabled';
-      return '<button type="button" class="entry" data-open="' + esc(id) + '"' +
-        (off ? ' disabled' : ' popovertarget="ev-pop-' + idx + '"') + '>' +
-        esc(itemLabel(it, st)) + '</button>' + debugId(id, st.debug);
+      return hoverWrap(
+        '<button type="button" class="entry" data-open="' + esc(id) + '"' +
+          (off ? ' disabled' : '') + '>' + esc(itemLabel(it, st)) + '</button>' + debugId(id, st.debug),
+        id, st, it);
     }
-    return '<button type="button" class="entry" data-open="' + esc(id) + '" popovertarget="ev-miss-' + i + '">미부착</button>' +
-      debugId(id, st.debug) + missPopover(id, i, st);
+    return hoverWrap(
+      '<button type="button" class="entry" data-open="' + esc(id) + '">미부착</button>' + debugId(id, st.debug),
+      id, st, null);
   }).join(' · ');
   return '<div class="card">' +
     '<span class="lbl">' + esc(s.memo || '분개') + '</span>' +
@@ -163,24 +194,50 @@ function html(st) {
 }
 
 function mount(el, opts) {
-  var st = {title: '증빙', here: 'mac', fleet: [], items: [], layers: [], server: {}, debug: false, open: ''};
+  var st = {title: '증빙', here: 'mac', fleet: [], items: [], layers: [], server: {}, debug: false, hover: '', session: {}, inflight: {}, receiveMs: 480};
   Object.keys(opts || {}).forEach(function (k) { if (opts[k] !== undefined) st[k] = opts[k]; });
-  function draw() {
-    el.innerHTML = html(st);
-    if (st.open && el.querySelector) {
-      var p = el.querySelector('[data-pop="' + String(st.open).replace(/"/g, '') + '"]');
-      if (p && p.showPopover) try { p.showPopover(); } catch (e) {}
+  st.session = Object.assign({}, st.session);
+  st.inflight = Object.assign({}, st.inflight);
+  function draw() { el.innerHTML = html(st); }
+  function paint(id) {
+    if (!el.querySelector) { draw(); return; }
+    var kind = previewKind(itemById(st.items, id), st);
+    var nodes = el.querySelectorAll('[data-tip="' + String(id).replace(/"/g, '') + '"]');
+    for (var i = 0; i < nodes.length; i++) {
+      var pane = nodes[i].querySelector('.ev-pop-preview');
+      if (pane) pane.outerHTML = previewPane(kind);
+      nodes[i].setAttribute('data-preview', kind);
+      if (kind === 'receive') nodes[i].setAttribute('aria-busy', 'true');
+      else nodes[i].removeAttribute('aria-busy');
     }
+  }
+  function receive(id) {
+    var it = itemById(st.items, id);
+    if (!it || flagged(st.session, id) || flagged(st.inflight, id)) return;
+    if (linkState(it, st.fleet, st.here) !== 'e2e') return;
+    st.inflight[id] = true;
+    paint(id);
+    setTimeout(function () {
+      delete st.inflight[id];
+      st.session[id] = true;
+      paint(id);
+    }, st.receiveMs);
   }
   function set(patch) { Object.keys(patch).forEach(function (k) { st[k] = patch[k]; }); draw(); }
   el.addEventListener('click', function (ev) {
     var b = ev.target.closest('[data-open]');
     if (!b || !el.contains(b) || b.disabled) return;
     if (st.onOpen) st.onOpen(b.dataset.open);
+    receive(b.dataset.open);
   });
+  el.addEventListener('pointerenter', function (ev) {
+    var w = ev.target.closest('[data-hover]');
+    if (!w || !el.contains(w)) return;
+    receive(w.dataset.hover);
+  }, true);
   draw();
   return {set: set, state: function () { return st; }};
 }
 
-root.EvidenceFleet = {OFFICIAL, AUX, LINK, HOST, gradeOf, hostLabel, itemLabel, collectedAt, timeShort, timeFull, linkState, linkLabel, presence, html, mount};
+root.EvidenceFleet = {OFFICIAL, AUX, LINK, HOST, PREVIEW, gradeOf, hostLabel, itemLabel, collectedAt, timeShort, timeFull, linkState, linkLabel, previewKind, previewCopy, presence, html, mount};
 })(globalThis);
