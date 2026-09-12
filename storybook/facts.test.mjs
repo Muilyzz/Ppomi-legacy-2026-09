@@ -82,6 +82,9 @@ test('공개 API: Panel 이 조립하고 뷰어는 각자. Facts.mount 는 없�
   assert.equal(typeof X.Timeline.mount, 'function');
   assert.equal(typeof X.Treemap.mount, 'function');
   assert.equal(typeof X.Floorplan.mount, 'function');
+  ['Panel', 'Table', 'Timeline', 'Treemap', 'Floorplan'].forEach((name) => {
+    assert.equal(globalThis[name], undefined);
+  });
   assert.deepEqual(X.Panel.children(building), [X.Timeline, X.Treemap, X.Floorplan, X.Table]);
   assert.deepEqual(X.Panel.children(car), [X.Timeline, X.Table]);
   assert.deepEqual(X.Panel.children(holdings), [X.Timeline, X.Treemap, X.Table]);

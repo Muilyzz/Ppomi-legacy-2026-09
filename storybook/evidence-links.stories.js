@@ -1,12 +1,12 @@
 import {fn} from 'storybook/test';
 import './evidence-fleet.js';
 import {title, here, fleet, items, pick} from './evidence-fleet-fixture.js';
-const F = globalThis.EvidenceFleet;
+const Evidence = globalThis.Evidence;
 
 export default {
   title: '증빙/Links',
   parameters: {layout: 'fullscreen'},
-  render: (args) => { const el = document.createElement('div'); F.Links.mount(el, args); return el; },
+  render: (args) => { const el = document.createElement('div'); Evidence.Links.mount(el, args); return el; },
   argTypes: {
     here: {control: 'select', options: ['mac', 'win', 'phone'], description: '이 기기'},
     debug: {control: 'boolean', description: '내부 id'},

@@ -6,7 +6,7 @@ import {yeogiWalk, installed} from './playbook-fixture.js';
 import {parseGovSites, govSchema} from './gov-fixture.js';
 import {listWithPlaybook} from './compose.js';
 import govMd from '../docs/gov-sites.md?raw';
-const P = globalThis.Playbook, X = globalThis.Facts;
+const P = globalThis.Playbook;
 const manifests = import.meta.glob('../Ppomi/Sources/Ppomi/Catalog/*/manifest.json', {eager: true, import: 'default'});
 const catalog = Object.fromEntries(Object.values(manifests).map((m) => [m.id, m]));
 const footprints = {yeogi: yeogiWalk};

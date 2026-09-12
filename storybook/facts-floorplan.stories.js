@@ -2,11 +2,11 @@
 import {fn} from 'storybook/test';
 import '../Ppomi/Sources/Ppomi/Web/facts.js';
 import {building, spending} from './facts-fixture.js';
-const X = globalThis.Facts;
+const Facts = globalThis.Facts;
 
 export default {
   title: '값 종류/Floorplan',
-  render: (args) => { const el = document.createElement('div'); X.Floorplan.mount(el, args); return el; },
+  render: (args) => { const el = document.createElement('div'); Facts.Floorplan.mount(el, args); return el; },
   argTypes: {
     selected: {control: 'text', description: '선택한 기록 ID'},
     records: {table: {disable: true}}, schema: {table: {disable: true}},

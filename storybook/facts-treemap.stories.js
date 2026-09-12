@@ -2,11 +2,11 @@
 import {fn} from 'storybook/test';
 import '../Ppomi/Sources/Ppomi/Web/facts.js';
 import {building, holdings} from './facts-fixture.js';
-const X = globalThis.Facts;
+const Facts = globalThis.Facts;
 
 export default {
   title: '값 종류/Treemap',
-  render: (args) => { const el = document.createElement('div'); X.Treemap.mount(el, args); return el; },
+  render: (args) => { const el = document.createElement('div'); Facts.Treemap.mount(el, args); return el; },
   argTypes: {
     depth: {control: {type: 'number', min: 1}, description: '트리맵 깊이'},
     root: {control: 'text', description: '트리맵 뿌리 경로'},

@@ -8,7 +8,7 @@ import {archive, MONEY} from './fixture.js';
 import {contracts, contractSchema, rules, rentEntries, TODAY} from './lease-fixture.js';
 import {parseGovSites, govSchema} from './gov-fixture.js';
 import govMd from '../docs/gov-sites.md?raw';
-const X = globalThis.Facts, J = globalThis.Journal, S = globalThis.Schedule;
+const Facts = globalThis.Facts, J = globalThis.Journal, S = globalThis.Schedule;
 
 // 분개 → 값 종류: 비용 차변 항목을 계정 경로 + 금액으로. 도메인 코드 없이 트리맵이 된다.
 const leaf = J.rollup(archive.accounts, Infinity);
@@ -21,7 +21,7 @@ function F(key, title, type, extra) { return {key, title, type, ...extra}; }
 
 export default {
   title: '값 종류/Panel',
-  render: (args) => { const el = document.createElement('div'); X.Panel.mount(el, args); return el; },
+  render: (args) => { const el = document.createElement('div'); Facts.Panel.mount(el, args); return el; },
   argTypes: {
     depth: {control: {type: 'number', min: 1}, description: '트리맵 깊이'},
     root: {control: 'text', description: '트리맵 뿌리 경로'},
