@@ -224,7 +224,7 @@ async function runWindowsLive(input: BodyRunInput): Promise<BodyRunResult> {
         return skipped(input.path, "live windows fake executor listed no app");
       }
       tools.allowApps([app.packageName]);
-      return runDriver(input.path, new WindowsDriver(tools), {
+      return await runDriver(input.path, new WindowsDriver(tools), {
         id: input.path.id,
         steps: [{ id: "open-next", kind: "click", target: "Go", effect: "navigate" }],
       });
