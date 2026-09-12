@@ -175,6 +175,13 @@ test("host CLI --intent works with Tauri-style .. path and Grok NODE_PATH", () =
   assert.equal(body.status, "path_not_found");
 });
 
+test("host CLI --proxy-responses with unreadable stdin exits 1 and prints no JSON to fabricate from", () => {
+  const result = spawnHost(hostFile, ["--proxy-responses"], { AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "fixture" }, "not json\n");
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, "");
+  assert.notEqual(result.stderr.trim(), "");
+});
+
 test("host CLI --proxy-responses runs via symlink and dotted path", () => {
   const dir = mkdtempSync(join(tmpdir(), "ppomi-host-"));
   const link = join(dir, "host.ts");
