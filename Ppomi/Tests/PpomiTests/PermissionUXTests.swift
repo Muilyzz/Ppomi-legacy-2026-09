@@ -12,6 +12,14 @@ final class PermissionUXTests: XCTestCase {
         XCTAssertEqual(Permissions.need(accessibility: true, screen: false, askedAX: false, askedScreen: true), .settings)
     }
 
+    func testAllowClickOpensBothMissingPrivacyPanesUntilReady() {
+        XCTAssertEqual(Permissions.missingPrivacyPanes(accessibility: true, screen: true), [])
+        XCTAssertEqual(Permissions.missingPrivacyPanes(accessibility: false, screen: true), ["Privacy_Accessibility"])
+        XCTAssertEqual(Permissions.missingPrivacyPanes(accessibility: true, screen: false), ["Privacy_ScreenCapture"])
+        XCTAssertEqual(Permissions.missingPrivacyPanes(accessibility: false, screen: false),
+                       ["Privacy_Accessibility", "Privacy_ScreenCapture"])
+    }
+
     func testStartupRowsKeepMicOptionalAndNameTheTwoRequiredPanes() {
         let items = Permissions.items()
         XCTAssertEqual(items.map(\.id), ["ax", "screen", "mic", "mirror", "relaunch", "lock"])

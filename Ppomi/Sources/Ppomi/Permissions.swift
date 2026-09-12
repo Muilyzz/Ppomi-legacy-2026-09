@@ -31,7 +31,8 @@ enum Permissions {
 
     private static var mirroringURL: URL? { NSWorkspace.shared.urlForApplication(withBundleIdentifier: Mirroring.bundleID) }
 
-    static func pane(_ anchor: String) {
+    @discardableResult
+    static func pane(_ anchor: String) -> Bool {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)")!)
     }
     static func openSettings() {
@@ -62,32 +63,50 @@ enum Permissions {
              askedAX: store.bool(forKey: askedAXKey), askedScreen: store.bool(forKey: askedScreenKey))
     }
 
-    /// AX prompt + Screen Recording request. Does not open 시작하기. Mic stays out.
+    /// Anchors still missing. Allow-click always opens these if !ready — recent macOS often shows no AX/Screen dialog.
+    static func missingPrivacyPanes(accessibility ax: Bool, screen: Bool) -> [String] {
+        (ax ? [] : ["Privacy_Accessibility"]) + (screen ? [] : ["Privacy_ScreenCapture"])
+    }
+
+    /// AX prompt + Screen Recording request. Does not mark asked: those APIs often no-op with no dialog.
     static func requestSystemPrompts() {
         if !accessibility {
             _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary)
-            store.set(true, forKey: askedAXKey)
         }
         if !screenCapture {
             _ = CGRequestScreenCaptureAccess()
-            store.set(true, forKey: askedScreenKey)
         }
     }
 
-    /// Chat CTA: small alert, then the OS allow flow. Settings only when macOS will not ask again.
+    /// Open each missing TCC pane. Two URLs in one tick often keep only the last, so the second waits a beat.
+    @discardableResult
+    static func openMissingPrivacyPanes() -> [String] {
+        let anchors = missingPrivacyPanes(accessibility: accessibility, screen: screenCapture)
+        guard let first = anchors.first else { return [] }
+        NSApp.activate()
+        _ = pane(first)
+        if anchors.count > 1 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { _ = pane(anchors[1]) }
+        }
+        if !accessibility { store.set(true, forKey: askedAXKey) }
+        if !screenCapture { store.set(true, forKey: askedScreenKey) }
+        return anchors
+    }
+
+    /// Chat CTA: small alert → try OS prompts → if still !ready, System Settings privacy panes. Every Allow click until ready.
     @discardableResult
     static func presentAllowSheet() -> Need {
         if ready { return .ready }
         let alert = NSAlert()
         alert.messageText = "손쉬운 사용과 화면 기록이 필요해요"
-        alert.informativeText = "폰을 읽고 만지려면 macOS가 한 번 물어봅니다. 허용하기를 누르면 시스템 창이 열립니다."
+        alert.informativeText = "허용하기를 누르면 시스템 설정에서 손쉬운 사용과 화면 기록을 켤 수 있습니다."
         alert.addButton(withTitle: "허용하기")
         alert.addButton(withTitle: "나중에")
         guard alert.runModal() == .alertFirstButtonReturn else { return need() }
-        if need() == .prompt { requestSystemPrompts() }
-        let now = need()
-        if now == .settings { openSettings() }
-        return now
+        requestSystemPrompts()
+        if ready { return .ready }
+        _ = openMissingPrivacyPanes()
+        return need()
     }
 
     /// The rows, top to bottom.
