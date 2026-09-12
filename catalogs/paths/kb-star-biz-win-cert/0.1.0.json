@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "id": "kb-star-biz-win-cert",
+  "version": "0.1.0",
+  "title": "KB스타기업뱅킹 Windows Edge 공동인증서 발급",
+  "surface": "os-windows",
+  "allowedOrigins": [
+    "https://obank.kbstar.com",
+    "https://obiz.kbstar.com",
+    "https://obranch.kbstar.com"
+  ],
+  "steps": [
+    {
+      "id": "goto-cert-center",
+      "title": "인증센터(기업) 열기 (로그인 전)",
+      "kind": "goto",
+      "url": "https://obranch.kbstar.com/quics?page=C100996",
+      "effect": "navigate",
+      "require": {
+        "permission": "ui.control",
+        "wait": 15000
+      }
+    },
+    {
+      "id": "goto-issue",
+      "title": "공동인증서 발급/재발급 화면",
+      "kind": "goto",
+      "url": "https://obiz.kbstar.com/quics?page=C019623",
+      "effect": "navigate",
+      "require": {
+        "permission": "ui.control",
+        "wait": 15000
+      }
+    },
+    {
+      "id": "human-terms",
+      "title": "약관 동의는 당사자",
+      "kind": "human"
+    },
+    {
+      "id": "human-identity",
+      "title": "사용자 ID·사업자번호·본인확인 식별번호는 당사자",
+      "kind": "human"
+    },
+    {
+      "id": "human-account-secret",
+      "title": "출금계좌 비밀번호는 당사자",
+      "kind": "human"
+    },
+    {
+      "id": "human-otp",
+      "title": "OTP는 당사자",
+      "kind": "human"
+    },
+    {
+      "id": "human-fee",
+      "title": "수수료 확인은 당사자 (자동 결제 없음)",
+      "kind": "human"
+    },
+    {
+      "id": "human-storage",
+      "title": "저장 매체 선택은 당사자",
+      "kind": "human"
+    },
+    {
+      "id": "human-security-uac",
+      "title": "VeraPort/Delfino/ASTx 설치와 UAC는 당사자",
+      "kind": "human"
+    },
+    {
+      "id": "human-cert-secret",
+      "title": "인증서 비밀번호는 당사자",
+      "kind": "human"
+    },
+    {
+      "id": "human-final",
+      "title": "발급 최종 확인은 당사자",
+      "kind": "human"
+    }
+  ]
+}
