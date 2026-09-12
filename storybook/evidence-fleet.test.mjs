@@ -70,6 +70,7 @@ test('큰 면: 서버 숫자, presence, 네 링크 상태, 다단. id·파일 �
   assert.match(h, /1 폰 훑어보기/);
   assert.match(h, /3 공식 첨부/);
   assert.match(h, /class="ev-hover"/);
+  assert.match(h, /<div class="ev-hover"/);
   assert.match(h, /role="tooltip"/);
   assert.match(h, /미리보기 · 파일은 기기 · 바이트 없음/);
   assert.match(h, /미리보기 · E2E · 바이트 없음/);

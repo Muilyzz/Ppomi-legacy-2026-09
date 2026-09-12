@@ -125,8 +125,8 @@ function tip(it, st, id) {
 }
 
 function hoverWrap(inner, id, st, it) {
-  return '<span class="ev-hover"' + (st.hover === id ? ' data-show="1"' : '') +
-    ' data-hover="' + esc(id) + '">' + inner + tip(it, st, id) + '</span>';
+  return '<div class="ev-hover"' + (st.hover === id ? ' data-show="1"' : '') +
+    ' data-hover="' + esc(id) + '">' + inner + tip(it, st, id) + '</div>';
 }
 
 function links(st) {
