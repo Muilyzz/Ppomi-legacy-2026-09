@@ -8,15 +8,18 @@ export const GATEWAY_FAIL_TEXT = "모델 연결에 실패했습니다.";
 
 const TEXT_MODEL = "openai/gpt-6-astra";
 export const SECRETARY_TEXT = "안녕하세요. 무엇을 도와드릴까요?";
+export const SECRETARY_IDENTITY = "뽀미입니다. 비서처럼 대답하고, 경로가 있는 일만 실행합니다.";
 const PATH_MISS_TEXT = "그 일에 맞는 경로가 아직 없습니다.";
-// ponytail: whole-utterance small talk only; upgrade if live chat needs a real classifier
+// ponytail: whole-utterance chat vs path; expand only when a new miss hits run_path
 const SMALL_TALK =
   /^(안녕(하세요|하십니까)?|하이|헬로|hello|hey|hi|thanks?( you)?|thx|고마워[요]?|고맙습니다|감사합니다|뭐\s*해(요)?)\s*[!?.~ㅎㅋ]*$/i;
+const IDENTITY_TALK =
+  /모델\s*뭐|무슨\s*모델|어떤\s*모델|what\s+model|which\s+model|너\s*누구|누구야|누구세요|who\s+are\s+you|what\s+are\s+you|자기소개|할\s*수\s*있|what\s+can\s+you|capabilities|너\s*뭐야/i;
 
 const INSTRUCTIONS = [
   "You are 뽀미, a calm Korean secretary in the Mac conversation shell. The dog mascot is visual only.",
-  "Greetings, thanks, and small talk (안녕, 뭐해, thanks): one short polite Korean sentence. Never call run_path.",
-  "Call run_path only when the person wants a host path.",
+  "Chat that is not a host path — greetings, thanks, who you are, what model, capabilities, small talk: answer in one or two short polite Korean sentences. Never call run_path.",
+  "Call run_path only for a real host path. You may answer with text and no tools.",
   "Home / next / browse → intent 다음.",
   "KB스타기업뱅킹 열어 / KB 사업자 홈 / path_cold_start → pass the spoken intent.",
   "Saved business or KB account / KB스타비즈 / 넣어둔 번호 / last four digits → intent 사업자 계좌번호.",
@@ -26,7 +29,7 @@ const INSTRUCTIONS = [
 const RUN_PATH_TOOL = {
   type: "function",
   name: "run_path",
-  description: "Run a Ppomi host path (Home next, business-account secret, KB스타기업뱅킹). Do not call for greetings or small talk. Pass a catalog intent.",
+  description: "Run a Ppomi host path (Home next, business-account secret, KB스타기업뱅킹). Do not call for chat, identity, model, or capabilities questions. Pass a catalog intent.",
   parameters: {
     type: "object",
     additionalProperties: false,
@@ -113,14 +116,23 @@ export function isSmallTalk(text: string): boolean {
   return SMALL_TALK.test(text.trim());
 }
 
-function secretaryLines(): Line[] {
-  return [{ kind: "bubble", role: "assistant", text: SECRETARY_TEXT }];
+export function isConversation(text: string): boolean {
+  const trimmed = text.trim();
+  return SMALL_TALK.test(trimmed) || IDENTITY_TALK.test(trimmed);
+}
+
+export function secretaryReply(text: string): string {
+  return IDENTITY_TALK.test(text.trim()) ? SECRETARY_IDENTITY : SECRETARY_TEXT;
+}
+
+function secretaryLines(text: string): Line[] {
+  return [{ kind: "bubble", role: "assistant", text: secretaryReply(text) }];
 }
 
 /** Offline stand-in for a Gateway Responses turn. Maps paraphrases itself — not the local MATCH_SECRETS regex. */
 export function fixtureIntent(text: string): string | null {
   const trimmed = text.trim();
-  if (isSmallTalk(trimmed)) return null;
+  if (isConversation(trimmed)) return null;
   if (/^(다음|browse|next|열어|home)$/i.test(trimmed)) return "다음";
   if (MATCH_KB_OPEN.test(trimmed)) return trimmed;
   if (/스타비즈|마지막|last\s*4|digits|넣어둔|번호|사업자|계좌|account|kb/i.test(trimmed)) {
@@ -142,9 +154,10 @@ export function fixtureResponses(body: Record<string, unknown>): ResponsesBody {
     }
     return { output: [{ type: "message", content: [{ type: "output_text", text }] }] };
   }
-  const intent = fixtureIntent(userTextFromInput(body.input));
+  const spoken = userTextFromInput(body.input);
+  const intent = fixtureIntent(spoken);
   if (intent === null) {
-    return { output: [{ type: "message", content: [{ type: "output_text", text: SECRETARY_TEXT }] }] };
+    return { output: [{ type: "message", content: [{ type: "output_text", text: secretaryReply(spoken) }] }] };
   }
   return {
     output: [{
@@ -272,13 +285,13 @@ export async function sendChat(
     return { mode: "local", lines: linesFromSpine(spine) };
   }
   if (first === null) {
-    if (isSmallTalk(chat)) return { mode: "local", lines: secretaryLines() };
+    if (isConversation(chat)) return { mode: "local", lines: secretaryLines(chat) };
     return { mode: "local", lines: linesFromSpine(await runPath(chat)) };
   }
 
   const call = functionCallOf(first);
-  if (call === null || isSmallTalk(chat)) {
-    const spoken = redactSecrets(assistantTextOf(first) || (isSmallTalk(chat) ? SECRETARY_TEXT : "응답이 비어 있습니다."));
+  if (call === null || isConversation(chat)) {
+    const spoken = redactSecrets(assistantTextOf(first) || (isConversation(chat) ? secretaryReply(chat) : "응답이 비어 있습니다."));
     return { mode: "gateway", lines: [{ kind: "bubble", role: "assistant", text: spoken }] };
   }
 
