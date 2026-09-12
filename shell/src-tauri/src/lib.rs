@@ -1,7 +1,8 @@
 use serde_json::Value;
 use std::env;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 fn node_bin() -> PathBuf {
     if let Ok(explicit) = env::var("PPOMI_NODE") {
@@ -88,10 +89,37 @@ fn run_path(intent: String, body: String, live: bool) -> Result<Value, String> {
     )
 }
 
+#[tauri::command]
+fn ai_gateway(body: Value) -> Result<Value, String> {
+    let mut cmd = Command::new(node_bin());
+    cmd.arg("--experimental-strip-types")
+        .arg(host_script())
+        .arg("--proxy-responses")
+        .current_dir(repo_root())
+        .stdin(Stdio::piped());
+    with_gui_path(&mut cmd);
+    let mut child = cmd
+        .spawn()
+        .map_err(|error| format!("node host failed to start: {error}"))?;
+    if let Some(stdin) = child.stdin.as_mut() {
+        stdin
+            .write_all(body.to_string().as_bytes())
+            .map_err(|error| format!("node host stdin failed: {error}"))?;
+    }
+    let output = child
+        .wait_with_output()
+        .map_err(|error| format!("node host failed: {error}"))?;
+    parse_host_output(
+        &String::from_utf8_lossy(&output.stdout),
+        &String::from_utf8_lossy(&output.stderr),
+        output.status.success(),
+    )
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![run_path])
+        .invoke_handler(tauri::generate_handler![run_path, ai_gateway])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -104,5 +132,11 @@ mod tests {
     fn json_stdout_wins_even_when_exit_failed() {
         let value = parse_host_output("{\"status\":\"path_not_found\"}\n", "", false).unwrap();
         assert_eq!(value["status"], "path_not_found");
+    }
+
+    #[test]
+    fn gateway_probe_json_is_host_stdout() {
+        let value = parse_host_output("{\"configured\":false,\"fixture\":false}\n", "", true).unwrap();
+        assert_eq!(value["configured"], false);
     }
 }

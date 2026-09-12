@@ -8,9 +8,10 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "paths": {
       "@/*": ["../agent/src/*"]
     }
   },
-  "include": ["src/app.tsx", "src/spine.ts", "src/vite-env.d.ts", "vite.config.ts"]
+  "include": ["src/app.tsx", "src/spine.ts", "src/chat.ts", "src/vite-env.d.ts", "vite.config.ts"]
 }

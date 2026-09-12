@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
+import { proxyResponses } from "./gateway.ts";
 import { parseArgs, parseBodyKind, runSpine, secretsPath } from "./host.ts";
 
 const hostFile = join(dirname(fileURLToPath(import.meta.url)), "host.ts");
@@ -100,6 +101,53 @@ test("host CLI exits 0 for the CEO secrets intent and prints no plaintext", () =
 test("bare 알아 stays path_not_found", async () => {
   const result = await runSpine({ intent: "알아?", body: "macos", live: false });
   assert.equal(result.status, "path_not_found");
+});
+
+test("gateway probe is configured only when a key or fixture is set", async () => {
+  const off = await proxyResponses({ probe: true }, { env: {} });
+  assert.deepEqual(off, { configured: false, fixture: false });
+  const fixture = await proxyResponses({ probe: true }, { env: { PPOMI_CHAT: "fixture" } });
+  assert.deepEqual(fixture, { configured: true, fixture: true });
+  const live = await proxyResponses({ probe: true }, { env: { AI_GATEWAY_API_KEY: "k" } });
+  assert.equal(live.configured, true);
+});
+
+test("gateway proxy posts to the AI Gateway and never echoes the key", async () => {
+  const calls: { url: string; init: RequestInit }[] = [];
+  const result = await proxyResponses(
+    { input: [{ role: "user", content: "hi" }], model: "client-chosen", stream: true, store: true },
+    {
+      env: { AI_GATEWAY_API_KEY: "secret-key", AI_TEXT_MODEL: "openai/gpt-6-astra" },
+      fetch: async (url, init) => {
+        calls.push({ url: String(url), init: init ?? {} });
+        return new Response(JSON.stringify({ output: [] }), { status: 200, headers: { "content-type": "application/json" } });
+      },
+    },
+  );
+  assert.equal(result.configured, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.url, "https://ai-gateway.vercel.sh/v1/responses");
+  const sent = JSON.parse(String(calls[0]?.init.body)) as { model: string; stream: boolean; store: boolean };
+  assert.equal(sent.model, "openai/gpt-6-astra");
+  assert.equal(sent.stream, false);
+  assert.equal(sent.store, false);
+  assert.doesNotMatch(JSON.stringify(result), /secret-key/);
+});
+
+test("host CLI --proxy-responses probe exits 0 without a key", () => {
+  const result = spawnSync(
+    process.execPath,
+    ["--experimental-strip-types", hostFile, "--proxy-responses"],
+    {
+      encoding: "utf8",
+      cwd: join(dirname(hostFile), ".."),
+      input: "{\"probe\":true}\n",
+      env: { ...process.env, AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "" },
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const body = JSON.parse(result.stdout) as { configured: boolean };
+  assert.equal(body.configured, false);
 });
 
 test("live secrets off-darwin skips instead of failing", async () => {
