@@ -99,3 +99,19 @@ hooks stay the existing `ppomi-body-*` examples (MZZ-55b / MZZ-55c).
 
 Packaged `npm --prefix shell run build` still needs `node` on `PATH` (or
 `PPOMI_NODE`) for the TS host. That is a smoke spine, not a store bundle.
+
+Failures stay failures. `run_path` / `ai_gateway` pipe the node child's
+stdout and stderr (60 s / 120 s timeout, then kill) and use the last JSON
+object; anything else is `{ code, message }` — `run_path_host_failed` /
+`gateway_host_failed` — never an empty or invented result. In the window an
+IPC failure is `실행에 실패했습니다.` plus an `output-error` card
+(`run_path_ipc_failed: <code>`), a Gateway failure is
+`모델 연결에 실패했습니다. 게이트웨이 오류: <code>`; neither is disguised as
+path-not-found or downgraded to the regex matcher. Only "no key and no
+fixture" falls back locally, and that card says `via: "local"`. The browser
+`previewSpine` runs only under `vite dev` or `?chat=fixture` and is labelled
+`(미리보기)`. The node child gets an allow-listed environment (`PATH`, `HOME`,
+`TMPDIR`, `LANG`/`LC_*`, `PPOMI_CHAT`, `PPOMI_NODE`, `PPOMI_MAC_BROWSER`,
+`AI_GATEWAY_API_KEY`, `AI_GATEWAY_BASE_URL`, `AI_TEXT_MODEL`); the live-arming
+variables, `NODE_*` and `DYLD_*`/`LD_*` never reach it from the window. The
+window's `live` refusal (`live_refused`) lands with #79.
