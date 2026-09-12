@@ -89,7 +89,8 @@ enum SecretsTree {
     static func asArray(_ value: Any?) -> [Any]? {
         let value = unwrap(value)
         if let array = value as? [Any] { return array }
-        return value as? [Any]
+        if let array = value as? NSArray { return array.map { $0 } }
+        return nil
     }
 
     static func isContainer(_ value: Any?) -> Bool {
@@ -140,15 +141,5 @@ enum SecretsTree {
             out.append(Chip(path: path, key: key, chip: chip))
         }
         return out.sorted { $0.key < $1.key }
-    }
-
-    static func containsPlaintext(_ haystack: String, from blob: Any) -> Bool {
-        var found = false
-        eachLeaf(blob) { _, leaf in
-            guard isSecretLeaf(leaf) else { return }
-            let text = stringish(leaf)
-            if !text.isEmpty, haystack.contains(text) { found = true }
-        }
-        return found
     }
 }

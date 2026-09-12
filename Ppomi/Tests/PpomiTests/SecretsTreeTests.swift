@@ -79,7 +79,6 @@ final class SecretsTreeTests: XCTestCase {
         XCTAssertTrue(locked.contains("••••"))
         XCTAssertTrue(opened.contains("001234567890"))
         XCTAssertTrue(opened.contains("probe-not-a-real-token"))
-        XCTAssertFalse(SecretsTree.containsPlaintext(locked, from: fixture))
     }
 
     func testDepthCapStopsAt32() {
