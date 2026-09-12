@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
-import { gatewayConfig, parseGatewayEnvFile, proxyResponses } from "./gateway.ts";
+import { gatewayConfig, parseGatewayEnvFile, processGatewayKey, proxyResponses } from "./gateway.ts";
+import { verifyClerkSession } from "./clerk-session.ts";
 import { KB_STAR_BIZ_PATH_ID, parseArgs, parseBodyKind, runSpine, secretsPath } from "./host.ts";
 
 const hostFile = join(dirname(fileURLToPath(import.meta.url)), "host.ts");
@@ -165,7 +166,20 @@ test("gateway probe is configured only when a key or fixture is set", async () =
   assert.deepEqual(fixture, { configured: true, fixture: true });
   const live = await proxyResponses({ probe: true }, { env: { AI_GATEWAY_API_KEY: "k" } });
   assert.equal(live.configured, true);
+  assert.equal(live.fixture, false);
+  assert.equal(processGatewayKey({ AI_GATEWAY_API_KEY: "k" }), "k");
 });
+
+function testClerkJwt(payload: Record<string, unknown> = {}): string {
+  const body = {
+    sub: "user_2AbCdEfGhIjK",
+    exp: Math.floor(Date.now() / 1000) + 86400,
+    iss: "https://foo.clerk.accounts.dev",
+    ...payload,
+  };
+  const header = Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString("base64url");
+  return `${header}.${Buffer.from(JSON.stringify(body)).toString("base64url")}.sig`;
+}
 
 test("HOME/.ppomi/.env supplies the Gateway key when process env is empty", async () => {
   const home = mkdtempSync(join(tmpdir(), "ppomi-home-"));
@@ -178,14 +192,22 @@ test("HOME/.ppomi/.env supplies the Gateway key when process env is empty", asyn
     );
     assert.equal(parseGatewayEnvFile("VERCEL_OIDC_TOKEN=unused-oidc\n").AI_GATEWAY_API_KEY, undefined);
     assert.equal(gatewayConfig({ HOME: home })?.key, "file-secret-key");
-    const probe = await proxyResponses({ probe: true }, { env: { HOME: home } });
+    assert.equal(processGatewayKey({ HOME: home }), undefined);
+    const unsigned = await proxyResponses({ probe: true }, { env: { HOME: home } });
+    assert.deepEqual(unsigned, { configured: false, fixture: false });
+    const session = testClerkJwt();
+    assert.equal(verifyClerkSession(session), true);
+    const probe = await proxyResponses(
+      { probe: true, clerkSession: session },
+      { env: { HOME: home } },
+    );
     assert.deepEqual(probe, { configured: true, fixture: false });
     const fixtureWins = await proxyResponses({ probe: true }, {
       env: { HOME: home, PPOMI_CHAT: "fixture" },
     });
     assert.deepEqual(fixtureWins, { configured: true, fixture: true });
     assert.equal(gatewayConfig({ HOME: home, AI_GATEWAY_API_KEY: "process-key" })?.key, "process-key");
-    assert.doesNotMatch(JSON.stringify(probe), /file-secret-key|unused-oidc/);
+    assert.doesNotMatch(JSON.stringify(probe), /file-secret-key|unused-oidc|clerkSession|user_2/);
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
@@ -200,6 +222,47 @@ test("PPOMI_ROOT/shell/.env is the repo fallback when HOME file has no key", asy
     assert.equal(gatewayConfig({ HOME: root }), null);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("file Gateway key is unused until a Clerk session is verified", async () => {
+  const home = mkdtempSync(join(tmpdir(), "ppomi-clerk-gate-"));
+  const calls: string[] = [];
+  try {
+    mkdirSync(join(home, ".ppomi"), { mode: 0o700 });
+    writeFileSync(join(home, ".ppomi", ".env"), "AI_GATEWAY_API_KEY=file-secret-key\n", { mode: 0o600 });
+    const blocked = await proxyResponses(
+      { input: [{ role: "user", content: "너 모델 뭐야?" }], clerkSession: "not-a-jwt" },
+      {
+        env: { HOME: home },
+        fetch: async url => {
+          calls.push(String(url));
+          return new Response("{}", { status: 200 });
+        },
+      },
+    );
+    assert.deepEqual(blocked, { configured: false, fixture: false });
+    assert.equal(calls.length, 0);
+    const session = testClerkJwt();
+    const result = await proxyResponses(
+      { input: [{ role: "user", content: "너 모델 뭐야?" }], clerkSession: session, model: "client" },
+      {
+        env: { HOME: home },
+        fetch: async (url, init) => {
+          calls.push(String(url));
+          const sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          assert.equal("clerkSession" in sent, false);
+          assert.equal("probe" in sent, false);
+          assert.doesNotMatch(JSON.stringify(sent), /file-secret-key|user_2AbCdEfGhIjK/);
+          return new Response(JSON.stringify({ output: [] }), { status: 200, headers: { "content-type": "application/json" } });
+        },
+      },
+    );
+    assert.equal(result.configured, true);
+    assert.equal(calls.length, 1);
+    assert.doesNotMatch(JSON.stringify(result), /file-secret-key|clerkSession|user_2AbCdEfGhIjK/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
   }
 });
 
@@ -230,17 +293,26 @@ test("host CLI --proxy-responses reads ~/.ppomi/.env without echoing the key", (
   try {
     mkdirSync(join(home, ".ppomi"), { mode: 0o700 });
     writeFileSync(join(home, ".ppomi", ".env"), "AI_GATEWAY_API_KEY=cli-file-secret\n", { mode: 0o600 });
+    const unsigned = spawnHost(
+      hostFile,
+      ["--proxy-responses"],
+      { HOME: home, PPOMI_ROOT: "", AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "", CLERK_SESSION: "" },
+      "{\"probe\":true}\n",
+    );
+    assert.equal(unsigned.status, 0, unsigned.stderr);
+    assert.equal((JSON.parse(unsigned.stdout) as { configured: boolean }).configured, false);
+    writeFileSync(join(home, ".ppomi", "clerk-session"), testClerkJwt(), { mode: 0o600 });
     const result = spawnHost(
       hostFile,
       ["--proxy-responses"],
-      { HOME: home, PPOMI_ROOT: "", AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "" },
+      { HOME: home, PPOMI_ROOT: "", AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "", CLERK_SESSION: "" },
       "{\"probe\":true}\n",
     );
     assert.equal(result.status, 0, result.stderr);
     const body = JSON.parse(result.stdout) as { configured: boolean; fixture?: boolean };
     assert.equal(body.configured, true);
     assert.equal(body.fixture, false);
-    assert.doesNotMatch(result.stdout, /cli-file-secret/);
+    assert.doesNotMatch(result.stdout, /cli-file-secret|user_2AbCdEfGhIjK/);
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
