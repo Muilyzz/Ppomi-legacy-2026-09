@@ -38,5 +38,6 @@ export default {
     wrap.appendChild(node);
     return wrap;
   }],
-  parameters: {backgrounds: {disable: true}, layout: 'fullscreen', docs: {codePanel: true}},
+  // html-vite's default Code snippet is the decorated DOM (theme <style> dump). type:'code' is the story JS/JSX.
+  parameters: {backgrounds: {disable: true}, layout: 'fullscreen', docs: {codePanel: true, source: {type: 'code', excludeDecorators: true}}},
 };
