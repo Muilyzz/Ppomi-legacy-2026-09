@@ -13,7 +13,7 @@ export type MaybePromise<T> = T | Promise<T>;
  */
 export type StepEffect = "navigate" | "input" | "commit";
 
-export type StepKind = "focus" | "click" | "type" | "read";
+export type StepKind = "focus" | "click" | "type" | "read" | "key";
 
 /** In-page steps for `BrowserPageAdapter`. Not OS screen-text `click` / `type`. */
 export type PageStepKind = "goto" | "click" | "fill" | "waitFor" | "read";
@@ -34,6 +34,8 @@ export interface RunInvalid {
     | "empty_playbook_id"
     | "empty_step_id"
     | "duplicate_step_id"
+    | "unknown_from_step"
+    | "resume_past_gate"
     | "unknown_driver"
     | "wait_requires_run"
     | "legacy_not_allowed";
@@ -72,6 +74,18 @@ export interface StepEvidence {
   readonly note: string;
 }
 
+/**
+ * A run that started at `fromStep`. The `skipped` prefix was not run and has no
+ * rows; `skippedGates` are the human / commit steps among it, which the caller
+ * acknowledged with `resumedAfterHuman` as done by the person.
+ */
+export interface RunResumedFrom {
+  readonly stepId: string;
+  readonly skipped: readonly string[];
+  readonly skippedGates: readonly string[];
+  readonly resumedAfterHuman: boolean;
+}
+
 export interface RunResult {
   readonly status: RunStatus;
   readonly stopReason: Exclude<StepOutcome, "ok"> | null;
@@ -80,6 +94,8 @@ export interface RunResult {
   readonly stepResults: readonly StepResult[];
   /** Set only when `status` is `invalid`. */
   readonly invalid?: RunInvalid;
+  /** Set only when the run was resumed with `fromStep`; a cold start has no prefix. */
+  readonly resumedFrom?: RunResumedFrom;
   /** Set when a deprecated wrapper ran with `legacy.runUndeclaredMutations`; such a dump is never a declared-effect run. */
   readonly legacy?: true;
 }

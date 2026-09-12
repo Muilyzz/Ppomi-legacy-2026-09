@@ -9,7 +9,8 @@ export type OsRef =
   | { readonly kind: "read" }
   | { readonly kind: "focus"; readonly target: string }
   | { readonly kind: "click"; readonly target: string }
-  | { readonly kind: "type"; readonly target: string; readonly text: string };
+  | { readonly kind: "type"; readonly target: string; readonly text: string }
+  | { readonly kind: "key"; readonly name: string };
 
 /** The OS screen as a `UiDriver`: screen-text targets over one `OsUiDriver` port. */
 export class OsSurface implements UiDriver<ScreenSnapshot, OsRef, PlaybookStep> {
@@ -31,6 +32,7 @@ export class OsSurface implements UiDriver<ScreenSnapshot, OsRef, PlaybookStep> 
 
   /** Screen text is the OS accessible name; node ids and coordinates never enter a result. */
   target(step: PlaybookStep): StepTarget {
+    if (step.kind === "key") return { kind: "none" };
     return step.target !== undefined && step.target.length > 0
       ? { kind: "accessibility", name: step.target }
       : { kind: "none" };
@@ -42,7 +44,10 @@ export class OsSurface implements UiDriver<ScreenSnapshot, OsRef, PlaybookStep> 
    * `browser_open({ url })` or an app launch.
    */
   classify(step: PlaybookStep): StepClass {
-    return { permission: defaultPermission(step.kind), mutation: step.kind === "click" || step.kind === "type" };
+    return {
+      permission: defaultPermission(step.kind),
+      mutation: step.kind === "click" || step.kind === "type" || step.kind === "key",
+    };
   }
 
   resolve(snap: ScreenSnapshot, step: PlaybookStep): Resolution<OsRef> {
@@ -71,6 +76,12 @@ export class OsSurface implements UiDriver<ScreenSnapshot, OsRef, PlaybookStep> 
         if (step.text === undefined) return unmet("text_required", "type step text is required");
         return { ok: true, ref: { kind: "type", target, text: step.text } };
       }
+      case "key": {
+        const name = step.target;
+        if (name === undefined || name.length === 0) return unmet("target_required", "step target is required");
+        if (this.os.key === undefined) return unmet("unsupported_action", "driver has no key");
+        return { ok: true, ref: { kind: "key", name } };
+      }
       default: {
         const exhaustive: never = step.kind;
         throw new Error(`unhandled step kind: ${String(exhaustive)}`);
@@ -88,6 +99,11 @@ export class OsSurface implements UiDriver<ScreenSnapshot, OsRef, PlaybookStep> 
         return this.os.click(ref.target);
       case "type":
         return this.os.type(ref.target, ref.text);
+      case "key": {
+        const send = this.os.key;
+        if (send === undefined) throw new Error("driver has no key");
+        return send.call(this.os, ref.name);
+      }
       default: {
         const exhaustive: never = ref;
         throw new Error(`unhandled ref: ${String(exhaustive)}`);

@@ -1,10 +1,42 @@
-export { IphoneMirroringAdapter, IphoneMirroringDriver } from "./iphone-mirroring-driver.ts";
+export { IPHONE_HOME_KEY, IphoneMirroringAdapter, IphoneMirroringDriver } from "./iphone-mirroring-driver.ts";
 export {
   FixtureIphoneMirroringTools,
   fixtureToolNames,
   type FixtureIphoneMirroringCall,
   type FixtureIphoneMirroringScreen,
 } from "./fixture-iphone-mirroring-tools.ts";
+export {
+  AccountCapturePort,
+  KB_ACCOUNT_PATTERN,
+  digitsOf,
+  findAccountNumbers,
+  isAccountText,
+  maskAccountNumber,
+  maskAccountRows,
+  maskAccountText,
+  type MaskedAccountCapture,
+} from "./account-capture.ts";
+export {
+  IPHONE_SNAPSHOT_TTL_MS,
+  LiveIphoneMirroringTools,
+  axHasPhoneLabels,
+  defaultExec,
+  isAxChrome,
+  isPayWord,
+  isProtectedLabel,
+  liveIphoneRequested,
+  skipCode,
+  type LiveIphoneAxNode,
+  type LiveIphoneCommand,
+  type LiveIphoneErr,
+  type LiveIphoneExec,
+  type LiveIphoneLastRead,
+  type LiveIphoneMirroringToolsOptions,
+  type LiveIphoneOcrNode,
+  type LiveIphoneOk,
+  type LiveIphoneReadSource,
+  type LiveIphoneReply,
+} from "./live-iphone-mirroring-tools.ts";
 export {
   IphoneMirroringAdapterError,
   type IphoneMirroringToolName,

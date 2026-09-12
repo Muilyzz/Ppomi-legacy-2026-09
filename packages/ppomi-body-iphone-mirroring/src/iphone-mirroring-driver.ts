@@ -6,6 +6,9 @@ import type {
 } from "./iphone-mirroring-tools.ts";
 import { IphoneMirroringAdapterError } from "./iphone-mirroring-tools.ts";
 
+/** iPhone Mirroring Home: `phone key home` → ⌘1 → SpringBoard. Not Mac Home (keycode 115). */
+export const IPHONE_HOME_KEY = "home";
+
 /**
  * `OsUiDriver` over iPhone Mirroring `phone_*` tools on Mac.
  * Not on-device iOS AX. Not Mac desktop AX (`ppomi-body-macos`).
@@ -42,6 +45,11 @@ export class IphoneMirroringDriver implements OsUiDriver {
     resolveRow(this.requireScreen(), target, "editable");
     this.tools.phone_type({ text });
     this.lastFocused = target;
+    this.lastScreen = null;
+  }
+
+  key(name: string): void {
+    this.tools.phone_key({ name });
     this.lastScreen = null;
   }
 

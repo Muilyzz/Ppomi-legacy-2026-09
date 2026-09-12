@@ -30,8 +30,9 @@ Do not add new domain `playbook-*` packs. Absorb them into versioned JSON:
 catalogs/paths/
   index.json
   kr-cert/0.1.0.json
+  kb-star-biz-iphone/0.1.0.json
 ```
 
-`kr-cert@0.1.0` is the first absorbed fixture (`playbook-kr-cert`). Full pack absorption and app/hub wiring are follow-up slices.
+`kr-cert@0.1.0` is the first absorbed fixture (`playbook-kr-cert`). `kb-star-biz-iphone@0.1.0` is the first iPhone Mirroring path (Home on cold start only, human login, masked account read, no payment). Full pack absorption and app/hub wiring are follow-up slices.
 
 See also [`packages/ppomi-body/docs/glossary.md`](../packages/ppomi-body/docs/glossary.md).

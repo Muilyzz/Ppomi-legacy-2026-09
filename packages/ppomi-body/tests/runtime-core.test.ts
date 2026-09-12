@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  DriverTimeoutError,
   DummyAdapter,
   DummyPageAdapter,
   FixedPermissionGate,
@@ -103,6 +104,144 @@ test("requiredPermissions always includes ui.read and the kind default; declared
   assert.deepEqual(requiredPermissions({ id: "b", kind: "click", require: { permission: "ui.read" } }, "ui.control"), ["ui.read", "ui.control"]);
   assert.deepEqual(requiredPermissions({ id: "c", kind: "read" }, "ui.read"), ["ui.read"]);
   assert.deepEqual(requiredPermissions({ id: "d", kind: "read", require: { permission: "ui.control" } }, "ui.read"), ["ui.read", "ui.control"]);
+  assert.deepEqual(requiredPermissions({ id: "e", kind: "key" }, "ui.control"), ["ui.read", "ui.control"]);
+});
+
+test("cold start runs from the first step; fromStep resumes and skips the prefix", async () => {
+  const playbook = {
+    id: "home-then-click",
+    steps: [
+      { id: "go-home", kind: "key" as const, target: "home", effect: "navigate" as const },
+      { id: "go", kind: "click" as const, target: "Next", effect: "navigate" as const },
+    ],
+  };
+  const cold = new DummyAdapter(screen);
+  const coldResult = await new Runtime(new OsSurface(cold), all).run(playbook);
+  assert.equal(coldResult.status, "completed");
+  assert.deepEqual(cold.calls.filter(call => call.kind === "key" || call.kind === "click"), [
+    { kind: "key", name: "home" },
+    { kind: "click", target: "Next" },
+  ]);
+
+  const resume = new DummyAdapter(screen);
+  const resumeResult = await new Runtime(new OsSurface(resume), all).run(playbook, { fromStep: "go" });
+  assert.equal(resumeResult.status, "completed");
+  assert.deepEqual(resumeResult.stepResults.map(row => row.stepId), ["go"]);
+  assert.equal(resume.calls.some(call => call.kind === "key"), false);
+  assert.deepEqual(resume.calls.filter(call => call.kind === "click"), [{ kind: "click", target: "Next" }]);
+
+  const missing = await new Runtime(new OsSurface(new DummyAdapter(screen)), all).run(playbook, { fromStep: "nope" });
+  assert.deepEqual([missing.status, missing.invalid?.code, missing.stepResults.length], ["invalid", "unknown_from_step", 0]);
+  assert.equal("resumedFrom" in coldResult, false);
+  assert.deepEqual(resumeResult.resumedFrom, { stepId: "go", skipped: ["go-home"], skippedGates: [], resumedAfterHuman: false });
+});
+
+test("key is a mutation: no declared effect hands off before any driver call; a timed-out key needs a human", async () => {
+  const undeclared = new DummyAdapter(screen);
+  const handedOff = await new Runtime(new OsSurface(undeclared), all).run({
+    id: "key-no-effect",
+    steps: [{ id: "go-home", kind: "key", target: "home" }],
+  });
+  assert.deepEqual(
+    [handedOff.status, handedOff.stopReason, handedOff.stepResults[0]?.status, handedOff.stepResults[0]?.code, handedOff.stepResults[0]?.attempt],
+    ["stopped", "handoff", "needs_human", "no_effect", "not_executed"],
+  );
+  assert.equal(undeclared.calls.some(call => call.kind === "key"), false);
+
+  const committed = await new Runtime(new OsSurface(new DummyAdapter(screen)), all).run({
+    id: "key-commit",
+    steps: [{ id: "enter", kind: "key", target: "return", effect: "commit" }],
+  });
+  assert.deepEqual([committed.stepResults[0]?.status, committed.stepResults[0]?.code], ["needs_human", "commit"]);
+
+  class TimedOutKeyAdapter extends DummyAdapter {
+    override key(): void {
+      throw new DriverTimeoutError("phone key home timed out");
+    }
+  }
+  const timedOut = await new Runtime(new OsSurface(new TimedOutKeyAdapter(screen)), all).run({
+    id: "key-timeout",
+    steps: [{ id: "go-home", kind: "key", target: "home", effect: "navigate" }],
+  });
+  assert.deepEqual(
+    [timedOut.stepResults[0]?.status, timedOut.stepResults[0]?.attempt, timedOut.evidence[0]?.outcome],
+    ["needs_human", "timeout", "timeout"],
+  );
+
+  const noKey: OsUiDriver = {
+    kind: "os-windows",
+    readScreen: () => screen,
+    focus: () => undefined,
+    click: () => undefined,
+    type: () => undefined,
+  };
+  const unsupported = await new Runtime(new OsSurface(noKey), all).run({
+    id: "key-unsupported",
+    steps: [{ id: "go-home", kind: "key", target: "home", effect: "navigate" }],
+  });
+  assert.deepEqual(
+    [unsupported.status, unsupported.stepResults[0]?.code, unsupported.stepResults[0]?.attempt],
+    ["stopped", "unsupported_action", "not_executed"],
+  );
+});
+
+test("fromStep cannot skip a human or commit step unless the caller states the person did it; the result records the resume", async () => {
+  const playbook = {
+    id: "resume-gates",
+    steps: [
+      { id: "go-home", kind: "key" as const, target: "home", effect: "navigate" as const },
+      { id: "confirm", kind: "click" as const, target: "Next", effect: "commit" as const },
+      { id: "after", kind: "read" as const },
+    ],
+  };
+  const refused = await new Runtime(new OsSurface(new DummyAdapter(screen)), all).run(playbook, { fromStep: "after" });
+  assert.deepEqual([refused.status, refused.invalid?.code, refused.stepResults.length], ["invalid", "resume_past_gate", 0]);
+  assert.match(refused.invalid?.detail ?? "", /confirm/);
+
+  const acknowledged = new DummyAdapter(screen);
+  const resumed = await new Runtime(new OsSurface(acknowledged), all).run(playbook, { fromStep: "after", resumedAfterHuman: true });
+  assert.equal(resumed.status, "completed");
+  assert.deepEqual(resumed.stepResults.map(row => row.stepId), ["after"]);
+  assert.deepEqual(resumed.resumedFrom, {
+    stepId: "after",
+    skipped: ["go-home", "confirm"],
+    skippedGates: ["confirm"],
+    resumedAfterHuman: true,
+  });
+  assert.equal(acknowledged.calls.some(call => call.kind === "click" || call.kind === "key"), false);
+
+  const atTheGate = await new Runtime(new OsSurface(new DummyAdapter(screen)), all).run(playbook, { fromStep: "confirm" });
+  assert.deepEqual(
+    [atTheGate.status, atTheGate.stepResults[0]?.status, atTheGate.stepResults[0]?.code, atTheGate.resumedFrom?.skippedGates],
+    ["stopped", "needs_human", "commit", []],
+  );
+
+  const undeclaredPrefix = {
+    id: "resume-undeclared",
+    steps: [
+      { id: "tap", kind: "click" as const, target: "Next" },
+      { id: "after", kind: "read" as const },
+    ],
+  };
+  const pastUndeclared = await new Runtime(new OsSurface(new DummyAdapter(screen)), all).run(undeclaredPrefix, { fromStep: "after" });
+  assert.deepEqual([pastUndeclared.status, pastUndeclared.invalid?.code], ["invalid", "resume_past_gate"]);
+
+  const humanPrefix = {
+    id: "resume-human",
+    steps: [
+      { id: "human-login", kind: "human" as unknown as "read" },
+      { id: "after", kind: "read" as const },
+    ],
+  };
+  const pastHuman = await new Runtime(new OsSurface(new DummyAdapter(screen)), all).run(humanPrefix, { fromStep: "after" });
+  assert.deepEqual([pastHuman.status, pastHuman.invalid?.code], ["invalid", "resume_past_gate"]);
+  const pastHumanAcknowledged = await new Runtime(new OsSurface(new DummyAdapter(screen)), all).run(humanPrefix, { fromStep: "after", resumedAfterHuman: true });
+  assert.deepEqual([pastHumanAcknowledged.status, pastHumanAcknowledged.resumedFrom?.skippedGates], ["completed", ["human-login"]]);
+
+  const stillGated = await new Runtime(new OsSurface(new DummyAdapter(screen)), readOnly).run(playbook, { fromStep: "after", resumedAfterHuman: true });
+  assert.deepEqual([stillGated.status, stillGated.stepResults[0]?.code], ["completed", undefined]);
+  const stillGatedMutation = await new Runtime(new OsSurface(new DummyAdapter(screen)), readOnly).run(playbook, { fromStep: "confirm" });
+  assert.deepEqual([stillGatedMutation.status, stillGatedMutation.stepResults[0]?.code], ["stopped", "permission_denied"]);
 });
 
 test("playbook data cannot downgrade a mutation to ui.read on either surface", () => {
