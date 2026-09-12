@@ -322,10 +322,16 @@ export function parseBodyKind(value: string | undefined): BodyKind {
   }
 }
 
-export function parseArgs(argv: readonly string[]): SpineInput {
+/**
+ * Live needs two keys: `--live` on the command line and `PPOMI_BODY_LIVE=1` in the environment.
+ * The flag alone is refused (the person asked for live and must not get a fixture dressed as
+ * one); the variable alone runs the fixture (a value inherited from some other probe's shell must
+ * never arm anything). `PPOMI_BODY_AX` is the Mac package example's switch, not the shell's.
+ */
+export function parseArgs(argv: readonly string[], env: NodeJS.ProcessEnv = process.env): SpineInput {
   let intent = "다음";
-  let body = parseBodyKind(process.env.PPOMI_BODY);
-  let live = process.env.PPOMI_BODY_LIVE === "1" || process.env.PPOMI_BODY_AX === "1";
+  let body = parseBodyKind(env.PPOMI_BODY);
+  let live = false;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--intent") {
@@ -349,6 +355,9 @@ export function parseArgs(argv: readonly string[]): SpineInput {
       continue;
     }
     throw new Error(`unknown argument: ${arg}`);
+  }
+  if (live && env.PPOMI_BODY_LIVE !== "1") {
+    throw new Error("--live also needs PPOMI_BODY_LIVE=1 in the environment (PPOMI_BODY_AX does not arm the shell). Without --live the fixture runs.");
   }
   return { intent, body, live };
 }

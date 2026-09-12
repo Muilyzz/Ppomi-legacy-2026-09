@@ -148,11 +148,15 @@ test("live macos: completed only when Runtime completed the gated click", async 
   assert.deepEqual(tools.taps, ["n1"]);
 });
 
-test("parseArgs reads intent, body, and live", () => {
+test("parseArgs reads intent and body; live needs both --live and PPOMI_BODY_LIVE=1", () => {
   assert.equal(parseBodyKind(undefined), "macos");
-  assert.deepEqual(parseArgs(["열어", "--body", "windows", "--live"]), {
+  assert.deepEqual(parseArgs(["열어", "--body", "windows", "--live"], { PPOMI_BODY_LIVE: "1" }), {
     intent: "열어",
     body: "windows",
     live: true,
   });
+  assert.deepEqual(parseArgs(["열어"], { PPOMI_BODY_LIVE: "1" }), { intent: "열어", body: "macos", live: false });
+  assert.deepEqual(parseArgs(["열어"], { PPOMI_BODY_LIVE: "1", PPOMI_BODY_AX: "1" }), { intent: "열어", body: "macos", live: false });
+  assert.throws(() => parseArgs(["--live"], {}), /PPOMI_BODY_LIVE=1/);
+  assert.throws(() => parseArgs(["--live"], { PPOMI_BODY_AX: "1" }), /PPOMI_BODY_LIVE=1/);
 });

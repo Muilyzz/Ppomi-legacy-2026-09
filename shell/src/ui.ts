@@ -85,9 +85,19 @@ async function send(): Promise<void> {
     const result = await invoke()("run_path", { intent: text, body: "macos", live: false }) as SpineView;
     lines.push({ role: "assistant", text: render(result) });
   } catch (error) {
-    lines.push({ role: "assistant", text: error instanceof Error ? error.message : String(error) });
+    lines.push({ role: "assistant", text: describeError(error) });
   }
   paint();
+}
+
+/** `run_path` rejects with `{ code, message }` from Rust; keep both visible. */
+function describeError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
+    const code = "code" in error && typeof error.code === "string" ? `${error.code}: ` : "";
+    return `${code}${error.message}`;
+  }
+  return String(error);
 }
 
 el("composer").addEventListener("submit", event => {
