@@ -184,9 +184,28 @@ using (clerk_user_id = (select auth.jwt() ->> 'sub'));
 
 슬라이스 2: 웹 세션만 Clerk — PR #4의 GoTrue 웹 기기와 이 Clerk 세션 중 하나만 남긴다. 슬라이스 3 (MZZ-39: "Mac/Windows 클라이언트 딥링크·토큰 교환"): Mac/iPad/**Windows** 딥링크·토큰 교환(PR #4의 Windows PKCE 포함), Android password grant 교체. `X-Ppomi-Device`와 기기 등록 RPC는 남긴다.
 
-## Mac 대화 셸 (MZZ-80)
+## Mac 대화 셸 (MZZ-82 UX login on #100 JWKS)
 
-Tauri 셸에 Clerk UI나 옛 딥링크를 넣지 않는다. who = 이 앱의 `/account` Google. Gateway 키는 호스트 `~/.ppomi/.env`(mode 0600, 아니면 거부)에만 둔다. 파일 키로 Gateway POST 하려면 Clerk 세션 JWT를 JWKS로 검증하고 `iss`/`aud`/`azp` allowlist에 맞아야 한다. 이건 인증 게이트가 아니다: 같은 OS 사용자는 파일을 읽을 수 있고, `open --env AI_GATEWAY_API_KEY` HITL은 그대로다. `AI_GATEWAY_BASE_URL`은 https만. 원격 Clerk 프록시와 Mac 슬라이스 3이 이 파일을 대체한다.
+who = 이 앱의 `/account` Google. Tauri는 Clerk UserProfile을 다시 만들지 않는다. 셸 **로그인**이 시스템 브라우저로 `web/` `/sign-in?from=shell`을 연다. `/account?from=shell`이 세션 JWT를 `127.0.0.1:17382`로만 넘기고, 호스트가 `~/.ppomi/clerk-session`(mode 0600)에 쓴다. 쓰기는 JWT 모양만 본다 — 로그인 UX / 세션 힌트이지 인증 게이트가 아니다. 파일 키로 Gateway POST 하려면 #100 JWKS + `iss`/`aud`/`azp` allowlist. 같은 OS 사용자는 파일을 읽을 수 있고 `open --env AI_GATEWAY_API_KEY` HITL은 그대로다. `AI_GATEWAY_BASE_URL`은 https만. 키는 웹뷰에 없다.
+
+Mac HITL:
+
+```sh
+# 1) 호스트 (~/.ppomi/.env mode 0600)
+# AI_GATEWAY_API_KEY=…
+# CLERK_ISSUER=https://<app>.clerk.accounts.dev
+# CLERK_AUTHORIZED_PARTIES=https://your-web-origin
+# 2) Clerk 웹 스파이크 (Google → /account)
+cd web && cp .env.example .env.local   # 실제 pk_/sk_ 만 사람이 붙인다
+npm install && npm run dev             # http://127.0.0.1:3000
+# 3) 뽀미 설치 (PPOMI_CHAT=fixture 쓰지 말 것)
+LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
+open /Applications/뽀미.app
+# 4) 로그인 → Google → footer Gateway (세션 힌트 + JWKS on use)
+# 5) 「너 모델 뭐야?」 → 텍스트. KB / secrets / 다음은 run_path
+```
+
+다른 Clerk 오리진은 `PPOMI_ACCOUNT_URL` (process 또는 `~/.ppomi/.env`).
 
 ## 하지 않는 일 (이 PR)
 

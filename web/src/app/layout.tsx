@@ -42,8 +42,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               afterSignOutUrl="/"
               signInFallbackRedirectUrl={CLERK_ACCOUNT_REDIRECT}
               signUpFallbackRedirectUrl={CLERK_ACCOUNT_REDIRECT}
-              signInForceRedirectUrl={CLERK_ACCOUNT_REDIRECT}
-              signUpForceRedirectUrl={CLERK_ACCOUNT_REDIRECT}
             >
               {body}
             </ClerkProvider>

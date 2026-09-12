@@ -29,7 +29,7 @@ npm --prefix shell run dev
 
 입력 `다음` → 보내기. IPC `run_path`가 Node `shell/src/host.ts`를 띄우고 `ppomi-brain`이 `path-home-next`를 고른 뒤 `ppomi-body-macos` fixture가 `Next`를 클릭한다. `내 사업자 KB계좌번호 알아?`는 `path-secrets-account` → `ppomi-secrets` get(`ppomi/kb-star-biz/account`). `KB스타기업뱅킹 열어` / `KB 사업자 홈`은 `ppomi-path` 카탈로그의 `kb-star-biz-iphone`(Home → KB, Face ID HITL). 말풍선은 마스킹/`****last4`만 (원문 금지). 기본은 fixture. 경로 결과는 말풍선 + 도구 카드로 보이고, `path_not_found`도 JSON(종료 0)이다.
 
-**CEO: paraphrase → secrets.** `내 사업자 KB계좌번호 알아?` 와 `KB스타비즈에 넣어둔 번호 마지막만 보여줘` 는 같은 `path-secrets-account` (`****7890`). Gateway/fixture는 `run_path(사업자 계좌번호)` 로 정규화하고, 로컬 매처·카탈로그 alias(`스타비즈` / `넣어둔 번호` / `마지막만`)도 같은 path. `KB스타기업뱅킹 열어` 는 `kb-star-biz-iphone` (MZZ-69/#93). Gateway/`complete()` 실패는 코드가 보이는 `모델 연결에 실패했습니다. 게이트웨이 오류: <code>` 이며 로컬 `run_path`로 숨기지 않는다. `run_path` IPC 실패는 `실행에 실패했습니다.` — `path_not_found` 말풍선으로 숨기지 않는다. `안녕` / `뭐해` / `thanks` / `너 모델 뭐야?` 는 fixture·로컬에서 비서 답(강아지 마스코트는 시각만). 라이브 Gateway는 같은 말을 툴 없이 텍스트로 답해도 된다. `지금 데이터 뭐 있어?` 는 Gateway가 꺼져 있을 때만 진짜 `path_not_found`. **MZZ-80:** Clerk = who (`web/` `/account` Google). Gateway 키는 호스트 `~/.ppomi/.env`(없으면 `$PPOMI_ROOT/shell/.env`)에만 둔다. 파일 키로 Gateway POST 하려면 Clerk 세션 JWT를 JWKS로 검증한다. 이건 인증 게이트가 아니다 — 같은 OS 사용자는 파일을 읽을 수 있고 `open --env AI_GATEWAY_API_KEY` HITL은 그대로다. Tauri에 Clerk UI/딥링크를 넣지 않는다. `PPOMI_CHAT=fixture` 일 때만 픽스처. 키는 출력하지 않는다. 입력창 아래 라이브면 `Gateway`, 픽스처면 `fixture`.
+**CEO: paraphrase → secrets.** `내 사업자 KB계좌번호 알아?` 와 `KB스타비즈에 넣어둔 번호 마지막만 보여줘` 는 같은 `path-secrets-account` (`****7890`). Gateway/fixture는 `run_path(사업자 계좌번호)` 로 정규화하고, 로컬 매처·카탈로그 alias(`스타비즈` / `넣어둔 번호` / `마지막만`)도 같은 path. `KB스타기업뱅킹 열어` 는 `kb-star-biz-iphone` (MZZ-69/#93). Gateway/`complete()` 실패는 코드가 보이는 `모델 연결에 실패했습니다. 게이트웨이 오류: <code>` 이며 로컬 `run_path`로 숨기지 않는다. `run_path` IPC 실패는 `실행에 실패했습니다.` — `path_not_found` 말풍선으로 숨기지 않는다. `안녕` / `뭐해` / `thanks` / `너 모델 뭐야?` 는 fixture·로컬에서 비서 답(강아지 마스코트는 시각만). 라이브 Gateway는 같은 말을 툴 없이 텍스트로 답해도 된다. `지금 데이터 뭐 있어?` 는 Gateway가 꺼져 있을 때만 진짜 `path_not_found`. **MZZ-82:** Clerk = who (UX). 셸 **로그인** → `web/` `/sign-in?from=shell`. `/account`가 JWT를 `127.0.0.1:17382`로 넘기고 호스트가 `~/.ppomi/clerk-session`에 쓴다. 쓰기는 세션 힌트이지 인증 게이트가 아니다. 파일 키 POST는 #100 JWKS. 같은 OS 사용자는 파일을 읽을 수 있고 `open --env` HITL은 그대로다. UserProfile을 Tauri에 넣지 않는다. `PPOMI_CHAT=fixture` 일 때만 픽스처. 키는 출력하지 않는다. 입력창 아래 라이브면 `Gateway`, 픽스처면 `fixture`. 로그인 전은 빈 캡션 + **로그인**.
 
 **Chat UX lock (CEO + 리서처).** 입력창 위에 IA 머리글(절차 · 기억 · 할 일)과 빈 화면 제안 칩(플레이북 찾기 등)을 두지 않는다. 인사 말풍선도 없다. 빈 화면은 진짜 셸 크롬 안의 입력창만. HITL/진행 중일 때만 입력창 안·바로 아래 칩 하나 — 지금은 만들지 않는다.
 
@@ -102,6 +102,18 @@ PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/ex
 
 하지 말 것: 옛 앱을 `뽀미-prev.app`으로 남기기, `dist/backup/`에 실행 가능한 `.app` 두기, 애드혹으로 권한 스모크, 일상 `tccutil reset`. 서명 전환 사고의 일회 복구 기록은 [release-status](release-status.md#개발-서명-전환-후-권한-복구)에만 있다.
 
+## Mac HITL — Clerk 로그인 UX (#100 JWKS on use)
+
+세션 쓰기는 로그인 전달(JWT 모양)이다. 파일 키 POST는 #100 JWKS.
+
+1. `~/.ppomi/.env` mode 0600: `AI_GATEWAY_API_KEY`, `CLERK_ISSUER`, `CLERK_AUTHORIZED_PARTIES`. `PPOMI_CHAT=fixture` 쓰지 말 것.
+2. `web/.env.local`에 실제 Clerk 키. `npm --prefix web run dev` → `http://127.0.0.1:3000`.
+3. `LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh` 후 `open /Applications/뽀미.app`.
+4. 입력창 아래 **로그인** → 브라우저 Google → `/account` → **뽀미 앱에서 계속**(from=shell이면 자동).
+5. 발로 돌아오면 footer `Gateway`. 「너 모델 뭐야?」는 텍스트. KB/secrets/`다음`은 `run_path`.
+
+다른 계정 오리진은 `PPOMI_ACCOUNT_URL`. 상세는 [clerk-migration](clerk-migration.md#mac-대화-셸-mzz-82-ux-login-on-100-jwks). JWKS는 #100. 로그인 전달은 이 PR. HITL은 로그인 + footer `Gateway`를 본다.
+
 ## 비범위
 
-KB 풀 E2E, vault, Clerk 이전, Swift `Ppomi/` 삭제, `adapter-*` 제품 표면 부활, Android/Win live 시크릿, AI Elements 재설계.
+KB 풀 E2E, vault, Swift `Ppomi/` 삭제, `adapter-*` 제품 표면 부활, Android/Win live 시크릿, AI Elements 재설계. Clerk UserProfile을 Tauri에 심는 일(웹 `/account` 재사용이 경로).

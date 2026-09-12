@@ -2,6 +2,7 @@
 
 import { UserButton } from '@clerk/nextjs';
 import { RLS_CLERK_SUB_SQL } from '@/lib/clerk-supabase';
+import { ShellHandoff } from './shell-handoff';
 
 export function AccountPanel({ userId }: { userId: string }) {
   return (
@@ -15,6 +16,7 @@ export function AccountPanel({ userId }: { userId: string }) {
           <a href="/account/profile">프로필 · 연결 계정</a>
         </div>
       </div>
+      <ShellHandoff />
     </section>
   );
 }

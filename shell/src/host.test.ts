@@ -367,6 +367,41 @@ test("host CLI --proxy-responses reads ~/.ppomi/.env without echoing the key", (
   }
 });
 
+test("host CLI --store-clerk-session writes the JWT file and never echoes it", () => {
+  const home = mkdtempSync(join(tmpdir(), "ppomi-store-clerk-"));
+  try {
+    const token = liveClerkSession();
+    const result = spawnHost(
+      hostFile,
+      ["--store-clerk-session"],
+      { HOME: home, PPOMI_ROOT: "", CLERK_SESSION: "" },
+      `${token}\n`,
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), { stored: true });
+    assert.doesNotMatch(result.stdout + result.stderr, /user_2AbCdEfGhIjK|eyJ/);
+    const probe = spawnHost(
+      hostFile,
+      ["--proxy-responses"],
+      { HOME: home, PPOMI_ROOT: "", AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "", CLERK_SESSION: "" },
+      "{\"probe\":true}\n",
+    );
+    assert.equal(probe.status, 0, probe.stderr);
+    assert.equal((JSON.parse(probe.stdout) as { configured: boolean }).configured, false);
+    writeFileSync(join(home, ".ppomi", ".env"), "AI_GATEWAY_API_KEY=cli-file-secret\n", { mode: 0o600 });
+    const live = spawnHost(
+      hostFile,
+      ["--proxy-responses"],
+      { HOME: home, PPOMI_ROOT: "", AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "", CLERK_SESSION: "", ...clerkTestEnv },
+      "{\"probe\":true}\n",
+    );
+    assert.equal((JSON.parse(live.stdout) as { configured: boolean; fixture?: boolean }).configured, true);
+    assert.equal((JSON.parse(live.stdout) as { fixture?: boolean }).fixture, false);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test("host CLI --proxy-responses probe exits 0 without a key", () => {
   const home = mkdtempSync(join(tmpdir(), "ppomi-empty-home-"));
   try {

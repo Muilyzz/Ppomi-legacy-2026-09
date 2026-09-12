@@ -1,12 +1,19 @@
 import { SignIn } from '@clerk/nextjs';
-import { CLERK_ACCOUNT_REDIRECT, isClerkConfigured } from '@/lib/clerk-env';
 import { SetupPanel } from '@/components/setup-panel';
+import { isClerkConfigured } from '@/lib/clerk-env';
+import { clerkAfterAuthUrl } from '@/lib/clerk-handoff';
 
-export default function SignInPage() {
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string }>;
+}) {
   if (!isClerkConfigured()) return <SetupPanel />;
+  const { from } = await searchParams;
+  const redirect = clerkAfterAuthUrl(from);
   return (
     <div className="center">
-      <SignIn forceRedirectUrl={CLERK_ACCOUNT_REDIRECT} fallbackRedirectUrl={CLERK_ACCOUNT_REDIRECT} />
+      <SignIn forceRedirectUrl={redirect} fallbackRedirectUrl={redirect} />
     </div>
   );
 }

@@ -15,5 +15,5 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["src/host.ts", "src/host.test.ts", "src/install-hygiene.test.ts", "src/spine.ts", "src/spine.test.ts", "src/chat.ts", "src/chat.test.ts", "src/gateway.ts", "src/clerk-session.ts", "src/clerk-session.test.ts", "src/clerk-test-keys.ts"]
+  "include": ["src/host.ts", "src/host.test.ts", "src/install-hygiene.test.ts", "src/spine.ts", "src/spine.test.ts", "src/chat.ts", "src/chat.test.ts", "src/gateway.ts", "src/clerk-session.ts", "src/clerk-session.test.ts", "src/clerk-test-keys.ts", "src/clerk-handoff.ts", "src/clerk-handoff.test.ts"]
 }

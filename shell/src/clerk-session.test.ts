@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
+  clerkAccountSignInUrl,
   clerkSessionToken,
   clerkVerifyConfig,
   parseClerkJwt,
   readStoredClerkSession,
   secretFileOk,
+  tokenFromClerkHandoffUrl,
   verifyClerkSession,
+  writeStoredClerkSession,
 } from "./clerk-session.ts";
 import {
   CLERK_TEST_AZP,
@@ -93,6 +96,41 @@ test("group-readable clerk-session is refused", () => {
     writeFileSync(path, liveClerkSession(), { mode: 0o644 });
     assert.equal(secretFileOk(path), false);
     assert.equal(readStoredClerkSession({ HOME: home }), undefined);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("writeStoredClerkSession keeps a 0600 JWT file the host already reads", () => {
+  const home = mkdtempSync(join(tmpdir(), "ppomi-clerk-write-"));
+  try {
+    const token = liveClerkSession();
+    const file = writeStoredClerkSession(token, { HOME: home });
+    assert.equal(file, join(home, ".ppomi", "clerk-session"));
+    assert.equal(readStoredClerkSession({ HOME: home }), token);
+    assert.equal(statSync(file).mode & 0o777, 0o600);
+    assert.throws(() => writeStoredClerkSession("not-a-jwt", { HOME: home }), /invalid clerk session/);
+    assert.throws(() => writeStoredClerkSession(unsignedClerkSession(), { HOME: home }), /invalid clerk session/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("ppomi://clerk-session fragment and local /sign-in?from=shell are the handoff URLs", () => {
+  const token = liveClerkSession();
+  assert.equal(tokenFromClerkHandoffUrl(`ppomi://clerk-session#${encodeURIComponent(token)}`), token);
+  assert.equal(tokenFromClerkHandoffUrl(`ppomi://clerk-session?clerkSession=${encodeURIComponent(token)}`), token);
+  assert.equal(tokenFromClerkHandoffUrl("https://example.test/#nope"), undefined);
+  assert.equal(tokenFromClerkHandoffUrl("ppomi://other#x"), undefined);
+  assert.equal(
+    clerkAccountSignInUrl({ PPOMI_ACCOUNT_URL: "https://account.example/" }),
+    "https://account.example/sign-in?from=shell",
+  );
+  const home = mkdtempSync(join(tmpdir(), "ppomi-account-url-"));
+  try {
+    mkdirSync(join(home, ".ppomi"), { mode: 0o700 });
+    writeFileSync(join(home, ".ppomi", ".env"), "PPOMI_ACCOUNT_URL=http://127.0.0.1:3456\n", { mode: 0o600 });
+    assert.equal(clerkAccountSignInUrl({ HOME: home }), "http://127.0.0.1:3456/sign-in?from=shell");
   } finally {
     rmSync(home, { recursive: true, force: true });
   }

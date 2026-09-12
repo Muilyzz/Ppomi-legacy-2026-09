@@ -1,5 +1,5 @@
 import { createPublicKey, verify as verifySig, type KeyObject } from "node:crypto";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
 /** Same shape as `web/src/lib/clerk-supabase.ts`. Shell must not import the Next app. */
@@ -292,4 +292,57 @@ export function clerkSessionToken(body: unknown, env: NodeJS.ProcessEnv = proces
     return env.CLERK_SESSION.trim();
   }
   return readStoredClerkSession(env);
+}
+
+/** UX write. parseClerkJwt only — JWKS is verifyClerkSession on use (MZZ-83/#100). */
+export function writeStoredClerkSession(token: string, env: NodeJS.ProcessEnv = process.env): string {
+  const trimmed = token.trim();
+  if (parseClerkJwt(trimmed) === null) throw new Error("invalid clerk session");
+  const home = env.HOME;
+  if (!home) throw new Error("HOME missing");
+  const dir = join(home, ".ppomi");
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const file = join(dir, "clerk-session");
+  writeFileSync(file, `${trimmed}\n`, { mode: 0o600 });
+  chmodSync(file, 0o600);
+  return file;
+}
+
+/** `ppomi://clerk-session#jwt` — fragment so a mistaken http log does not keep the JWT. */
+export function tokenFromClerkHandoffUrl(raw: string): string | undefined {
+  let url: URL;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    return undefined;
+  }
+  if (url.protocol !== "ppomi:") return undefined;
+  const host = url.hostname || url.pathname.replace(/^\//, "").split("/")[0];
+  if (host !== "clerk-session") return undefined;
+  const fromHash = url.hash.startsWith("#") ? decodeURIComponent(url.hash.slice(1)) : "";
+  const fromQuery = url.searchParams.get("clerkSession") ?? url.searchParams.get("t") ?? "";
+  const token = (fromHash || fromQuery).trim();
+  return token !== "" ? token : undefined;
+}
+
+export function clerkAccountOrigin(env: NodeJS.ProcessEnv = process.env): string {
+  if (typeof env.PPOMI_ACCOUNT_URL === "string" && env.PPOMI_ACCOUNT_URL.trim() !== "") {
+    return env.PPOMI_ACCOUNT_URL.trim().replace(/\/+$/, "");
+  }
+  if (env.HOME) {
+    const file = join(env.HOME, ".ppomi", ".env");
+    if (existsSync(file)) {
+      try {
+        const value = parseEnvValue(readFileSync(file, "utf8"), "PPOMI_ACCOUNT_URL");
+        if (value) return value.replace(/\/+$/, "");
+      } catch {
+        /* missing or unreadable file stays the local Clerk spike */
+      }
+    }
+  }
+  return "http://127.0.0.1:3000";
+}
+
+export function clerkAccountSignInUrl(env: NodeJS.ProcessEnv = process.env): string {
+  return `${clerkAccountOrigin(env)}/sign-in?from=shell`;
 }

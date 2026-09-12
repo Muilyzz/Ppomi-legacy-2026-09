@@ -32,7 +32,7 @@ LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
 open --env PPOMI_CHAT=fixture /Applications/뽀미.app
 ```
 
-Prefixing `PPOMI_CHAT=fixture open …` does **not** pass env into the GUI app. `open --env` lasts for that launch only: quit, then Dock/Finder starts a new process without it. `open --env AI_GATEWAY_API_KEY=…` is **HITL only**, not the product path. Clerk is who (Google lands on `web/` `/account`). The Gateway key stays host-side (`~/.ppomi/.env` must be mode 600 or the host refuses it; optional `$PPOMI_ROOT/shell/.env`). A file-held key is posted only after a Clerk session JWT verifies with JWKS + aud/azp — this is **not** an auth gate: the same OS user can read the file, and process env still wins (HITL). No Keychain, no Tauri Clerk UI, no deep link. `PPOMI_CHAT=fixture` still forces fixture. 「안녕」 / thanks / 뭐해 / 「너 모델 뭐야?」 in fixture or unset Gateway is a short secretary reply, never the path-not-found bubble. Live Gateway may answer that chat in text with no tool. The key is never printed and never given to the webview. A true miss (`지금 데이터 뭐 있어?`) is the Korean path-not-found bubble when Gateway is unset. If Gateway/`complete()` throws, the bubble is `모델 연결에 실패했습니다. 게이트웨이 오류: <code>` — local `run_path` is not a disguise. `run_path` IPC failure is `실행에 실패했습니다.` — never `node host returned invalid JSON` and never disguised as path-not-found. Node spawn clears inherited `NODE_PATH` / Grok Electron injects. `PPOMI_CHAT=fixture` is an IPC ack; the webview fills the fixture Responses body (no node proxy required). The composer footer shows `Gateway` when the live proxy is on, and `fixture` only when `PPOMI_CHAT=fixture`.
+Prefixing `PPOMI_CHAT=fixture open …` does **not** pass env into the GUI app. `open --env` lasts for that launch only: quit, then Dock/Finder starts a new process without it. `open --env AI_GATEWAY_API_KEY=…` is **HITL only**, not the product path. Clerk is who (UX login): the shell **로그인** button opens `web/` `/sign-in?from=shell` (Google lands on `/account`). `/account` posts the session JWT to `127.0.0.1:17382`; the host writes `~/.ppomi/clerk-session` (mode 600). The write is a session hint (JWT shape), not an auth gate. The Gateway key stays host-side (`~/.ppomi/.env` must be mode 600 or the host refuses it; optional `$PPOMI_ROOT/shell/.env`). A file-held key is posted only after Clerk JWKS + aud/azp. The same OS user can read the file, and process env still wins (HITL). No Keychain, no UserProfile in Tauri. `PPOMI_CHAT=fixture` still forces fixture. 「안녕」 / thanks / 뭐해 / 「너 모델 뭐야?」 in fixture or unset Gateway is a short secretary reply, never the path-not-found bubble. Live Gateway may answer that chat in text with no tool. The key is never printed and never given to the webview. A true miss (`지금 데이터 뭐 있어?`) is the Korean path-not-found bubble when Gateway is unset. If Gateway/`complete()` throws, the bubble is `모델 연결에 실패했습니다. 게이트웨이 오류: <code>` — local `run_path` is not a disguise. `run_path` IPC failure is `실행에 실패했습니다.` — never `node host returned invalid JSON` and never disguised as path-not-found. Node spawn clears inherited `NODE_PATH` / Grok Electron injects. `PPOMI_CHAT=fixture` is an IPC ack; the webview fills the fixture Responses body (no node proxy required). The composer footer shows `Gateway` when the live proxy is on, and `fixture` only when `PPOMI_CHAT=fixture`.
 
 The window is the **agent conversation shell** (`agent/src/ui/shell.tsx`)
 inside Tauri — same visual family as Storybook 「대화 셸」. Placeholder verb
@@ -60,9 +60,9 @@ inside the real shell chrome.
 
 The webview never holds the key (Tauri CSP is IPC-only). Packaged app:
 `ai_gateway` IPC → `host.ts --proxy-responses` → `https://ai-gateway.vercel.sh/v1/responses`.
-Who: Clerk session (Google → `web/` `/account`). Host key: `~/.ppomi/.env` (mode 0600
+Who: Clerk session (shell **로그인** → `web/` `/sign-in?from=shell` → `/account`). Host key: `~/.ppomi/.env` (mode 0600
 or refused; optional `$PPOMI_ROOT/shell/.env`). File-held key is POSTed only after
-Clerk JWKS + aud/azp verify — not an auth gate. HITL escape: process
+Clerk JWKS + aud/azp — login write is a session hint, not an auth gate. HITL escape: process
 `AI_GATEWAY_API_KEY` (`open --env`, not Dock). `AI_GATEWAY_BASE_URL` must be https.
 `VERCEL_OIDC_TOKEN` is ignored.
 Vite preview: same proxy at `/__ppomi/responses`, or `?chat=fixture` for an
@@ -74,8 +74,10 @@ offline model-shaped function_call.
 #   AI_GATEWAY_API_KEY=…
 #   CLERK_ISSUER=https://<app>.clerk.accounts.dev
 #   CLERK_AUTHORIZED_PARTIES=https://your-web-origin
-# ~/.ppomi/clerk-session  Clerk session JWT     (after web /account)
+# ~/.ppomi/clerk-session  Clerk session JWT     (셸 로그인 → web /account)
 open /Applications/뽀미.app
+# CEO HITL: web/.env.local Clerk keys + `npm --prefix web run dev`, then 로그인 in-app
+# Do not set PPOMI_CHAT=fixture. Footer should read Gateway after sign-in.
 # HITL only — not the product path
 open --env AI_GATEWAY_API_KEY=… /Applications/뽀미.app
 # real Gateway (CLI host, HITL)

@@ -1,5 +1,12 @@
 import { realpathSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { listenForClerkHandoff } from "./clerk-handoff.ts";
+import {
+  clerkSessionToken,
+  parseClerkJwt,
+  tokenFromClerkHandoffUrl,
+  writeStoredClerkSession,
+} from "./clerk-session.ts";
 import { proxyResponses } from "./gateway.ts";
 import { allowGrant, grantableEffects, orchestrate } from "../../packages/ppomi-brain/src/index.ts";
 import type {
@@ -506,12 +513,27 @@ export async function runSpine(input: SpineInput): Promise<SpineResult> {
 
 export { gatewayConfig, proxyResponses } from "./gateway.ts";
 
-async function readStdinJson(): Promise<unknown> {
+async function readStdinText(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-  const raw = Buffer.concat(chunks).toString("utf8").trim();
+  return Buffer.concat(chunks).toString("utf8").trim();
+}
+
+async function readStdinJson(): Promise<unknown> {
+  const raw = await readStdinText();
   if (raw === "") return {};
   return JSON.parse(raw) as unknown;
+}
+
+function tokenFromStoreInput(raw: string): string | undefined {
+  const fromUrl = tokenFromClerkHandoffUrl(raw);
+  if (fromUrl) return fromUrl;
+  if (parseClerkJwt(raw) !== null) return raw.trim();
+  try {
+    return clerkSessionToken(JSON.parse(raw) as unknown, {});
+  } catch {
+    return undefined;
+  }
 }
 
 function isMain(): boolean {
@@ -530,12 +552,27 @@ async function main(): Promise<void> {
     process.stdout.write(`${JSON.stringify(await proxyResponses(await readStdinJson()))}\n`);
     return;
   }
+  if (process.argv.includes("--store-clerk-session")) {
+    const token = tokenFromStoreInput(await readStdinText());
+    writeStoredClerkSession(token ?? "");
+    process.stdout.write(`${JSON.stringify({ stored: true })}\n`);
+    return;
+  }
+  if (process.argv.includes("--clerk-handoff")) {
+    process.stdout.write(`${JSON.stringify(await listenForClerkHandoff())}\n`);
+    return;
+  }
   const result = await runSpine(parseArgs(process.argv.slice(2)));
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
-// --proxy-responses must run even if isMain() misses a strip-types / symlink argv path.
-if (process.argv.includes("--proxy-responses") || isMain()) {
+// CLI flags must run even if isMain() misses a strip-types / symlink argv path.
+if (
+  process.argv.includes("--proxy-responses")
+  || process.argv.includes("--store-clerk-session")
+  || process.argv.includes("--clerk-handoff")
+  || isMain()
+) {
   main().catch(error => {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`${message}\n`);

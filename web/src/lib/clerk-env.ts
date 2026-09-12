@@ -26,7 +26,7 @@ export const CLERK_DEFAULT_ROUTES = {
   NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: '/account',
 } as const;
 
-/** DoD: Google (or any Clerk IdP) sign-in lands on /account. Set in components, not only env. */
+/** DoD: Google (or any Clerk IdP) sign-in lands on /account. Set in components, not only env. Shell adds ?from=shell. */
 export const CLERK_ACCOUNT_REDIRECT = '/account';
 
 export type ClerkRequiredKey = (typeof CLERK_REQUIRED_KEYS)[number];
