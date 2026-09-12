@@ -1,5 +1,14 @@
 type Invoke = (cmd: string, args: Record<string, unknown>) => Promise<unknown>;
 
+interface StepRowView {
+  readonly stepId: string;
+  readonly driver: string;
+  readonly status: string;
+  readonly attempt: string;
+  readonly code?: string;
+  readonly observation: { readonly summary: string };
+}
+
 interface SpineView {
   readonly status: string;
   readonly pathId: string | null;
@@ -11,6 +20,8 @@ interface SpineView {
     readonly status: string;
     readonly steps: readonly { readonly stepId: string; readonly status: string; readonly note: string }[];
   } | null;
+  /** Core `RunResult`; `null` when the body stopped before `Runtime` (refusal, skip, path miss). */
+  readonly run?: { readonly status: string; readonly stepResults: readonly StepRowView[] } | null;
 }
 
 interface Line {
@@ -35,18 +46,20 @@ function el(id: string): HTMLElement {
 }
 
 function render(result: SpineView): string {
-  const steps = result.body?.steps ?? [];
-  const rows = steps
-    .map(step => `  - ${step.stepId}  ${step.status}  ${step.note}`)
-    .join("\n");
+  const run = result.run ?? null;
+  const rows = run !== null
+    ? run.stepResults.map(row =>
+      `  - ${row.stepId}  ${row.status}  ${row.attempt}  ${row.driver}${row.code !== undefined ? `  ${row.code}` : ""}  ${row.observation.summary}`)
+    : (result.body?.steps ?? []).map(step => `  - ${step.stepId}  ${step.status}  ${step.note}`);
   return [
     `status   ${result.status}`,
     `path     ${result.pathId ?? "(none)"}`,
     `body     ${result.bodyKind}${result.live ? " live" : " fixture"}`,
+    `run      ${run !== null ? run.status : "(stopped before Runtime)"}`,
     `note     ${result.note}`,
-    rows,
+    ...rows,
     `hook     ${result.hook}`,
-  ].filter(line => line.length > 0).join("\n");
+  ].join("\n");
 }
 
 function paint(): void {

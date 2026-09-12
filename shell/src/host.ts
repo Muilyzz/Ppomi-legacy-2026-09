@@ -5,6 +5,7 @@ import type {
   BodyRunResult,
   BodyRuntime,
   BodyStepStatus,
+  BodyStopReason,
   OrchestrationResult,
   PathDefinition,
   SessionIdentity,
@@ -16,8 +17,10 @@ import {
   type OsUiDriver,
   type Playbook,
   type RunResult,
+  type StepResult,
   type StepResultStatus,
 } from "../../packages/ppomi-body/src/index.ts";
+import { redactText } from "../../packages/ppomi-body/src/public-url.ts";
 import {
   FixtureMacosNativeTools,
   LiveMacosNativeTools,
@@ -25,6 +28,7 @@ import {
   macosBrowserApp,
   pickLiveAxClickTarget,
   type FixtureMacosWindow,
+  type MacNativeTools,
 } from "../../packages/ppomi-body-macos/src/index.ts";
 import {
   FixtureWindowsExecutorTools,
@@ -50,7 +54,24 @@ export interface SpineResult extends OrchestrationResult {
   readonly bodyKind: BodyKind;
   readonly live: boolean;
   readonly hook: string;
+  /** The core `RunResult` when the body reached `Runtime`; `null` when it stopped before that (refusal, skip, path miss). */
+  readonly run: RunResult | null;
 }
+
+/** Live Mac tools as the spine uses them: `LiveMacosNativeTools`, or a test double off a Mac. */
+export interface LiveMacTools extends MacNativeTools {
+  readonly app: string;
+  trusted(): boolean;
+}
+
+/** Filled by `runDriver` so the caller can return the core result next to the brain's summary. */
+export interface RunCapture {
+  run: RunResult | null;
+}
+
+const MACOS_LIVE_HOOK = "PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body macos --live";
+const WINDOWS_LIVE_HOOK = "PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts";
+const ANDROID_LIVE_HOOK = "PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts";
 
 const identity: SessionIdentity = {
   ownerId: "shell-dev",
@@ -66,7 +87,7 @@ const demoWindow = {
   ],
 } as const;
 
-const homePath: PathDefinition = {
+export const homePath: PathDefinition = {
   id: "path-home-next",
   title: "Home next",
   intents: ["browse", "next", "다음", "열어", "home"],
@@ -105,14 +126,25 @@ function mapStatus(status: StepResultStatus | undefined, code: string | undefine
   }
 }
 
+/** The structured code leads the note so `stale_screen` / `protected_action` / `commit` survive the brain's flattening. */
+function stepNote(row: StepResult | undefined): string {
+  if (row === undefined) return "no step result";
+  const summary = row.observation.summary;
+  if (row.code === undefined) return summary;
+  return summary.length > 0 ? `${row.code}: ${summary}` : row.code;
+}
+
 function toBodyResult(run: RunResult, path: PathDefinition): BodyRunResult {
-  const steps = path.steps.map((step, index) => {
-    const row = run.stepResults[index];
+  const invalid = run.status === "invalid" && run.invalid !== undefined
+    ? `invalid: ${run.invalid.code} ${run.invalid.detail}`.trim()
+    : null;
+  const steps = path.steps.map(step => {
+    const row = run.stepResults.find(item => item.stepId === step.id);
     return {
       stepId: step.id,
       effect: step.effect,
       status: mapStatus(row?.status, row?.code),
-      note: row?.observation.summary ?? row?.code ?? "no step result",
+      note: invalid ?? stepNote(row),
     };
   });
   const blocking = steps.find(step => step.status !== "ok");
@@ -129,106 +161,129 @@ async function runDriver(
   path: PathDefinition,
   driver: OsUiDriver,
   playbook: Playbook,
+  capture: RunCapture,
 ): Promise<BodyRunResult> {
   const run = await new Runtime(
     new OsSurface(driver),
     new FixedPermissionGate(["ui.read", "ui.control"]),
   ).run(playbook);
+  capture.run = run;
   return toBodyResult(run, path);
 }
 
-function skipped(path: PathDefinition, note: string): BodyRunResult {
+/** The body stopped before `Runtime` ran anything: every declared step carries the reason. Never `completed`. */
+function stopped(path: PathDefinition, reason: BodyStopReason, note: string): BodyRunResult {
   return {
-    status: "completed",
-    stopReason: null,
+    status: "stopped",
+    stopReason: reason,
     steps: path.steps.map(step => ({
       stepId: step.id,
       effect: step.effect,
-      status: "ok" as const,
+      status: reason,
       note,
     })),
   };
 }
 
-async function runMacos(input: BodyRunInput, live: boolean): Promise<BodyRunResult> {
+function failedWith(path: PathDefinition, prefix: string, error: unknown): BodyRunResult {
+  const code = error instanceof Error && "code" in error && typeof error.code === "string" && error.code.length > 0
+    ? error.code
+    : "failed";
+  const message = redactText(error instanceof Error ? error.message : String(error));
+  return stopped(path, "failed", `${prefix} ${code}: ${message}`);
+}
+
+async function runMacos(input: BodyRunInput, live: boolean, capture: RunCapture): Promise<BodyRunResult> {
   if (!live) {
     const window: FixtureMacosWindow = { ...demoWindow };
     return runDriver(
       input.path,
       new MacosDriver(new FixtureMacosNativeTools(window)),
       fixturePlaybook(input.path),
+      capture,
     );
   }
   if (process.platform !== "darwin") {
-    return skipped(input.path, "live macos skipped (not darwin). On a Mac: PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body macos --live");
+    return stopped(input.path, "needs_human", `live macos needs a Mac (this is ${process.platform}). On a Mac: ${MACOS_LIVE_HOOK}`);
   }
   const preferred = process.env.PPOMI_MAC_BROWSER === "chrome" ? "chrome" : "safari";
   const app = macosBrowserApp(preferred);
   if (app === null) {
-    return skipped(input.path, "live macos skipped (no Safari/Chrome name)");
+    return stopped(input.path, "needs_human", "live macos needs Safari or Chrome (PPOMI_MAC_BROWSER=safari|chrome)");
   }
-  const tools = new LiveMacosNativeTools({ app });
-  if (!tools.trusted()) {
-    return skipped(input.path, "live macos skipped (Accessibility denied). Grant 손쉬운 사용 to the terminal or Ppomi.app, then rerun --live.");
-  }
+  let tools: LiveMacTools;
   try {
-    tools.browser_open({ app, url: "https://example.com/" });
-    const preview = tools.screen_read();
-    const node = pickLiveAxClickTarget(preview.nodes);
-    if (node === undefined) {
-      return skipped(input.path, "live macos skipped (example.com More information not on the front window)");
-    }
-    return runDriver(input.path, new MacosDriver(tools), {
-      id: input.path.id,
-      steps: [{ id: "open-next", kind: "click", target: node.text, effect: "navigate" }],
-    });
+    tools = new LiveMacosNativeTools({ app });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return skipped(input.path, `live macos skipped (${message})`);
+    return failedWith(input.path, "live macos could not start:", error);
   }
+  return runLiveMacos(input.path, tools, capture);
 }
 
-function withHook(result: BodyRunResult, note: string): BodyRunResult {
-  const last = result.steps.at(-1);
-  if (last === undefined) return result;
-  return {
-    ...result,
-    steps: [...result.steps.slice(0, -1), { ...last, note: `${last.note}; ${note}` }],
-  };
+/**
+ * The live Mac sequence: Accessibility check, open example.com, read, pick only the
+ * "More information" link, then one gated `Runtime` click. Denied Accessibility is
+ * `grant_denied`, a missing link is `needs_human`, a thrown tool error is `failed`;
+ * `completed` only comes out of `Runtime`.
+ */
+export async function runLiveMacos(path: PathDefinition, tools: LiveMacTools, capture: RunCapture): Promise<BodyRunResult> {
+  if (!tools.trusted()) {
+    return stopped(path, "grant_denied", "live macos: Accessibility denied. Grant 손쉬운 사용 to the terminal or 뽀미.app, then rerun --live.");
+  }
+  let node;
+  try {
+    tools.browser_open({ app: tools.app, url: "https://example.com/" });
+    node = pickLiveAxClickTarget(tools.screen_read().nodes);
+  } catch (error) {
+    return failedWith(path, "live macos failed before the click:", error);
+  }
+  if (node === undefined) {
+    return stopped(path, "needs_human", `live macos: example.com "More information" is not on the ${tools.app} front window; nothing else is clicked.`);
+  }
+  return runDriver(
+    path,
+    new MacosDriver(tools),
+    { id: path.id, steps: [{ id: "open-next", kind: "click", target: node.text, effect: "navigate" }] },
+    capture,
+  );
 }
 
-async function runWindows(input: BodyRunInput, live: boolean): Promise<BodyRunResult> {
+async function runWindows(input: BodyRunInput, live: boolean, capture: RunCapture): Promise<BodyRunResult> {
+  if (live) {
+    return stopped(input.path, "failed", `live windows is not wired through the shell (MZZ-55b); the fixture runs without --live. Live UIA: ${WINDOWS_LIVE_HOOK}`);
+  }
   const window: FixtureWindowsWindow = { ...demoWindow, packageName: "win:1:1" };
-  const result = await runDriver(
+  return runDriver(
     input.path,
     new WindowsDriver(new FixtureWindowsExecutorTools(window)),
     fixturePlaybook(input.path),
+    capture,
   );
-  if (!live) return result;
-  return withHook(result, "live windows is MZZ-55b — PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts");
 }
 
-async function runAndroid(input: BodyRunInput, live: boolean): Promise<BodyRunResult> {
+async function runAndroid(input: BodyRunInput, live: boolean, capture: RunCapture): Promise<BodyRunResult> {
+  if (live) {
+    return stopped(input.path, "failed", `live android is not wired through the shell (MZZ-55c); the fixture runs without --live. Live UIAutomator: ${ANDROID_LIVE_HOOK}`);
+  }
   const window: FixtureAndroidWindow = { ...demoWindow, packageName: "com.ppomi.androidtarget" };
-  const result = await runDriver(
+  return runDriver(
     input.path,
     new AndroidDriver(new FixtureAndroidNativeTools(window)),
     fixturePlaybook(input.path),
+    capture,
   );
-  if (!live) return result;
-  return withHook(result, "live android is MZZ-55c — PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts");
 }
 
-function bodyFor(kind: BodyKind, live: boolean): BodyRuntime {
+function bodyFor(kind: BodyKind, live: boolean, capture: RunCapture): BodyRuntime {
   return {
     run(input) {
       switch (kind) {
         case "macos":
-          return runMacos(input, live);
+          return runMacos(input, live, capture);
         case "windows":
-          return runWindows(input, live);
+          return runWindows(input, live, capture);
         case "android":
-          return runAndroid(input, live);
+          return runAndroid(input, live, capture);
         default: {
           const exhaustive: never = kind;
           return exhaustive;
@@ -241,11 +296,11 @@ function bodyFor(kind: BodyKind, live: boolean): BodyRuntime {
 function hookFor(kind: BodyKind): string {
   switch (kind) {
     case "macos":
-      return "PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body macos --live";
+      return MACOS_LIVE_HOOK;
     case "windows":
-      return "PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts";
+      return WINDOWS_LIVE_HOOK;
     case "android":
-      return "PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts";
+      return ANDROID_LIVE_HOOK;
     default: {
       const exhaustive: never = kind;
       return exhaustive;
@@ -299,6 +354,7 @@ export function parseArgs(argv: readonly string[]): SpineInput {
 }
 
 export async function runSpine(input: SpineInput): Promise<SpineResult> {
+  const capture: RunCapture = { run: null };
   const result = await orchestrate(
     {
       paths: {
@@ -316,11 +372,11 @@ export async function runSpine(input: SpineInput): Promise<SpineResult> {
           ...(identity.seatId !== undefined ? { seatId: identity.seatId } : {}),
         }),
       },
-      body: bodyFor(input.body, input.live),
+      body: bodyFor(input.body, input.live, capture),
     },
     { text: input.intent, surface: "app" },
   );
-  return { ...result, bodyKind: input.body, live: input.live, hook: hookFor(input.body) };
+  return { ...result, bodyKind: input.body, live: input.live, hook: hookFor(input.body), run: capture.run };
 }
 
 function isMain(): boolean {
