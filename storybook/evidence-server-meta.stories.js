@@ -1,12 +1,12 @@
 import {fn} from 'storybook/test';
 import './evidence-fleet.js';
 import {title, here, fleet, server, items} from './evidence-fleet-fixture.js';
-const F = globalThis.EvidenceFleet;
+const Evidence = globalThis.Evidence;
 
 export default {
   title: '증빙/ServerMeta',
   parameters: {layout: 'fullscreen'},
-  render: (args) => { const el = document.createElement('div'); F.ServerMeta.mount(el, args); return el; },
+  render: (args) => { const el = document.createElement('div'); Evidence.ServerMeta.mount(el, args); return el; },
   argTypes: {
     debug: {control: 'boolean', description: '내부 id'},
     fleet: {table: {disable: true}}, items: {table: {disable: true}}, server: {table: {disable: true}},

@@ -2,6 +2,7 @@
 //   amount 수량+단위 · time 시각(until 로 기간) · place 좌표·다각형 · ratio 1/10000 · path 계층 경로 · ref 대상 ID · provenance 출처 등급 · image 원본 · text
 // 표는 항상. 시간축은 time 이 있으면, 트리맵은 path+amount 가 있으면, 평면도는 place 가 있으면. 비율은 표 안의 <meter>, 출처 등급은 모든 표시에 prov-* 클래스로 겹친다.
 // 어떤 도메인이 자기만의 뷰어를 요구하면 위 목록에 빠진 값 종류가 있다는 뜻이다 — 도메인 분기를 넣지 않는다.
+// 공개 API: Panel 은 조립만 — 스키마를 보고 Table · Timeline · Treemap · Floorplan 을 붙인다. 뷰어는 각자 html·mount. Facts.mount 는 없다.
 // CSS 없음: 기하는 SVG 좌표(자료), 꾸밈은 skin 의 .fx-* 훅. 앱은 끼워 넣고 Storybook은 import — globalThis.Facts.
 //
 // records: [{id, fields:{...}}]   schema: {fields:[{key, title, type, unit, until}]}   until = 기간의 끝을 담은 다른 time 필드의 key.
@@ -154,40 +155,118 @@ function places(st, shapes) {
   return '<svg class="fx-places" viewBox="0 0 ' + VW + ' ' + H + '" role="img" aria-label="평면도">' + g + '</svg>';
 }
 
-// ---- 디스패처: 스키마의 값 종류만 보고 붙일 뷰를 고른다
+// ---- 뷰어: 각자 html·mount. Panel 만 스키마를 보고 자식을 붙인다.
+function fieldsOf(st) { return (st.schema && st.schema.fields) || []; }
+function recsOf(st) { return st.records || []; }
 function btn(key, value, label, on) { return '<button type="button" data-' + key + '="' + esc(value) + '"' + (on ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"') + '>' + esc(label) + '</button>'; }
-function html(st) {
-  var schema = (st.schema && st.schema.fields) || [], records = st.records || [];
-  var pathF = schema.find(function (f) { return f.type === 'path'; }), amountF = schema.find(function (f) { return f.type === 'amount'; });
-  var out = '<div class="fx"><div class="sec">값 종류<span class="r"><span>' + schema.map(function (f) { return esc(f.title || f.key) + ' <small class="meta">' + esc(f.type) + '</small>'; }).join(' · ') + '</span></span></div>';
-  var sp = spans(records, schema);
-  if (sp.length) out += '<div class="sec">시간<span class="r">' + sp.length + '건</span></div>' + timeline(st, sp);
-  if (pathF && amountF) {
-    var maxD = records.reduce(function (m, r) { return Math.max(m, segs(r.fields[pathF.key]).length); }, 0) - segs(st.root).length, depth = Math.max(1, Math.min(st.depth || 1, maxD));
-    var items = nodes(records, pathF.key, amountF.key, st.root, depth), nav = '';
-    for (var d = 1; d <= maxD; d++) nav += btn('depth', d, String(d), depth === d);
-    out += '<div class="sec">계층 · ' + esc(amountF.title || amountF.key) + '<span class="r">' + (st.root ? '<nav class="nav">' + btn('root', pathAt(st.root, segs(st.root).length - 1), '← ' + st.root, false) + '</nav>' : '') + '<nav class="nav" aria-label="깊이"><span>깊이</span>' + nav + '</nav></span></div>' + (items.length ? treemap(st, items, amountF) : '<p class="meta">크기가 있는 기록이 없습니다.</p>');
-  }
-  var sh = shapesOf(records, schema);
-  if (sh.length) out += '<div class="sec">장소<span class="r">' + sh.length + '건 · 북쪽이 위</span></div>' + places(st, sh);
-  return out + '<div class="sec">기록<span class="r">' + records.length + '건</span></div>' + table(st, schema, records) + '</div>';
+function typesBar(schema) {
+  return '<div class="sec">값 종류<span class="r"><span>' + schema.map(function (f) { return esc(f.title || f.key) + ' <small class="meta">' + esc(f.type) + '</small>'; }).join(' · ') + '</span></span></div>';
 }
-function mount(el, opts) {
+function emit(st) { if (st.onChange) st.onChange({depth: st.depth, root: st.root, selected: st.selected}); }
+function liveState(opts) {
+  if (opts && opts._live) return opts;
   var st = {depth: 1, root: '', selected: null};
-  Object.keys(opts).forEach(function (k) { st[k] = opts[k]; });
-  function draw() { el.innerHTML = html(st); }
-  function set(patch) { Object.keys(patch).forEach(function (k) { st[k] = patch[k]; }); draw(); if (st.onChange) st.onChange({depth: st.depth, root: st.root, selected: st.selected}); }
-  el.addEventListener('click', function (ev) {
-    var b = ev.target.closest('[data-depth],[data-root],[data-path],[data-record]'); if (!b || !el.contains(b)) return;
-    var d = b.dataset;
-    if (d.depth) set({depth: +d.depth});
-    else if (d.root != null) set({root: d.root, depth: 1});
-    else if (d.path) { if (b.classList.contains('deeper')) set({root: d.path, depth: 1}); else set({selected: st.selected === d.path ? null : d.path}); if (st.onSelect) st.onSelect({path: d.path}); }
-    else if (d.record) { set({selected: st.selected === d.record ? null : d.record}); if (st.onSelect) st.onSelect((st.records || []).find(function (r) { return r.id === st.selected; }) || null); }
-  });
-  draw();
-  return {set: set, state: function () { return st; }};
+  Object.keys(opts || {}).forEach(function (k) { st[k] = opts[k]; });
+  return st;
+}
+function recordClick(ev, el, st, set) {
+  var b = ev.target.closest('[data-record]'); if (!b || !el.contains(b)) return;
+  set({selected: st.selected === b.dataset.record ? null : b.dataset.record});
+  if (st.onSelect) st.onSelect((st.records || []).find(function (r) { return r.id === st.selected; }) || null);
+}
+function component(htmlFn, clickFn) {
+  return {
+    html: htmlFn,
+    mount: function (el, opts) {
+      var st = liveState(opts);
+      function draw() { el.innerHTML = htmlFn(st); }
+      function set(patch) {
+        Object.keys(patch).forEach(function (k) { st[k] = patch[k]; });
+        if (st._redraw) st._redraw();
+        else { draw(); emit(st); }
+      }
+      el.addEventListener('click', function (ev) { clickFn(ev, el, st, set); });
+      draw();
+      return {set: set, state: function () { return st; }, draw: draw};
+    }
+  };
 }
 
-root.Facts = {TYPES, PROV, fmt, cell, labelOf, nodes, layout, spans, ticks, shapesOf, project, html, mount};
+function tableHtml(st) {
+  var schema = fieldsOf(st), records = recsOf(st);
+  return '<div class="sec">기록<span class="r">' + records.length + '건</span></div>' + table(st, schema, records);
+}
+function timelineHtml(st) {
+  var schema = fieldsOf(st), records = recsOf(st), sp = spans(records, schema);
+  if (!sp.length) return '<div class="sec">시간</div><p class="meta">시각이 있는 기록이 없습니다.</p>';
+  return '<div class="sec">시간<span class="r">' + sp.length + '건</span></div>' + timeline(st, sp);
+}
+function treemapHtml(st) {
+  var schema = fieldsOf(st), records = recsOf(st);
+  var pathF = schema.find(function (f) { return f.type === 'path'; }), amountF = schema.find(function (f) { return f.type === 'amount'; });
+  if (!pathF || !amountF) return '<div class="sec">계층</div><p class="meta">경로와 크기가 있는 기록이 없습니다.</p>';
+  var maxD = records.reduce(function (m, r) { return Math.max(m, segs(r.fields[pathF.key]).length); }, 0) - segs(st.root).length, depth = Math.max(1, Math.min(st.depth || 1, maxD));
+  var items = nodes(records, pathF.key, amountF.key, st.root, depth), nav = '';
+  for (var d = 1; d <= maxD; d++) nav += btn('depth', d, String(d), depth === d);
+  return '<div class="sec">계층 · ' + esc(amountF.title || amountF.key) + '<span class="r">' + (st.root ? '<nav class="nav">' + btn('root', pathAt(st.root, segs(st.root).length - 1), '← ' + st.root, false) + '</nav>' : '') + '<nav class="nav" aria-label="깊이"><span>깊이</span>' + nav + '</nav></span></div>' + (items.length ? treemap(st, items, amountF) : '<p class="meta">크기가 있는 기록이 없습니다.</p>');
+}
+function floorplanHtml(st) {
+  var schema = fieldsOf(st), records = recsOf(st), sh = shapesOf(records, schema);
+  if (!sh.length) return '<div class="sec">장소</div><p class="meta">장소가 있는 기록이 없습니다.</p>';
+  return '<div class="sec">장소<span class="r">' + sh.length + '건 · 북쪽이 위</span></div>' + places(st, sh);
+}
+function treemapClick(ev, el, st, set) {
+  var b = ev.target.closest('[data-depth],[data-root],[data-path]'); if (!b || !el.contains(b)) return;
+  var d = b.dataset;
+  if (d.depth) set({depth: +d.depth});
+  else if (d.root != null) set({root: d.root, depth: 1});
+  else if (d.path) {
+    if (b.classList.contains('deeper')) set({root: d.path, depth: 1});
+    else set({selected: st.selected === d.path ? null : d.path});
+    if (st.onSelect) st.onSelect({path: d.path});
+  }
+}
+
+var Table = component(tableHtml, recordClick);
+var Timeline = component(timelineHtml, recordClick);
+var Treemap = component(treemapHtml, treemapClick);
+var Floorplan = component(floorplanHtml, recordClick);
+
+function childrenOf(st) {
+  var schema = fieldsOf(st), records = recsOf(st), out = [];
+  if (spans(records, schema).length) out.push(Timeline);
+  var pathF = schema.find(function (f) { return f.type === 'path'; }), amountF = schema.find(function (f) { return f.type === 'amount'; });
+  if (pathF && amountF) out.push(Treemap);
+  if (shapesOf(records, schema).length) out.push(Floorplan);
+  out.push(Table);
+  return out;
+}
+function panelHtml(st) {
+  return '<div class="fx">' + typesBar(fieldsOf(st)) + childrenOf(st).map(function (V) { return V.html(st); }).join('') + '</div>';
+}
+function panelMount(el, opts) {
+  var st = liveState(opts); st._live = true;
+  var handles = [];
+  st._redraw = function () { handles.forEach(function (h) { h.draw(); }); emit(st); };
+  function attach() {
+    el.innerHTML = '';
+    var wrap = document.createElement('div'); wrap.className = 'fx';
+    wrap.insertAdjacentHTML('beforeend', typesBar(fieldsOf(st)));
+    handles = childrenOf(st).map(function (V) {
+      var slot = document.createElement('div'); wrap.appendChild(slot); return V.mount(slot, st);
+    });
+    el.appendChild(wrap);
+  }
+  attach();
+  function set(patch) {
+    Object.keys(patch).forEach(function (k) { st[k] = patch[k]; });
+    if (patch.records !== undefined || patch.schema !== undefined) attach();
+    else handles.forEach(function (h) { h.draw(); });
+    emit(st);
+  }
+  return {set: set, state: function () { return st; }};
+}
+var Panel = {html: panelHtml, mount: panelMount, children: childrenOf};
+
+root.Facts = {TYPES, PROV, fmt, cell, labelOf, nodes, layout, spans, ticks, shapesOf, project, Panel, Table, Timeline, Treemap, Floorplan};
 })(globalThis);

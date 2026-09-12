@@ -1,4 +1,4 @@
-// facts.js 의 논리 검사 — 값 종류 표기, 트리맵 집계·배치, 시간축 항목·눈금, 평면도 투영, 디스패처의 뷰 선택. DOM 없이 돈다: npm test
+// facts.js 의 논리 검사 — 값 종류 표기, 트리맵 집계·배치, 시간축 항목·눈금, 평면도 투영, Panel 조립과 뷰어 경계. DOM 없이 돈다: npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../Ppomi/Sources/Ppomi/Web/facts.js';
@@ -74,19 +74,47 @@ test('평면도 투영: 위도 1° ≈ 110.6 km, 경도는 cos(위도) 만큼 �
   assert.equal(X.shapesOf(spending.records, spending.schema.fields).length, 8);
 });
 
-test('디스패처: 스키마의 값 종류만 보고 뷰를 붙인다. CSS 는 없다', () => {
-  const b = X.html({...building, depth: 2});
+test('공개 API: Panel 이 조립하고 뷰어는 각자. Facts.mount 는 없다', () => {
+  assert.equal(X.mount, undefined);
+  assert.equal(X.html, undefined);
+  assert.equal(typeof X.Panel.mount, 'function');
+  assert.equal(typeof X.Table.mount, 'function');
+  assert.equal(typeof X.Timeline.mount, 'function');
+  assert.equal(typeof X.Treemap.mount, 'function');
+  assert.equal(typeof X.Floorplan.mount, 'function');
+  ['Panel', 'Table', 'Timeline', 'Treemap', 'Floorplan'].forEach((name) => {
+    assert.equal(globalThis[name], undefined);
+  });
+  assert.deepEqual(X.Panel.children(building), [X.Timeline, X.Treemap, X.Floorplan, X.Table]);
+  assert.deepEqual(X.Panel.children(car), [X.Timeline, X.Table]);
+  assert.deepEqual(X.Panel.children(holdings), [X.Timeline, X.Treemap, X.Table]);
+  assert.deepEqual(X.Panel.children({records: [], schema: {fields: []}}), [X.Table]);
+});
+
+test('뷰어는 자기 그림만: Table 은 표, Timeline 은 시간축, Treemap 은 계층, Floorplan 은 평면도', () => {
+  const t = X.Table.html(building);
+  assert.match(t, /class="fx-table"/); assert.doesNotMatch(t, /fx-timeline|fx-treemap|fx-places/);
+  const tl = X.Timeline.html(loan);
+  assert.match(tl, /class="fx-timeline"/); assert.doesNotMatch(tl, /fx-table|fx-treemap|fx-places/);
+  const tm = X.Treemap.html({...building, depth: 2});
+  assert.match(tm, /class="fx-treemap"/); assert.doesNotMatch(tm, /fx-table|fx-timeline|fx-places/);
+  const fl = X.Floorplan.html(building);
+  assert.match(fl, /class="fx-places"/); assert.doesNotMatch(fl, /fx-table|fx-timeline|fx-treemap/);
+});
+
+test('Panel: 스키마의 값 종류만 보고 자식을 붙인다. CSS 는 없다', () => {
+  const b = X.Panel.html({...building, depth: 2});
   assert.match(b, /class="fx-table"/); assert.match(b, /class="fx-timeline"/); assert.match(b, /class="fx-treemap"/); assert.match(b, /class="fx-places"/);
   assert.match(b, /<polygon points="/); assert.match(b, /<meter /); assert.match(b, /class="prov prov-estimated">추정/);
   assert.equal((b.match(/data-path=/g) || []).length, 6);
   assert.match(b, /data-depth="2" class="on"/);
   assert.doesNotMatch(b, /<style/);
-  const c = X.html({...car});
+  const c = X.Panel.html({...car});
   assert.match(c, /fx-timeline/); assert.doesNotMatch(c, /fx-treemap/); assert.doesNotMatch(c, /fx-places/);
   assert.match(c, /<code>12가3456<\/code>/);
-  const h = X.html({...holdings, depth: 3, selected: 'h4'});
+  const h = X.Panel.html({...holdings, depth: 3, selected: 'h4'});
   assert.match(h, /aria-selected="true"/); assert.match(h, /fx-treemap/); assert.doesNotMatch(h, /fx-places/);
-  const drilled = X.html({...building, root: '건물/2층', depth: 1});
+  const drilled = X.Panel.html({...building, root: '건물/2층', depth: 1});
   assert.match(drilled, /data-root="건물" [^>]*>← 건물\/2층/); assert.equal((drilled.match(/data-path=/g) || []).length, 2);
-  assert.match(X.html({records: [], schema: {fields: []}}), /기록이 없습니다/);
+  assert.match(X.Panel.html({records: [], schema: {fields: []}}), /기록이 없습니다/);
 });

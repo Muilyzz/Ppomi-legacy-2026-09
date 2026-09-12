@@ -1,4 +1,4 @@
-// 값 종류 뷰 — 대장 다섯 개 + 분개 집계 하나가 전부 같은 Facts.mount 를 쓴다. 에이전트가 {records, schema} 만 돌려주면 이 화면이 된다.
+// 값 종류/Panel — 스키마 값 종류만 보고 Table · Timeline · Treemap · Floorplan 을 붙인다. 도메인 분기 없음.
 import {fn} from 'storybook/test';
 import '../Ppomi/Sources/Ppomi/Web/facts.js';
 import '../Ppomi/Sources/Ppomi/Web/journal.js';
@@ -8,7 +8,7 @@ import {archive, MONEY} from './fixture.js';
 import {contracts, contractSchema, rules, rentEntries, TODAY} from './lease-fixture.js';
 import {parseGovSites, govSchema} from './gov-fixture.js';
 import govMd from '../docs/gov-sites.md?raw';
-const X = globalThis.Facts, J = globalThis.Journal, S = globalThis.Schedule;
+const Facts = globalThis.Facts, J = globalThis.Journal, S = globalThis.Schedule;
 
 // 분개 → 값 종류: 비용 차변 항목을 계정 경로 + 금액으로. 도메인 코드 없이 트리맵이 된다.
 const leaf = J.rollup(archive.accounts, Infinity);
@@ -20,8 +20,8 @@ const expenses = {
 function F(key, title, type, extra) { return {key, title, type, ...extra}; }
 
 export default {
-  title: '값 종류 뷰',
-  render: (args) => { const el = document.createElement('div'); X.mount(el, args); return el; },
+  title: '값 종류/Panel',
+  render: (args) => { const el = document.createElement('div'); Facts.Panel.mount(el, args); return el; },
   argTypes: {
     depth: {control: {type: 'number', min: 1}, description: '트리맵 깊이'},
     root: {control: 'text', description: '트리맵 뿌리 경로'},

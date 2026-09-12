@@ -190,5 +190,5 @@ function mount(el, opts) {
   return {set: set, state: function () { return st; }};
 }
 
-root.Evidence = {tagAt, tagDepth, underTag, tagCounts, schemaOf, cellText, rowsOf, place, extent, rightMargin, html, mount};
+root.Evidence = Object.assign(root.Evidence || {}, {tagAt, tagDepth, underTag, tagCounts, schemaOf, cellText, rowsOf, place, extent, rightMargin, html, mount});
 })(globalThis);
