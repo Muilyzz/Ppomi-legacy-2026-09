@@ -49,6 +49,10 @@ open /Applications/뽀미.app
 
 미결(오너 결정): `shell/`·`ppomi-shell` 이름은 `ppomi-*` 잠금 목록 밖이고, 「Swift `Ppomi/`는 UI 대체재가 아니다」는 [#61](https://github.com/Muilyzz/Ppomi/pull/61)의 「테스트는 메인 앱에서」와 방향이 갈린다 — 이 문서는 결정하지 않는다.
 
+## 실패는 실패로 (Gateway · IPC)
+
+`run_path` / `ai_gateway`는 node 자식의 stdout·stderr를 파이프로 받고(타임아웃 60 s / 120 s, 넘기면 kill), 마지막 JSON 객체만 결과로 쓴다. 실패는 전부 `{ code, message }` — `run_path_host_failed` / `gateway_host_failed` — 이고 빈 결과나 지어낸 결과는 없다. 창에서는 IPC 실패가 `실행에 실패했습니다.` + `output-error` 카드(`run_path_ipc_failed: <code>`), Gateway 실패가 `모델 연결에 실패했습니다. 게이트웨이 오류: <code>`(`gateway_ipc_failed` · `gateway_host_failed` · `model_unavailable`)로 보인다 — `path_not_found` 말풍선으로 숨기지 않고, 로컬 regex 매처로 조용히 내려가지 않는다. 키도 픽스처도 없을 때만 로컬 매처가 답하고, 그 카드는 `via: "local"`이다(`via: "gateway"`는 모델 function_call만). 브라우저 `previewSpine`은 `vite dev` 또는 `?chat=fixture`에서만 쓰이고 `(미리보기)`로 표시된다; 그 밖에 IPC가 없으면 `run_path_ipc_failed: no_tauri_ipc`. 자식 환경은 허용 목록만 넘긴다(`PATH`·`HOME`·`TMPDIR`·`LANG`/`LC_*`·`PPOMI_CHAT`·`PPOMI_NODE`·`PPOMI_MAC_BROWSER`·`AI_GATEWAY_API_KEY`·`AI_GATEWAY_BASE_URL`·`AI_TEXT_MODEL`); `PPOMI_BODY_LIVE`·`PPOMI_BODY_AX`·`PPOMI_BODY`·`PPOMI_SECRETS_LIVE`·`NODE_*`·`DYLD_*`/`LD_*`는 창에서 절대 자식에 닿지 않는다. 창의 `live` 거부(`live_refused`)는 #79와 함께 온다.
+
 ## Live Mac body
 
 기본은 fixture(단위). 실기기 AX는 **CLI 전용**이고 열쇠가 둘이다 — `--live` 플래그와 환경 `PPOMI_BODY_LIVE=1`:
