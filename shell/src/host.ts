@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url";
 import { allowGrant, grantableEffects, orchestrate } from "../../packages/ppomi-brain/src/index.ts";
 import type {
+  ActionEffect,
   BodyRunInput,
   BodyRunResult,
   BodyRuntime,
@@ -9,6 +10,12 @@ import type {
   PathDefinition,
   SessionIdentity,
 } from "../../packages/ppomi-brain/src/index.ts";
+import {
+  loadPath,
+  loadPathCatalog,
+  type PathDocument,
+  type PathStep as CatalogStep,
+} from "../../packages/ppomi-path/src/index.ts";
 import {
   FixedPermissionGate,
   OsSurface,
@@ -36,6 +43,7 @@ import {
   FixtureAndroidNativeTools,
   type FixtureAndroidWindow,
 } from "../../packages/ppomi-body-android/src/index.ts";
+import { FixtureIphoneMirroringTools } from "../../packages/ppomi-body-iphone-mirroring/src/index.ts";
 import {
   KB_STAR_BIZ_ACCOUNT_KEY,
   openOsSecretStore,
@@ -105,10 +113,55 @@ export const secretsPath: PathDefinition = {
   steps: [{ id: "read-account", title: "계좌번호 읽기", effect: "lookup" }],
 };
 
-const paths = [homePath, secretsPath];
+export const KB_STAR_BIZ_PATH_ID = "kb-star-biz-iphone";
+const KB_STAR_BIZ_APP = "KB스타기업뱅킹";
+
+function brainEffect(step: CatalogStep): ActionEffect {
+  if (step.kind === "read") return "lookup";
+  if (step.kind === "payment" || step.kind === "submit" || step.effect === "commit") return "transmit";
+  return "input";
+}
+
+function intentsFor(document: PathDocument): readonly string[] {
+  switch (document.id) {
+    case KB_STAR_BIZ_PATH_ID:
+      return [KB_STAR_BIZ_APP, "KB 사업자 홈", "path_cold_start", "kb-enterprise"];
+    default:
+      return [];
+  }
+}
+
+function catalogDefinition(document: PathDocument): PathDefinition {
+  const steps = document.steps.map(step => ({
+    id: step.id,
+    title: step.title ?? step.id,
+    effect: brainEffect(step),
+  }));
+  return {
+    id: document.id,
+    title: document.title,
+    intents: intentsFor(document),
+    requiredEffects: [...new Set(steps.map(step => step.effect))],
+    requiredSurfaces: ["app"],
+    steps,
+  };
+}
+
+function loadCatalogPaths(): readonly PathDefinition[] {
+  return loadPathCatalog().paths.map(entry =>
+    catalogDefinition(loadPath(entry.id, { version: entry.version })),
+  );
+}
+
+const catalogPaths = loadCatalogPaths();
+const paths = [...catalogPaths, secretsPath, homePath];
 
 export const SECRETS_LIVE_HOOK =
   "PPOMI_SECRETS_LIVE=1 npm --prefix shell run host -- --intent '내 사업자 KB계좌번호 알아?' --live";
+export const KB_LIVE_HOOK =
+  "PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 'KB스타기업뱅킹 열어' --live";
+export const KB_MIRRORING_HOOK =
+  "PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-iphone-mirroring/example/src/main.ts";
 
 function fixturePlaybook(path: PathDefinition): Playbook {
   return {
@@ -282,6 +335,41 @@ function liveSecretsRequested(live: boolean, env: NodeJS.ProcessEnv = process.en
   return live || env.PPOMI_SECRETS_LIVE === "1";
 }
 
+function kbStoppedAtHuman(path: PathDefinition, note: string): BodyRunResult {
+  return {
+    status: "stopped",
+    stopReason: "needs_human",
+    steps: path.steps.map(step => {
+      if (step.id === "go-home" || step.id === "open-kb") {
+        return { stepId: step.id, effect: step.effect, status: "ok" as const, note };
+      }
+      if (step.id === "human-login") {
+        return { stepId: step.id, effect: step.effect, status: "needs_human" as const, note };
+      }
+      return { stepId: step.id, effect: step.effect, status: "failed" as const, note: "stopped at human-login" };
+    }),
+  };
+}
+
+function fixtureKb(path: PathDefinition): BodyRunResult {
+  const tools = new FixtureIphoneMirroringTools({
+    appLabel: KB_STAR_BIZ_APP,
+    rows: [
+      { text: KB_STAR_BIZ_APP, tappable: true, editable: false },
+      { text: "Face ID", tappable: true, editable: false },
+    ],
+  });
+  tools.phone_key({ name: "home" });
+  tools.phone_open({ app: KB_STAR_BIZ_APP });
+  return kbStoppedAtHuman(path, "fixture: Home → KB스타기업뱅킹. Face ID·로그인은 당사자.");
+}
+
+function runKbStar(path: PathDefinition, live: boolean): BodyRunResult {
+  const result = fixtureKb(path);
+  if (!live) return result;
+  return withHook(result, `live iphone-mirroring is ${KB_MIRRORING_HOOK}`);
+}
+
 function runSecrets(path: PathDefinition, live: boolean): BodyRunResult {
   if (!liveSecretsRequested(live)) return fixtureSecrets(path);
   if (process.platform !== "darwin" && process.platform !== "win32") {
@@ -303,6 +391,7 @@ function bodyFor(kind: BodyKind, live: boolean): BodyRuntime {
   return {
     run(input) {
       if (input.path.id === secretsPath.id) return runSecrets(input.path, live);
+      if (input.path.id === KB_STAR_BIZ_PATH_ID) return runKbStar(input.path, live);
       switch (kind) {
         case "macos":
           return runMacos(input, live);
@@ -401,7 +490,12 @@ export async function runSpine(input: SpineInput): Promise<SpineResult> {
     },
     { text: input.intent, surface: "app" },
   );
-  const hook = result.pathId === secretsPath.id ? SECRETS_LIVE_HOOK : hookFor(input.body);
+  const hook =
+    result.pathId === secretsPath.id
+      ? SECRETS_LIVE_HOOK
+      : result.pathId === KB_STAR_BIZ_PATH_ID
+        ? KB_LIVE_HOOK
+        : hookFor(input.body);
   return { ...result, bodyKind: input.body, live: input.live, hook };
 }
 
