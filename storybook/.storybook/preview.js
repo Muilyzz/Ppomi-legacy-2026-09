@@ -9,6 +9,7 @@ import shell from '../../agent/src/style.css?raw';
 import workbench from '../../agent/src/ui/workbench.css?raw';
 import theme from '../../Ppomi/Sources/Ppomi/Web/theme.css?raw';
 import simple from '../../Ppomi/Sources/Ppomi/Web/simple.css?raw';
+import {usageSource} from '../source.js';
 
 const tokens = colors + tokensSource.replace(/^@import[^\n]*\n/m, '').replace('./fonts/PretendardVariable.woff2', fontUrl);
 // 뽀미 테마 = 토큰 + 스토리가 고른 부분(parameters.skin). 페이지(분개·증거·값 종류)는 theme, 셸·작업대는 shell·workbench.
@@ -29,15 +30,9 @@ export default {
     root.style.setProperty('--ui-scale', ctx.globals.scale);
     const wrap = document.createElement('div'), css = skin(ctx.globals.style, ctx.parameters.skin);
     if (css) { const s = document.createElement('style'); s.textContent = css; wrap.appendChild(s); }
-    const node = story();
-    // 빨간 점선 = 컴포넌트 실제 경계. 패딩은 그 바깥(잘림·클릭용)만. 대화 셸은 componentOutline:false.
-    if (ctx.parameters.componentOutline !== false) {
-      node.style.outline = '1px dotted red';
-      wrap.style.padding = '1px';
-    }
-    wrap.appendChild(node);
+    wrap.appendChild(story());
     return wrap;
   }],
-  // html-vite's default Code snippet is the decorated DOM (theme <style> dump). type:'code' is the story JS/JSX.
-  parameters: {backgrounds: {disable: true}, layout: 'fullscreen', docs: {codePanel: true, source: {type: 'code', excludeDecorators: true}}},
+  // html-vite default snippet is decorated DOM. type:'code' is CSF args. dynamic+transform → mount/render usage.
+  parameters: {backgrounds: {disable: true}, layout: 'fullscreen', docs: {codePanel: true, source: {type: 'dynamic', transform: usageSource}}},
 };
