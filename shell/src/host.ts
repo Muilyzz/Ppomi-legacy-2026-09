@@ -1,4 +1,6 @@
-import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { proxyResponses } from "./gateway.ts";
 import { allowGrant, grantableEffects, orchestrate } from "../../packages/ppomi-brain/src/index.ts";
 import type {
   BodyRunInput,
@@ -40,6 +42,13 @@ import {
   FixtureAndroidNativeTools,
   type FixtureAndroidWindow,
 } from "../../packages/ppomi-body-android/src/index.ts";
+import {
+  KB_STAR_BIZ_ACCOUNT_KEY,
+  openOsSecretStore,
+  secretEvidence,
+  SecretStoreError,
+} from "../../packages/ppomi-secrets/src/index.ts";
+import { FakeSecretStore } from "../../packages/ppomi-secrets/src/testing.ts";
 
 export const BODY_KINDS = ["macos", "windows", "android"] as const;
 export type BodyKind = (typeof BODY_KINDS)[number];
@@ -96,7 +105,33 @@ export const homePath: PathDefinition = {
   steps: [{ id: "open-next", title: "Next", effect: "input" }],
 };
 
-const paths = [homePath];
+/** Probe digits only — same as ppomi-secrets example / Storybook. Never a real account. */
+const SECRETS_FIXTURE_ACCOUNT = "001234567890";
+
+export const secretsPath: PathDefinition = {
+  id: "path-secrets-account",
+  title: "사업자 계좌 시크릿",
+  intents: [
+    "사업자 계좌",
+    "사업자 kb",
+    "kb계좌",
+    "kb 계좌",
+    "kb account",
+    "계좌번호",
+    "통장번호",
+    "account number",
+    "account",
+    "계좌",
+  ],
+  requiredEffects: ["lookup"],
+  requiredSurfaces: ["app"],
+  steps: [{ id: "read-account", title: "계좌번호 읽기", effect: "lookup" }],
+};
+
+const paths = [homePath, secretsPath];
+
+export const SECRETS_LIVE_HOOK =
+  "PPOMI_SECRETS_LIVE=1 npm --prefix shell run host -- --intent '내 사업자 KB계좌번호 알아?' --live";
 
 function fixturePlaybook(path: PathDefinition): Playbook {
   return {
@@ -274,9 +309,57 @@ async function runAndroid(input: BodyRunInput, live: boolean, capture: RunCaptur
   );
 }
 
+function secretsNote(value: string | undefined): string {
+  if (value === undefined) return `no secret for ${KB_STAR_BIZ_ACCOUNT_KEY}`;
+  const evidence = secretEvidence(KB_STAR_BIZ_ACCOUNT_KEY, value);
+  return `${evidence.masked} ${evidence.key}`;
+}
+
+function secretsResult(path: PathDefinition, note: string): BodyRunResult {
+  return {
+    status: "completed",
+    stopReason: null,
+    steps: path.steps.map(step => ({
+      stepId: step.id,
+      effect: step.effect,
+      status: "ok" as const,
+      note,
+    })),
+  };
+}
+
+function fixtureSecrets(path: PathDefinition): BodyRunResult {
+  // ponytail: in-process fixture, same as the secrets example. Keychain if --live / PPOMI_SECRETS_LIVE.
+  const store = new FakeSecretStore();
+  store.put(KB_STAR_BIZ_ACCOUNT_KEY, SECRETS_FIXTURE_ACCOUNT);
+  return secretsResult(path, secretsNote(store.get(KB_STAR_BIZ_ACCOUNT_KEY)));
+}
+
+function liveSecretsRequested(live: boolean, env: NodeJS.ProcessEnv = process.env): boolean {
+  return live || env.PPOMI_SECRETS_LIVE === "1";
+}
+
+/** A live read that cannot happen here is a stop the person sees, never a `completed` with no read behind it. */
+function runSecrets(path: PathDefinition, live: boolean): BodyRunResult {
+  if (!liveSecretsRequested(live)) return fixtureSecrets(path);
+  if (process.platform !== "darwin" && process.platform !== "win32") {
+    return stopped(path, "needs_human", `live secrets need a Mac or Windows (this is ${process.platform}); no Keychain / Credential Manager here. On a Mac: ${SECRETS_LIVE_HOOK}`);
+  }
+  try {
+    const store = openOsSecretStore();
+    return secretsResult(path, secretsNote(store.get(KB_STAR_BIZ_ACCOUNT_KEY)));
+  } catch (error) {
+    if (error instanceof SecretStoreError && error.code === "unavailable") {
+      return stopped(path, "needs_human", `live secrets: store unavailable (${error.message}). On a Mac: ${SECRETS_LIVE_HOOK}`);
+    }
+    return failedWith(path, "live secrets failed:", error);
+  }
+}
+
 function bodyFor(kind: BodyKind, live: boolean, capture: RunCapture): BodyRuntime {
   return {
     run(input) {
+      if (input.path.id === secretsPath.id) return runSecrets(input.path, live);
       switch (kind) {
         case "macos":
           return runMacos(input, live, capture);
@@ -385,24 +468,42 @@ export async function runSpine(input: SpineInput): Promise<SpineResult> {
     },
     { text: input.intent, surface: "app" },
   );
-  return { ...result, bodyKind: input.body, live: input.live, hook: hookFor(input.body), run: capture.run };
+  const hook = result.pathId === secretsPath.id ? SECRETS_LIVE_HOOK : hookFor(input.body);
+  return { ...result, bodyKind: input.body, live: input.live, hook, run: capture.run };
+}
+
+export { gatewayConfig, proxyResponses } from "./gateway.ts";
+
+async function readStdinJson(): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  const raw = Buffer.concat(chunks).toString("utf8").trim();
+  if (raw === "") return {};
+  return JSON.parse(raw) as unknown;
 }
 
 function isMain(): boolean {
   const entry = process.argv[1];
   if (entry === undefined) return false;
-  return import.meta.url === pathToFileURL(entry).href;
-}
-
-async function main(): Promise<void> {
-  const result = await runSpine(parseArgs(process.argv.slice(2)));
-  process.stdout.write(`${JSON.stringify(result)}\n`);
-  if (result.status === "path_not_found" || result.status === "grant_denied" || result.status === "failed") {
-    process.exitCode = 1;
+  const self = fileURLToPath(import.meta.url);
+  try {
+    return realpathSync(entry) === realpathSync(self);
+  } catch {
+    return import.meta.url === pathToFileURL(entry).href;
   }
 }
 
-if (isMain()) {
+async function main(): Promise<void> {
+  if (process.argv.includes("--proxy-responses")) {
+    process.stdout.write(`${JSON.stringify(await proxyResponses(await readStdinJson()))}\n`);
+    return;
+  }
+  const result = await runSpine(parseArgs(process.argv.slice(2)));
+  process.stdout.write(`${JSON.stringify(result)}\n`);
+}
+
+// --proxy-responses must run even if isMain() misses a strip-types / symlink argv path.
+if (process.argv.includes("--proxy-responses") || isMain()) {
   main().catch(error => {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`${message}\n`);
