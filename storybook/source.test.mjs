@@ -3,20 +3,21 @@ import assert from 'node:assert/strict';
 import {usageSource} from './source.js';
 
 const csf = "export const Building = { args: { depth: 2 } };";
-const mountFn = {toString: () => '(args) => { const el = document.createElement("div"); X.mount(el, args); return el; }'};
+const wrapped = {toString: () => '(context) => decoratedStoryFn(context)'};
 
 test('Facts.mount args become a mount snippet, not CSF', () => {
   const out = usageSource(csf, {
     title: '값 종류 뷰',
     args: {depth: 2, root: '', selected: null, records: [{id: 1, fields: {}}], schema: {fields: []}, onSelect() {}},
     argTypes: {records: {table: {disable: true}}, schema: {table: {disable: true}}},
-    originalStoryFn: mountFn,
+    originalStoryFn: wrapped,
   });
   assert.match(out, /Facts\.mount\(el,/);
   assert.match(out, /depth: 2/);
   assert.match(out, /records,/);
   assert.doesNotMatch(out, /export const/);
   assert.doesNotMatch(out, /onSelect/);
+  assert.doesNotMatch(out, /decoratedStoryFn/);
 });
 
 test('story parameters.docs.source.mount wins over the title map', () => {
@@ -24,7 +25,7 @@ test('story parameters.docs.source.mount wins over the title map', () => {
     title: '값 종류 뷰',
     parameters: {docs: {source: {mount: 'Journal.mount'}}},
     args: {unit: 'month'},
-    originalStoryFn: mountFn,
+    originalStoryFn: wrapped,
   });
   assert.match(out, /Journal\.mount\(el,/);
   assert.match(out, /unit: "month"/);
@@ -43,9 +44,7 @@ test('Shell stories become createRoot + JSX, not CSF args', () => {
   assert.doesNotMatch(out, /export const/);
 });
 
-test('custom render without mount keeps the function source', () => {
-  const render = () => page();
-  const out = usageSource(csf, {title: '개발자', originalStoryFn: render});
-  assert.match(out, /page\(/);
-  assert.doesNotMatch(out, /export const/);
+test('unknown title does not leak Storybook wrapper or theme CSS', () => {
+  const out = usageSource('(context) => decoratedStoryFn(context)', {title: '개발자', originalStoryFn: wrapped});
+  assert.equal(out, '');
 });

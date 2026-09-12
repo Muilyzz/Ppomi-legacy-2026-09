@@ -15,11 +15,9 @@ export function usageSource(src, ctx = {}) {
   const kind = KIND[ctx.title] || {};
   const mount = docs.mount || kind.mount;
   const jsx = docs.jsx || kind.jsx;
-  const fn = String(ctx.unboundStoryFn || ctx.originalStoryFn || '');
-  if (mount && /\.mount\s*\(/.test(fn)) return mountUsage(mount, ctx.args, ctx.argTypes);
+  if (mount) return mountUsage(mount, ctx.args, ctx.argTypes);
   if (jsx) return jsxUsage(jsx, ctx.args, ctx.argTypes);
-  if (/^\s*(async\s+)?(function|\()/.test(fn)) return fn;
-  return src;
+  return typeof src === 'string' && src && !/decoratedStoryFn|<style/i.test(src) ? src : '';
 }
 
 function mountUsage(mount, args, argTypes) {
