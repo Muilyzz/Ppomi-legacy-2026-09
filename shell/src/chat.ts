@@ -9,6 +9,8 @@ import {
   type SpineView,
 } from "./spine.ts";
 
+const MATCH_KB_OPEN = /kb스타기업뱅킹|kb\s*사업자\s*홈|path_cold_start|kb-enterprise/i;
+
 export const CEO_GATEWAY_PROMPT = "KB스타비즈에 넣어둔 번호 마지막만 보여줘";
 export const SECRETS_CATALOG_INTENT = "사업자 계좌번호";
 export const GATEWAY_FAIL_TEXT = "모델 연결에 실패했습니다.";
@@ -33,6 +35,7 @@ const INSTRUCTIONS = [
   "You are 뽀미 in the Mac conversation shell.",
   "Call run_path when the person wants a host path.",
   "Home / next / browse → intent 다음.",
+  "KB스타기업뱅킹 열어 / KB 사업자 홈 / path_cold_start → pass the spoken intent.",
   "Saved business or KB account / KB스타비즈 / last four digits → intent 사업자 계좌번호.",
   "Never write a full account number. Only ****last4 from the tool result.",
 ].join(" ");
@@ -40,7 +43,7 @@ const INSTRUCTIONS = [
 const RUN_PATH_TOOL = {
   type: "function",
   name: "run_path",
-  description: "Run a Ppomi host path (Home next, business-account secret). Pass a catalog intent.",
+  description: "Run a Ppomi host path (Home next, business-account secret, KB스타기업뱅킹). Pass a catalog intent.",
   parameters: {
     type: "object",
     additionalProperties: false,
@@ -125,6 +128,7 @@ function toolOutputText(input: unknown): string {
 export function fixtureIntent(text: string): string {
   const trimmed = text.trim();
   if (/^(다음|browse|next|열어|home)$/i.test(trimmed)) return "다음";
+  if (MATCH_KB_OPEN.test(trimmed)) return trimmed;
   if (/스타비즈|마지막|last\s*4|digits|넣어둔|번호|사업자|계좌|account|kb/i.test(trimmed)) {
     return SECRETS_CATALOG_INTENT;
   }
@@ -134,13 +138,14 @@ export function fixtureIntent(text: string): string {
 export function fixtureResponses(body: Record<string, unknown>): ResponsesBody {
   if (hasToolOutput(body.input)) {
     const blob = toolOutputText(body.input);
-    const masked = blob.match(/\*{4}\d{4}/);
-    const pathId = blob.includes("path-home-next") ? "path-home-next" : "";
-    const text = masked !== null
-      ? `저장된 사업자 계좌는 \`${masked[0]}\`입니다.`
-      : pathId === "path-home-next"
-        ? "다음을 눌렀습니다."
-        : "그 일에 맞는 경로가 아직 없습니다.";
+    let text = "그 일에 맞는 경로가 아직 없습니다.";
+    try {
+      text = textFromSpine(JSON.parse(blob) as SpineView);
+    } catch {
+      const masked = blob.match(/\*{4}\d{4}/);
+      if (masked !== null) text = `저장된 사업자 계좌는 \`${masked[0]}\`입니다.`;
+      else if (blob.includes("path-home-next")) text = "다음을 눌렀습니다.";
+    }
     return { output: [{ type: "message", content: [{ type: "output_text", text }] }] };
   }
   const intent = fixtureIntent(userTextFromInput(body.input));
@@ -178,7 +183,7 @@ export function assistantTextOf(response: ResponsesBody): string {
 
 export function toolFromModelCall(call: { name: string; intent: string }, result: SpineView): SpineTool {
   const safe = redactSpine(result);
-  const failed = safe.status !== "completed" || safe.pathId === null;
+  const failed = (safe.status !== "completed" && safe.status !== "needs_human") || safe.pathId === null;
   return {
     name: call.name,
     label: safe.pathId ?? call.name,

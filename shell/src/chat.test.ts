@@ -214,3 +214,36 @@ test("functionCallOf reads the Responses function_call", () => {
   const call = functionCallOf(fixtureResponses({ input: CEO_GATEWAY_PROMPT }));
   assert.deepEqual(call, { call_id: "call_run_path", name: "run_path", intent: SECRETS_CATALOG_INTENT });
 });
+
+test("fixture Gateway keeps KB open off the secrets remap", async () => {
+  const kbOpen = "KB스타기업뱅킹 열어";
+  assert.equal(fixtureIntent(kbOpen), kbOpen);
+  assert.equal(fixtureIntent("내 사업자 KB계좌번호 알아?"), SECRETS_CATALOG_INTENT);
+  const turn = await sendChat(kbOpen, {
+    complete: async body => fixtureResponses(body),
+    runPath: async intent => previewSpine(intent),
+  });
+  assert.equal(turn.mode, "gateway");
+  assert.equal(turn.lines[0]?.kind, "tool");
+  assert.equal(turn.lines[1]?.kind, "bubble");
+  if (turn.lines[0]?.kind !== "tool" || turn.lines[1]?.kind !== "bubble") return;
+  assert.equal(turn.lines[0].tool.label, "kb-star-biz-iphone");
+  assert.equal(turn.lines[0].tool.state, "output-available");
+  assert.deepEqual(turn.lines[0].tool.input, { intent: kbOpen, via: "gateway" });
+  assert.equal(turn.lines[1].text, "KB스타기업뱅킹을 열었습니다. Face ID로 로그인하면 이어서 볼게요.");
+  assert.doesNotMatch(JSON.stringify(turn), /path_not_found|1234567890|\*{4}7890/);
+});
+
+test("fixture Gateway still returns ****7890 for the exact secrets phrase", async () => {
+  const turn = await sendChat("내 사업자 KB계좌번호 알아?", {
+    complete: async body => fixtureResponses(body),
+    runPath: async intent => previewSpine(intent),
+  });
+  assert.equal(turn.mode, "gateway");
+  assert.equal(turn.lines[0]?.kind, "tool");
+  assert.equal(turn.lines[1]?.kind, "bubble");
+  if (turn.lines[0]?.kind !== "tool" || turn.lines[1]?.kind !== "bubble") return;
+  assert.equal(turn.lines[0].tool.label, "path-secrets-account");
+  assert.deepEqual(turn.lines[0].tool.input, { intent: SECRETS_CATALOG_INTENT, via: "gateway" });
+  assert.equal(turn.lines[1].text, "저장된 사업자 계좌는 `****7890`입니다.");
+});
