@@ -45,7 +45,10 @@ test('큰 면: 서버 숫자, presence, 네 링크 상태, 다단. id·파일 �
   assert.match(h, /class="ev-fleet"/);
   assert.match(h, /소액현금 9월/);
   assert.match(h, /164,000/);
-  assert.match(h, /서버 · 파일 없음 · 증빙 6건/);
+  assert.match(h, /서버 · 파일 없음 · 증빙 7건/);
+  assert.match(h, /미부착/);
+  assert.match(h, /미리보기 없음 · 기기 미부착/);
+  assert.doesNotMatch(h, /<img|data:image/);
   assert.match(h, /Mac · 세금계산서 · 9.12 01:10/);
   assert.match(h, /Win · 카드 · 9.11 08:22/);
   assert.match(h, /Phone · 스냅샷\(보조\) · 9.12 00:05/);
@@ -68,7 +71,7 @@ test('큰 면: 서버 숫자, presence, 네 링크 상태, 다단. id·파일 �
   assert.match(h, /3 공식 첨부/);
   assert.match(h, /popover/);
   assert.match(h, /미리보기 · 파일은 기기 · 바이트 없음/);
-  assert.doesNotMatch(visible(h), /ev_tax_001|ev_card_002|ev_cash_003|ev_bill_004|ev_snap_1|ev_step_1/);
+  assert.doesNotMatch(visible(h), /ev_tax_001|ev_card_002|ev_cash_003|ev_bill_004|ev_snap_1|ev_step_1|ev_gone_1/);
   assert.doesNotMatch(h, /<code>ev_/);
   assert.doesNotMatch(h, /\.xlsx|data:image|PK\x03\x04/);
   assert.doesNotMatch(h, /<style/);

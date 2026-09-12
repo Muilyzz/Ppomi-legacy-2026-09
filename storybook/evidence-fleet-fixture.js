@@ -12,7 +12,7 @@ export const server = {
   memo: '소액현금 9월',
   amount: 164000,
   unit: '원',
-  evidence_ids: ['ev_tax_001', 'ev_card_002', 'ev_cash_003', 'ev_bill_004', 'ev_snap_1', 'ev_step_1'],
+  evidence_ids: ['ev_tax_001', 'ev_card_002', 'ev_cash_003', 'ev_bill_004', 'ev_snap_1', 'ev_step_1', 'ev_gone_1'],
 };
 
 // 로컬 파일 키 = (host, collectedAtMs). ms. 서버 칸의 evidence_id 와 별개.

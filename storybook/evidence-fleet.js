@@ -71,6 +71,11 @@ function badges(item) {
 
 function debugId(id, on) { return on ? ' <code>' + esc(id) + '</code>' : ''; }
 
+function itemById(items, id) {
+  for (var i = 0; i < (items || []).length; i++) if (items[i].evidence_id === id) return items[i];
+  return null;
+}
+
 function popover(it, st, i) {
   var state = linkState(it, st.fleet, st.here);
   var host = it.host || st.here || 'local';
@@ -84,6 +89,15 @@ function popover(it, st, i) {
     esc(it.linked ? '연결' : '미연결') + when + debugId(it.evidence_id, st.debug) + '</p>' +
     '<div class="ev-pop-preview"><span class="meta">미리보기 · 파일은 기기 · 바이트 없음</span></div>' +
     '<p><button type="button" class="entry" popovertarget="ev-pop-' + i + '" popovertargetaction="hide">닫기</button></p></div>';
+}
+
+function missPopover(id, i, st) {
+  return '<div class="card ev-pop" popover id="ev-miss-' + i + '" data-pop="' + esc(id) + '">' +
+    '<div class="jtitle"><span class="lbl">미부착</span></div>' +
+    '<div>서버 메타만</div>' +
+    '<p class="meta">기기 없음 · 미리보기 불가' + debugId(id, st.debug) + '</p>' +
+    '<div class="ev-pop-preview"><span class="meta">미리보기 없음 · 기기 미부착</span></div>' +
+    '<p><button type="button" class="entry" popovertarget="ev-miss-' + i + '" popovertargetaction="hide">닫기</button></p></div>';
 }
 
 function links(st) {
@@ -120,11 +134,22 @@ function serverMeta(st) {
   var s = st.server || {};
   var ids = s.evidence_ids || [];
   var amt = s.amount == null ? '' : '<span class="key n">' + Number(s.amount).toLocaleString('ko-KR') + '</span> <small class="meta">' + esc(s.unit || '원') + '</small>';
-  var refs = st.debug ? ids.map(function (id) { return '<code>' + esc(id) + '</code>'; }).join(' ') : (ids.length ? '증빙 ' + ids.length + '건' : '증빙 없음');
+  var refs = ids.map(function (id, i) {
+    var it = itemById(st.items, id), idx = it ? (st.items || []).indexOf(it) : -1;
+    if (it) {
+      var off = linkState(it, st.fleet, st.here) === 'disabled';
+      return '<button type="button" class="entry" data-open="' + esc(id) + '"' +
+        (off ? ' disabled' : ' popovertarget="ev-pop-' + idx + '"') + '>' +
+        esc(itemLabel(it, st)) + '</button>' + debugId(id, st.debug);
+    }
+    return '<button type="button" class="entry" data-open="' + esc(id) + '" popovertarget="ev-miss-' + i + '">미부착</button>' +
+      debugId(id, st.debug) + missPopover(id, i, st);
+  }).join(' · ');
   return '<div class="card">' +
     '<span class="lbl">' + esc(s.memo || '분개') + '</span>' +
     '<div>' + amt + '</div>' +
-    '<p class="meta">서버 · 파일 없음 · ' + refs + '</p></div>';
+    '<p class="meta">서버 · 파일 없음' + (ids.length ? ' · 증빙 ' + ids.length + '건' : ' · 증빙 없음') + '</p>' +
+    (refs ? '<p>' + refs + '</p>' : '') + '</div>';
 }
 
 function html(st) {
