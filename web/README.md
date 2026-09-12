@@ -21,4 +21,4 @@ PPOMI_BODY_LIVE=1 node --experimental-strip-types web/scripts/live-account-probe
 
 Keys present + `npm run dev` → operator Google sign-in must land on `/account`.
 
-Mac 셸(MZZ-82): 뽀미 **로그인**이 `/sign-in?from=shell`을 연다. `/account?from=shell`이 세션 JWT만 `http://127.0.0.1:17382`로 넘긴다. Gateway 키는 웹에 두지 않는다.
+Mac 셸(MZZ-82): 뽀미 **로그인**이 `/sign-in?from=shell`을 연다. `/account?from=shell`이 세션 JWT만 `http://127.0.0.1:17382`로 넘긴다. UX 전달이지 인증 게이트가 아니다. Gateway 키는 웹에 두지 않는다.

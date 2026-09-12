@@ -186,7 +186,7 @@ using (clerk_user_id = (select auth.jwt() ->> 'sub'));
 
 ## Mac 대화 셸 (MZZ-82 UX login on #100 JWKS)
 
-who = 이 앱의 `/account` Google. Tauri는 Clerk UserProfile을 다시 만들지 않는다. 셸 **로그인**이 시스템 브라우저로 `web/` `/sign-in?from=shell`을 연다. `/account?from=shell`이 세션 JWT를 `127.0.0.1:17382`로만 넘기고, 호스트가 `~/.ppomi/clerk-session`(mode 0600)에 쓴다. 쓰기는 JWT 모양만 본다. 파일 키로 Gateway POST 하려면 #100 JWKS + `iss`/`aud`/`azp` allowlist. 같은 OS 사용자는 파일을 읽을 수 있고 `open --env AI_GATEWAY_API_KEY` HITL은 그대로다. `AI_GATEWAY_BASE_URL`은 https만. 키는 웹뷰에 없다.
+who = 이 앱의 `/account` Google. Tauri는 Clerk UserProfile을 다시 만들지 않는다. 셸 **로그인**이 시스템 브라우저로 `web/` `/sign-in?from=shell`을 연다. `/account?from=shell`이 세션 JWT를 `127.0.0.1:17382`로만 넘기고, 호스트가 `~/.ppomi/clerk-session`(mode 0600)에 쓴다. 쓰기는 JWT 모양만 본다 — 로그인 UX / 세션 힌트이지 인증 게이트가 아니다. 파일 키로 Gateway POST 하려면 #100 JWKS + `iss`/`aud`/`azp` allowlist. 같은 OS 사용자는 파일을 읽을 수 있고 `open --env AI_GATEWAY_API_KEY` HITL은 그대로다. `AI_GATEWAY_BASE_URL`은 https만. 키는 웹뷰에 없다.
 
 Mac HITL:
 
