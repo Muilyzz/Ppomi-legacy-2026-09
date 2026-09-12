@@ -35,25 +35,29 @@ LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
 open /Applications/뽀미.app
 ```
 
-스크립트는 실행 중인 뽀미를 먼저 종료하고, 그 경로만 덮어쓴다. `*-prev.app`·`dist/backup/` 복사본은 만들지 않으며, 있으면 거부한다. 권한 목록의 「previous」는 그런 백업 경로/이름과 섞인 바이너리 때문에 Launch Services/TCC가 옛 사본을 따로 집은 것이다. 일상 설치에 `tccutil reset`을 쓰지 않는다.
+스크립트는 실행 중인 뽀미를 먼저 종료하고, 그 경로만 덮어쓴다. 설치 경로는 절대 `*.app`이어야 하고(`PPOMI_APP`/`PPOMI_ROOT`는 `--hygiene`/`--check` 테스트 모드에서만 읽는다), `*-prev.app`·`뽀미*.app` 형제나 `dist/backup/`이 있으면 거부하며, 빌드 사본(`shell/src-tauri/target/…/bundle/macos/*.app`)은 복사 뒤 지운다. 권한 목록의 「previous」는 그런 백업 경로/이름과 섞인 바이너리 때문에 Launch Services/TCC가 옛 사본을 따로 집은 것이다. 일상 설치에 `tccutil reset`을 쓰지 않는다. Swift `dist/Ppomi.app`도 같은 번들 id라 경고만 낸다 — 형제로 실행하지 않는다.
 
-애드혹 서명은 패키징 확인용이다. 권한 스모크에 쓰지 않는다. 배포 공증은 `SIGN_ID` / `NOTARY_PROFILE`(후속).
+애드혹 서명은 패키징 확인용이다. 권한 스모크에 쓰지 않는다. 배포 공증은 `SIGN_ID` / `NOTARY_PROFILE`(후속). `Info.plist`의 `NSAppleEventsUsageDescription`은 live 경로(AppleScript·System Events)의 자동화 권한 프롬프트에 필요하다.
 
-패키지 앱도 TS 호스트를 위해 `node`(또는 `PPOMI_NODE`)가 PATH에 있어야 한다. Swift `Ppomi/`는 과도기 body 호스트 — `swift run` 또는 `scripts/make-app.sh`의 `dist/Ppomi.app`이며, `/Applications/뽀미.app`의 형제 백업이 아니다.
+패키지 앱도 TS 호스트를 위해 `node`(또는 `PPOMI_NODE`)가 필요하다. Finder/Dock에서 연 앱의 PATH는 `/usr/bin:/bin:/usr/sbin:/sbin`뿐이라 Homebrew·nvm의 node가 보이지 않는다: `launchctl setenv PPOMI_NODE "$(command -v node)"` 뒤 앱을 다시 열면 된다(로그아웃까지 유지). 실패하면 창에 `host_spawn: node host failed to start (<경로>)`가 그대로 뜬다. Swift `Ppomi/`는 과도기 body 호스트 — `swift run` 또는 `scripts/make-app.sh`의 `dist/Ppomi.app`이며, `/Applications/뽀미.app`의 형제 백업이 아니다.
+
+미결(오너 결정): `shell/`·`ppomi-shell` 이름은 `ppomi-*` 잠금 목록 밖이고, 「Swift `Ppomi/`는 UI 대체재가 아니다」는 [#61](https://github.com/Muilyzz/Ppomi/pull/61)의 「테스트는 메인 앱에서」와 방향이 갈린다 — 이 문서는 결정하지 않는다.
 
 ## Live Mac body
 
-기본은 fixture(단위). 실기기 AX:
+기본은 fixture(단위). 실기기 AX는 **CLI 전용**이고 열쇠가 둘이다 — `--live` 플래그와 환경 `PPOMI_BODY_LIVE=1`:
 
 ```sh
 PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body macos --live
 ```
 
-Safari(또는 `PPOMI_MAC_BROWSER=chrome`)로 example.com을 열고 "More information"만 클릭한다. 손쉬운 사용이 없거나 Mac이 아니면 skip(실패 아님). 예제는 `packages/ppomi-body-macos/example`.
+플래그만 있으면 거부(종료 1, fixture를 live로 꾸미지 않는다). 변수만 있으면 fixture(다른 프로브용으로 export해 둔 값이 무장시키면 안 된다). `PPOMI_BODY_AX`는 `packages/ppomi-body-macos/example`의 스위치일 뿐 셸을 무장시키지 않는다. 창의 `run_path`는 `live`를 거부하고(`live_refused`), 자식 node 환경에서 `PPOMI_BODY_LIVE`·`PPOMI_BODY_AX`·`PPOMI_BODY`를 지운다 — 승인 게이트가 생기기 전까지 창에서 live는 없다.
+
+Safari(또는 `PPOMI_MAC_BROWSER=chrome`)로 example.com을 열고 "More information"만 클릭한다. 멈춤은 `completed`가 아니다: 손쉬운 사용 거부 = `grant_denied`, Mac 아님·Safari/Chrome 없음·링크 없음 = `needs_human`, 도구 오류 = `failed`(드라이버 코드 + URL 리댁션 메시지). `completed`는 `Runtime`이 게이트를 지나 클릭을 끝냈을 때만 나오고, JSON의 `run`(core `RunResult`: `driver`·`code`·`attempt`·`target`)이 그 증거다. 예제는 `packages/ppomi-body-macos/example`.
 
 ## Windows / Android 호출 자리
 
-같은 `run_path` / `host.ts --body windows|android`가 각 fixture 1-step을 돌린다. Live UIA · UIAutomator는 기존 패키지 예제(MZZ-55b / MZZ-55c):
+같은 `run_path` / `host.ts --body windows|android`가 각 fixture 1-step을 돌린다. `--live`를 붙이면 fixture를 돌리지 않고 `failed`(미배선, MZZ-55b / MZZ-55c)로 멈춘다. Live UIA · UIAutomator는 기존 패키지 예제:
 
 ```sh
 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts
