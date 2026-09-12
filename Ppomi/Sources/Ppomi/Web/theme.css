@@ -81,6 +81,14 @@ tr[data-event]{cursor:pointer} tr[data-event]:hover td{background:var(--surface-
 .ev-tags{flex-wrap:wrap;row-gap:4px} .ev-tags>button{white-space:nowrap}
 .ev-records{overflow-x:auto} .ev-table th,.ev-table td{white-space:nowrap}   /* 넓은 표는 제 칸 안에서 가로 스크롤, 글자를 세로로 부수지 않는다 */
 
+/* ---- 증빙 잠금(evidence-fleet.js): 큰 면. 점 = 메신저형 presence(켜짐=본문색, 꺼짐=선) */
+.ev-fleet{min-height:100dvh}
+.ev-dot{display:inline-block;width:.5rem;height:.5rem;border-radius:50%;box-sizing:border-box;background:var(--line-2);vertical-align:middle;margin-right:.35rem}
+.ev-dot.on{background:var(--fg)}
+.ev-fleet .entry{text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:3px}
+.ev-fleet button[disabled]{opacity:.45;cursor:not-allowed;text-decoration:none}
+.ev-fleet ol{margin:.25rem 0 0;padding-left:1.25rem}
+
 /* ---- 값 종류 뷰(facts.js): SVG 기하는 자료(inline), 여기는 꾸밈. 출처 등급은 선 무늬로 겹친다 — 추정은 긴 점선, 개략·AI 추정은 짧은 점선 */
 .fx svg{display:block;width:100%;height:auto;margin:4px 0} .fx svg text{fill:currentColor}
 .fx-node rect,.fx-span,.fx-place{cursor:pointer}
