@@ -68,6 +68,13 @@ tr[data-event]:hover td,tr[data-record]:hover td,tr[aria-selected="true"] td{bac
 .ev-fleet ol{margin:4px 0 0;padding-left:20px}
 .ev-pop{min-width:256px;max-width:352px}
 .ev-pop-preview{min-height:96px;margin:12px 0 8px;display:flex;align-items:center;justify-content:center;background:#f4f4f4;border:1px dashed #e5e5e5;border-radius:4px}
+.ev-grid-wrap{overflow-x:auto;margin:8px 0}
+.ev-grid th,.ev-grid td{vertical-align:top}
+.ev-thumb{display:flex;flex-direction:column;align-items:stretch;width:120px;padding:0;border:0;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.ev-thumb-face{display:block;height:72px;box-sizing:border-box;border-radius:4px}
+.ev-thumb[data-fill="1"] .ev-thumb-face{background:#f4f4f4;border:1px solid #e5e5e5;padding:6px;font-size:12px}
+.ev-thumb[data-fill="0"] .ev-thumb-face{background:transparent;border:1px dashed #e5e5e5}
+.ev-thumb .meta{display:block;margin-top:4px;white-space:normal}
 
 /* ---- 값 종류 뷰(facts.js): SVG 기하는 자료(inline), 여기는 꾸밈. 출처 등급은 선 무늬로 겹친다 — 추정은 긴 점선, 개략·AI 추정은 짧은 점선 */
 .fx svg{display:block;width:100%;height:auto;margin:4px 0} .fx svg text{fill:currentColor}

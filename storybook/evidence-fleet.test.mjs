@@ -91,6 +91,40 @@ test('열기는 onOpen, 오프라인 버튼은 호출 안 함', () => {
   assert.deepEqual(opened, ['ev_tax_001']);
 });
 
+test('썸네일: 열리면 채움, 오프·미부착·암호문만이면 빈 칸', () => {
+  assert.equal(F.thumbFilled({host: 'mac'}, fleet, 'mac'), true);
+  assert.equal(F.thumbFilled({host: 'win'}, fleet, 'mac'), true);
+  assert.equal(F.thumbFilled({host: 'phone'}, fleet, 'mac'), false);
+  assert.equal(F.thumbFilled({host: 'phone', cache: 'ciphertext'}, fleet, 'mac'), false);
+  assert.equal(F.thumbFilled({host: 'ghost'}, fleet, 'mac'), false);
+  assert.deepEqual(F.timesOf(items), items.map((it) => it.collectedAtMs).slice().sort((a, b) => a - b));
+  assert.deepEqual(F.hostsOf(st), ['mac', 'win', 'phone']);
+});
+
+test('그리드: 기기 행 × 시각 열, 온라인 채움·오프 빈 칸. 링크와 같은 fixture, id·가짜 미리보기 없음', () => {
+  const h = F.html(st);
+  const g = F.grid(st);
+  assert.match(h, /<div class="sec">그리드<\/div>/);
+  assert.match(g, /aria-label="기기 × 시각"/);
+  assert.match(g, /data-device="mac"/);
+  assert.match(g, /data-device="win"/);
+  assert.match(g, /data-device="phone"/);
+  items.forEach((it) => assert.match(g, new RegExp('data-collected="' + it.collectedAtMs + '"')));
+  assert.match(g, /data-fill="1" data-link="open"/);
+  assert.match(g, /data-fill="1" data-link="e2e"/);
+  assert.match(g, /data-fill="0" data-link="disabled"/);
+  assert.match(g, /data-fill="0" data-link="cache"/);
+  assert.match(g, /Mac · 세금계산서 · 9.12 01:10/);
+  assert.match(g, /Phone · 스냅샷\(보조\) · 9.12 00:05/);
+  assert.match(g, /popovertarget="ev-pop-0"/);
+  assert.match(h, /id="ev-pop-0"/);
+  assert.match(h, /data-open="ev_tax_001"/);
+  assert.doesNotMatch(visible(g), /ev_tax_001|ev_card_002|ev_cash_003|ev_bill_004|ev_snap_1|ev_step_1/);
+  assert.doesNotMatch(g, /data:image|<img|PK\x03\x04|\.xlsx/);
+  const empty = F.grid({here, fleet, items: []});
+  assert.match(empty, /그리드 없음/);
+});
+
 test('스냅샷 행은 적격으로 안 보이고, 빈 기기·적대 문자열은 이스케이프', () => {
   const snap = F.html({here, fleet, items: items.filter((it) => it.kind === '스냅샷'), server: {}});
   assert.match(snap, /보조 · 미연결/);

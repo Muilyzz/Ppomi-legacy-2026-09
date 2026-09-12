@@ -1,4 +1,4 @@
-// 증빙 잠금 큰 면. OCR 스티치(증거)는 그대로 두고, 여기만 presence·링크·적격/보조·미리보기. 앱 wire 없음.
+// 증빙 잠금 큰 면. OCR 스티치(증거)는 그대로 두고, 여기만 presence·링크·적격/보조·미리보기·2D 그리드. 앱 wire 없음.
 // https://linear.app/muilyzz/issue/MZZ-67
 import {fn} from 'storybook/test';
 import './evidence-fleet.js';
@@ -27,3 +27,4 @@ export const Eligible = {name: '적격 · 연결/미연결', args: {items: pick(
 export const Auxiliary = {name: '보조만 · 스냅샷·StepResult', args: {items: pick(['ev_snap_1', 'ev_step_1']), layers: []}};
 export const Presence = {name: '기기 presence · Mac/Win/Phone', args: {items: [], layers: [], server: {memo: '서버 메타만', evidence_ids: []}}};
 export const Preview = {name: '클릭 · 미리보기', args: {open: 'ev_tax_001', items: pick(['ev_tax_001']), layers: []}};
+export const Grid = {name: '2D · 기기×시각', args: {layers: []}};
