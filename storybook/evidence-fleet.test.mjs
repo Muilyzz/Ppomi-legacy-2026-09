@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import './evidence-fleet.js';
-import {title, here, fleet, server, items, layers} from './evidence-fleet-fixture.js';
+import {title, here, fleet, server, items, layers, pick} from './evidence-fleet-fixture.js';
 const F = globalThis.EvidenceFleet;
 
 const st = {title, here, fleet, server, items, layers};
@@ -49,6 +49,17 @@ test('큰 면: 서버 숫자·evidence_id, presence, 네 링크 상태, 다단. 
   assert.match(h, /3 공식 첨부/);
   assert.doesNotMatch(h, /\.xlsx|data:image|PK\x03\x04/);
   assert.doesNotMatch(h, /<style/);
+});
+
+test('열기는 onOpen, 오프라인 버튼은 호출 안 함', () => {
+  const opened = [];
+  const el = {innerHTML: '', listeners: [], addEventListener(_t, fn) { this.listeners.push(fn); }, contains() { return true; }};
+  F.mount(el, {here, fleet, items: pick(['ev_tax_001', 'ev_snap_1']), onOpen: (id) => opened.push(id)});
+  assert.match(el.innerHTML, /disabled>오프라인</);
+  const click = (id, disabled) => el.listeners[0]({target: {closest: (q) => q === '[data-open]' ? {dataset: {open: id}, disabled} : null}});
+  click('ev_tax_001', false);
+  click('ev_snap_1', true);
+  assert.deepEqual(opened, ['ev_tax_001']);
 });
 
 test('스냅샷 행은 적격으로 안 보이고, 빈 기기·적대 문자열은 이스케이프', () => {

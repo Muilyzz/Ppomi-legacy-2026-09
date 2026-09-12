@@ -63,7 +63,8 @@ tr[data-event]:hover td,tr[data-record]:hover td,tr[aria-selected="true"] td{bac
 .ev-fleet{min-height:100dvh}
 .ev-dot{display:inline-block;width:8px;height:8px;border-radius:50%;box-sizing:border-box;background:#ccc;vertical-align:middle;margin-right:6px}
 .ev-dot.on{background:#111}
-.ev-fleet button[disabled]{opacity:.45;cursor:not-allowed}
+.ev-fleet .entry{text-decoration:underline;text-underline-offset:3px}
+.ev-fleet button[disabled]{opacity:.45;cursor:not-allowed;text-decoration:none}
 .ev-fleet ol{margin:4px 0 0;padding-left:20px}
 
 /* ---- 값 종류 뷰(facts.js): SVG 기하는 자료(inline), 여기는 꾸밈. 출처 등급은 선 무늬로 겹친다 — 추정은 긴 점선, 개략·AI 추정은 짧은 점선 */
