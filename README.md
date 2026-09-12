@@ -28,6 +28,10 @@
 - iPhone 미러링이 되는 지역·Apple 계정(같은 계정, Wi‑Fi·Bluetooth 켜짐)
 - 아이폰은 **잠근 채** Mac 옆에. 잠금을 풀거나 손에 들면 미러링이 끊깁니다 — 그때는 뽀미가 멈추고 다시 잠가 달라고 합니다.
 
+## 제품 표면
+
+소비자 UI는 [`shell/`](shell/)의 **Tauri 2 + TypeScript**다. Swift [`Ppomi/`](Ppomi/)는 OS body(손쉬운 사용·화면 기록·키체인)와 과도기 호스트이며 UI 대체재가 아니다. Mac에서 셸을 빌드·실행하는 방법은 [docs/tauri-shell.md](docs/tauri-shell.md).
+
 ## 설치
 
 **다운로드**: 현재 [v0.1.0 프리릴리스](https://github.com/Muilyzz/Ppomi/releases)는 애드혹 서명된 테스트 빌드이며, Apple 공증 전입니다. `.zip`을 풀어 `Ppomi.app`을 `/Applications`로 옮길 수 있지만 macOS에서 실행이 차단될 수 있습니다. 일반 배포용 Developer ID 서명·공증 빌드는 준비 중입니다.
@@ -133,7 +137,15 @@ PC 전용 웹(대법원 인터넷등기소 등)은 Parallels의 Windows 창에�
 
 ## 개발
 
-**범용 분개장**은 돈·시간·수량을 장부와 단위로 구분하고, 계정과목·복수 차변/대변으로 기록합니다. 기록 영역의 **분개장**에서 원본과 관리용 평가를 나란히 비교하며, 자기개발 같은 새 사례는 계정 데이터로 추가합니다. 앱·MCP·음성이 같은 저장소와 검증 엔진을 사용합니다. [구조와 API](docs/accounting.md)를 참고하세요.
+소비자 셸(Tauri 2):
+
+```sh
+npm --prefix shell ci
+npm --prefix shell test
+npm --prefix shell run dev     # Mac 창. 실행 → brain → body-macos
+```
+
+Swift `Ppomi/`는 과도기 호스트다.
 
 ```sh
 cd Ppomi
@@ -142,6 +154,8 @@ swift test
 swift run Ppomi            # 콘솔
 swift run Ppomi --mcp      # MCP 서버(stdio)
 ```
+
+**범용 분개장**은 돈·시간·수량을 장부와 단위로 구분하고, 계정과목·복수 차변/대변으로 기록합니다. 기록 영역의 **분개장**에서 원본과 관리용 평가를 나란히 비교하며, 자기개발 같은 새 사례는 계정 데이터로 추가합니다. 앱·MCP·음성이 같은 저장소와 검증 엔진을 사용합니다. [구조와 API](docs/accounting.md)를 참고하세요.
 
 ## 라이선스
 

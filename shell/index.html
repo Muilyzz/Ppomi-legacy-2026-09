@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>뽀미</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font: 14px/1.45 system-ui, sans-serif;
+        color: #111;
+        background: #fff;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { color: #f4f4f5; background: #111; }
+      }
+      main { max-width: 40rem; margin: 0 auto; padding: 1.5rem; }
+      h1 { font-size: 21px; font-weight: 500; margin: 0 0 0.25rem; }
+      p, label { margin: 0 0 0.75rem; }
+      .meta { opacity: 0.7; font-size: 12px; }
+      .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 1rem 0; }
+      input[type="text"], select, button, pre {
+        font: inherit;
+      }
+      input[type="text"] { flex: 1 1 12rem; min-width: 10rem; padding: 0.4rem 0.5rem; }
+      button {
+        background: #3b82f6;
+        color: #fff;
+        border: 0;
+        padding: 0.4rem 0.9rem;
+        font-weight: 500;
+      }
+      pre {
+        white-space: pre-wrap;
+        background: color-mix(in srgb, currentColor 6%, transparent);
+        padding: 0.75rem;
+        min-height: 8rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>뽀미</h1>
+      <p class="meta">Tauri 2 셸 · 소비자 표면. Swift <code>Ppomi/</code>는 과도기 body 호스트다.</p>
+      <div class="row">
+        <input id="intent" type="text" value="다음" aria-label="intent" />
+        <select id="body" aria-label="body">
+          <option value="macos" selected>macos</option>
+          <option value="windows">windows</option>
+          <option value="android">android</option>
+        </select>
+        <label><input id="live" type="checkbox" /> live</label>
+        <button id="run" type="button">실행</button>
+      </div>
+      <pre id="out">path-home-next → ppomi-brain → ppomi-body-macos (fixture). live 는 Mac AX.</pre>
+    </main>
+    <script type="module" src="./ui.js"></script>
+  </body>
+</html>
