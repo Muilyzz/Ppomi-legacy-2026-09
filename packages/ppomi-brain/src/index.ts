@@ -9,6 +9,8 @@ export type { PathDefinition, PathStep, PathSummary, RunIntent } from "./path.ts
 export { choosePath, grantableEffects } from "./path.ts";
 export type {
   AccountSession,
+  AttachRefusal,
+  AttachResult,
   BodyRunInput,
   BodyRunResult,
   BodyRuntime,
@@ -16,13 +18,37 @@ export type {
   BodyStepStatus,
   BodyStopReason,
   BrainPorts,
+  DetachRefusal,
+  DetachResult,
+  DeviceListScope,
+  DeviceOs,
+  DeviceRegistry,
+  DeviceSessionAttach,
+  FleetClock,
+  FleetDevice,
+  FleetPresence,
+  FleetSurface,
   Memory,
   MemoryEvent,
   PathCatalog,
   PathLoader,
 } from "./ports.ts";
+export { DEVICE_OS } from "./ports.ts";
 export type { OrchestrationResult, OrchestrationStatus } from "./orchestrate.ts";
 export { PpomiBrain, orchestrate } from "./orchestrate.ts";
+export type { BodyRoute, BodyRouteCode, InMemoryDeviceRegistryOptions } from "./fleet.ts";
+export {
+  ALLOWED_SERVES,
+  DEFAULT_SERVES,
+  DEFAULT_STALE_AFTER_MS,
+  InMemoryDeviceRegistry,
+  isDeviceOs,
+  isFleetSurface,
+  isOnline,
+  isOpaqueId,
+  routeBody,
+  routeBodyForSurface,
+} from "./fleet.ts";
 export type {
   LegacyPlaybook,
   LegacyPlaybookRunner,
