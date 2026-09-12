@@ -123,6 +123,9 @@ test('잠김 HTML: 원문 없고 접힘, 칩만. 열림: 원문 + open', () => {
   assert.doesNotMatch(locked, /probe-not-a-real-token/);
   assert.doesNotMatch(locked, /009876543210/);
   assert.doesNotMatch(locked, /<details open/);
+  assert.match(locked, /class="secrets"/);
+  assert.match(locked, /class="jtitle"/);
+  assert.match(locked, /class="card"/);
   assert.match(locked, /<ul>/);
   assert.match(locked, /••••/);
   assert.match(opened, />열림</);
@@ -131,6 +134,8 @@ test('잠김 HTML: 원문 없고 접힘, 칩만. 열림: 원문 + open', () => {
   assert.match(opened, /probe-not-a-real-token/);
   assert.match(opened, /<details open/);
   assert.match(opened, /data-copy="/);
+  assert.match(opened, /class="entry"/);
   assert.doesNotMatch(locked, /data-copy="/);
+  assert.doesNotMatch(locked, /class="entry"/);
   assert.doesNotMatch(locked, /<style/);
 });
