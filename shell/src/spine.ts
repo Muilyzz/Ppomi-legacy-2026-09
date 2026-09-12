@@ -17,9 +17,13 @@ export interface SpineView {
     readonly status: string;
     readonly steps: readonly { readonly stepId: string; readonly status: string; readonly note: string }[];
   } | null;
+  /** Set only by the browser dev preview: the result came from `previewSpine`, not from a host run. */
+  readonly preview?: true;
 }
 
 export type ToolState = "output-available" | "output-error" | "input-available";
+
+export const RUN_PATH_IPC_FAILED = "run_path_ipc_failed";
 
 export interface SpineTool {
   readonly name: string;
@@ -92,17 +96,68 @@ export function previewSpine(intent: string, body = "macos"): SpineView {
   };
 }
 
+/**
+ * `previewSpine` is allowed only where a person deliberately opened the browser preview:
+ * `vite dev`, or `?chat=fixture` on `vite preview`. A production bundle without Tauri IPC is a
+ * failure, not a stand-in run.
+ */
+function previewAllowed(): boolean {
+  const search = (globalThis as { location?: { search?: string } }).location?.search;
+  if (search !== undefined && new URLSearchParams(search).get("chat") === "fixture") return true;
+  return (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
+}
+
+/** Stable code out of an IPC rejection: Rust `{ code, message }`, a `code: message` string, or a fallback. */
+export function errorCodeOf(error: unknown, fallback: string): string {
+  if (typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" && error.code.length > 0) {
+    return error.code;
+  }
+  const text = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  const match = /^([a-z][a-z0-9_]*)(?::|$)/.exec(text);
+  return match?.[1] ?? fallback;
+}
+
+export function errorMessageOf(error: unknown): string {
+  if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
+    return error.message;
+  }
+  return typeof error === "string" ? error : String(error);
+}
+
+/** The host never ran: a `failed` view that names the code and fabricates nothing. */
+export function ipcFailedSpine(code: string, body = "macos", live = false): SpineView {
+  return {
+    status: "failed",
+    pathId: null,
+    note: `${RUN_PATH_IPC_FAILED}: ${code}`,
+    bodyKind: body,
+    live,
+    hook: "",
+    body: null,
+  };
+}
+
 export async function invokeRunPath(intent: string, body = "macos", live = false): Promise<SpineView> {
   const invoke = tauriInvoke();
-  if (invoke === null) return previewSpine(intent, body);
+  if (invoke === null) {
+    if (previewAllowed()) return { ...previewSpine(intent, body), preview: true };
+    return ipcFailedSpine("no_tauri_ipc", body, live);
+  }
   try {
     return await invoke("run_path", { intent, body, live }) as SpineView;
-  } catch {
-    return previewSpine(intent, body);
+  } catch (error) {
+    const code = errorCodeOf(error, "ipc_rejected");
+    console.error(`run_path IPC failed (${code}): ${errorMessageOf(error)}`);
+    return ipcFailedSpine(code, body, live);
   }
 }
 
 export function textFromSpine(result: SpineView): string {
+  const text = statusText(result);
+  return result.preview === true ? `(미리보기) ${text}` : text;
+}
+
+function statusText(result: SpineView): string {
   switch (result.status) {
     case "path_not_found":
       return "그 일에 맞는 경로가 아직 없습니다.";
@@ -134,13 +189,15 @@ function secretsBubble(result: SpineView): string {
 }
 
 export function toolFromSpine(result: SpineView): SpineTool | null {
-  if (result.status === "path_not_found" || result.pathId === null) return null;
+  if (result.status === "path_not_found") return null;
+  // A failed run with no path (the host never started) still gets a card: the code must be visible.
+  if (result.pathId === null && result.status !== "failed") return null;
   const failed = result.status !== "completed";
   return {
     name: "run_path",
-    label: result.pathId,
+    label: result.pathId ?? "run_path",
     state: failed ? "output-error" : "output-available",
-    input: { body: result.bodyKind, live: result.live },
+    input: { body: result.bodyKind, live: result.live, ...(result.preview === true ? { preview: true } : {}) },
     output: result.body ?? { status: result.status, note: result.note },
     ...(failed ? { errorText: result.note } : {}),
   };
