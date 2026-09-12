@@ -58,7 +58,7 @@ test("secrets intent is a tool card plus a masked Korean reply", () => {
   if (lines[0]?.kind !== "tool" || lines[1]?.kind !== "bubble") return;
   assert.equal(lines[0].tool.name, "run_path");
   assert.equal(lines[0].tool.label, "path-secrets-account");
-  assert.equal(lines[1].text, "저장된 사업자 계좌는 ****7890입니다.");
+  assert.equal(lines[1].text, "저장된 사업자 계좌는 `****7890`입니다.");
   const dumped = JSON.stringify(lines);
   assert.doesNotMatch(dumped, /001234567890/);
   assert.doesNotMatch(dumped, /1234567890/);
