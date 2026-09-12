@@ -1,4 +1,5 @@
 import { pathToFileURL } from "node:url";
+import { proxyResponses } from "./gateway.ts";
 import { allowGrant, grantableEffects, orchestrate } from "../../packages/ppomi-brain/src/index.ts";
 import type {
   BodyRunInput,
@@ -470,6 +471,16 @@ export async function runSpine(input: SpineInput): Promise<SpineResult> {
   return { ...result, bodyKind: input.body, live: input.live, hook, run: capture.run };
 }
 
+export { gatewayConfig, proxyResponses } from "./gateway.ts";
+
+async function readStdinJson(): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  const raw = Buffer.concat(chunks).toString("utf8").trim();
+  if (raw === "") return {};
+  return JSON.parse(raw) as unknown;
+}
+
 function isMain(): boolean {
   const entry = process.argv[1];
   if (entry === undefined) return false;
@@ -477,6 +488,10 @@ function isMain(): boolean {
 }
 
 async function main(): Promise<void> {
+  if (process.argv.includes("--proxy-responses")) {
+    process.stdout.write(`${JSON.stringify(await proxyResponses(await readStdinJson()))}\n`);
+    return;
+  }
   const result = await runSpine(parseArgs(process.argv.slice(2)));
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }

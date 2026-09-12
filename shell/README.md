@@ -27,14 +27,20 @@ Same `LOCAL_SIGN_ID` every local Mac build (Swift `make-app.sh`). Quit the old a
 
 The window is the **agent conversation shell** (`agent/src/ui/shell.tsx`)
 inside Tauri — same visual family as Storybook 「대화 셸」. Placeholder verb
-only: `시킬 일을 적어 주세요`. Type `다음` or `browse` and send: `run_path` →
-`src/host.ts` → `ppomi-brain` → `path-home-next` → `ppomi-body-macos`
-fixture click on `Next`. `내 사업자 KB계좌번호 알아?` (and 계좌번호 / KB 계좌 /
-account number) selects `path-secrets-account` and reads `ppomi-secrets`
-(`ppomi/kb-star-biz/account`). Chat shows a tool card plus masked `****last4`
-only — never the plaintext account. Fixture is the default. Path results land
-in chat bubbles / tool cards. Handled outcomes (`path_not_found` included)
-return JSON and exit 0.
+only: `시킬 일을 적어 주세요`. Send goes through a Vercel AI Gateway
+Responses loop when configured (`AI_GATEWAY_API_KEY` or `PPOMI_CHAT=fixture`).
+The model may call one host tool, `run_path`, which reuses the existing
+spine (`src/host.ts` → `ppomi-brain` → body / `ppomi-secrets`). The ToolCard
+is painted from that **model function_call** (`via: "gateway"`), not from a
+local regex on the composer text. No key / no fixture: same local matcher as
+before (offline, no crash). Chat never prints a plaintext account —
+masked `****last4` only.
+
+Type `다음` or `browse`: `run_path` → `path-home-next` → `ppomi-body-macos`
+fixture click on `Next`. `내 사업자 KB계좌번호 알아?` still matches locally.
+`KB스타비즈에 넣어둔 번호 마지막만 보여줘` does **not** match the local regex
+— that prompt is how you prove the Gateway/fixture tool loop.
+
 No IA header, no empty-state chips, no greeting — composer-only empty
 inside the real shell chrome.
 The window never arms live: `run_path` refuses `live: true` (`live_refused`)
@@ -43,6 +49,25 @@ and never forwards `PPOMI_BODY_LIVE`, `PPOMI_BODY_AX`, `PPOMI_BODY`,
 probe's shell cannot turn the fixture run into real control or a real
 Keychain/CredMan read. The JSON reply carries the core `run` (`driver`,
 `status`, `attempt`, `code`) next to the brain status.
+
+### Vercel AI Gateway
+
+The webview never holds the key (Tauri CSP is IPC-only). Packaged app:
+`ai_gateway` IPC → `host.ts --proxy-responses` → `https://ai-gateway.vercel.sh/v1/responses`
+(env `AI_GATEWAY_API_KEY`, optional `AI_GATEWAY_BASE_URL`, `AI_TEXT_MODEL`).
+Vite preview: same proxy at `/__ppomi/responses`, or `?chat=fixture` for an
+offline model-shaped function_call.
+
+```sh
+# real Gateway (Mac install / host)
+AI_GATEWAY_API_KEY=… PPOMI_CHAT=  npm --prefix shell run host -- --proxy-responses
+# offline model-shaped loop (no key)
+PPOMI_CHAT=fixture npm --prefix shell run dev:ui
+# then open /?chat=fixture — or set PPOMI_CHAT=fixture for the Vite middleware
+```
+
+Missing key: composer still works; ToolCards come from `linesFromSpine` only
+when the local matcher hits. Do not put account digits in chat.
 
 Live Mac AX is **CLI only** and needs two keys, the `--live` flag **and**
 `PPOMI_BODY_LIVE=1` (손쉬운 사용 on the terminal):
