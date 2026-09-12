@@ -126,6 +126,19 @@ test("fixture CLI proxy answers 안녕 as secretary text, not run_path", async (
   assert.doesNotMatch(dumped, /function_call|run_path|path_not_found|그 일에 맞는 경로/);
 });
 
+test("host CLI --proxy-responses fixture 너 모델 뭐야? is secretary text", () => {
+  const result = spawnHost(
+    hostFile,
+    ["--proxy-responses"],
+    { AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "fixture" },
+    "{\"input\":[{\"role\":\"user\",\"content\":\"너 모델 뭐야?\"}]}\n",
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const dumped = result.stdout;
+  assert.match(dumped, /뽀미입니다/);
+  assert.doesNotMatch(dumped, /function_call|run_path|path_not_found|그 일에 맞는 경로/);
+});
+
 test("host CLI --proxy-responses fixture 안녕 is a secretary message", () => {
   const result = spawnHost(
     hostFile,

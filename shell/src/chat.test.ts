@@ -4,6 +4,7 @@ import {
   CEO_GATEWAY_PROMPT,
   GATEWAY_FAIL_TEXT,
   GatewayError,
+  SECRETARY_IDENTITY,
   SECRETARY_TEXT,
   SECRETS_CATALOG_INTENT,
   defaultComplete,
@@ -11,9 +12,11 @@ import {
   fixtureResponses,
   functionCallOf,
   gatewayFailText,
+  isConversation,
   isSmallTalk,
   probeChatMode,
   redactSecrets,
+  secretaryReply,
   sendChat,
   toolFromModelCall,
 } from "./chat.ts";
@@ -261,6 +264,49 @@ test("mistaken greeting tool call is ignored", async () => {
     },
   });
   assert.deepEqual(turn.lines, [{ kind: "bubble", role: "assistant", text: SECRETARY_TEXT }]);
+});
+
+test("fixture 너 모델 뭐야? is secretary text, never run_path", async () => {
+  for (const asked of ["너 모델 뭐야?", "누구야", "뭐 할 수 있어?", "what model are you"]) {
+    assert.equal(isConversation(asked), true, asked);
+    assert.equal(isSmallTalk(asked), false, asked);
+    assert.equal(fixtureIntent(asked), null, asked);
+    assert.equal(functionCallOf(fixtureResponses({ input: asked })), null, asked);
+    assert.equal(secretaryReply(asked), SECRETARY_IDENTITY, asked);
+  }
+  assert.equal(isConversation("지금 데이터 뭐 있어?"), false);
+  const intents: string[] = [];
+  const turn = await sendChat("너 모델 뭐야?", {
+    complete: async body => fixtureResponses(body),
+    runPath: async intent => {
+      intents.push(intent);
+      return previewSpine(intent);
+    },
+  });
+  assert.equal(turn.mode, "gateway");
+  assert.deepEqual(turn.lines, [{ kind: "bubble", role: "assistant", text: SECRETARY_IDENTITY }]);
+  assert.deepEqual(intents, []);
+  assert.doesNotMatch(JSON.stringify(turn), /path_not_found|그 일에 맞는 경로|function_call/);
+});
+
+test("live Gateway may answer 너 모델 뭐야? without run_path", async () => {
+  const turn = await sendChat("너 모델 뭐야?", {
+    complete: async body => {
+      assert.equal((body.tools as { name?: string }[] | undefined)?.some(tool => tool.name === "run_path"), true);
+      return {
+        output: [{ type: "message", content: [{ type: "output_text", text: "뽀미입니다. openai/gpt-6-astra로 답합니다." }] }],
+      };
+    },
+    runPath: async () => {
+      throw new Error("run_path should not run for conversational Q&A");
+    },
+  });
+  assert.equal(turn.mode, "gateway");
+  assert.deepEqual(turn.lines, [{
+    kind: "bubble",
+    role: "assistant",
+    text: "뽀미입니다. openai/gpt-6-astra로 답합니다.",
+  }]);
 });
 
 test("task miss still uses the path_not_found bubble", async () => {

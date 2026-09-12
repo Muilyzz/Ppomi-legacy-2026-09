@@ -32,7 +32,7 @@ LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
 open --env PPOMI_CHAT=fixture /Applications/뽀미.app
 ```
 
-Prefixing `PPOMI_CHAT=fixture open …` does **not** pass env into the GUI app. `open --env` lasts for that launch only: quit, then Dock/Finder starts a new process without it — run `open --env` again. Reopen while the app is still running keeps the env. 「안녕」 / thanks / 뭐해 in fixture or unset Gateway is a short secretary greeting, never the path-not-found bubble. A true miss (`지금 데이터 뭐 있어?`) is the Korean path-not-found bubble when Gateway is unset. If Gateway/`complete()` throws, the bubble is `모델 연결에 실패했습니다. 게이트웨이 오류: <code>` — local `run_path` is not a disguise. `run_path` IPC failure is `실행에 실패했습니다.` — never `node host returned invalid JSON` and never disguised as path-not-found. Node spawn clears inherited `NODE_PATH` / Grok Electron injects. `PPOMI_CHAT=fixture` is an IPC ack; the webview fills the fixture Responses body (no node proxy required). The composer footer shows `fixture` or `Gateway` when that loop is on.
+Prefixing `PPOMI_CHAT=fixture open …` does **not** pass env into the GUI app. `open --env` lasts for that launch only: quit, then Dock/Finder starts a new process without it — run `open --env` again. Reopen while the app is still running keeps the env. 「안녕」 / thanks / 뭐해 / 「너 모델 뭐야?」 in fixture or unset Gateway is a short secretary reply, never the path-not-found bubble. Live Gateway (`AI_GATEWAY_API_KEY`, no fixture) may answer that chat in text with no tool. A true miss (`지금 데이터 뭐 있어?`) is the Korean path-not-found bubble when Gateway is unset. If Gateway/`complete()` throws, the bubble is `모델 연결에 실패했습니다. 게이트웨이 오류: <code>` — local `run_path` is not a disguise. `run_path` IPC failure is `실행에 실패했습니다.` — never `node host returned invalid JSON` and never disguised as path-not-found. Node spawn clears inherited `NODE_PATH` / Grok Electron injects. `PPOMI_CHAT=fixture` is an IPC ack; the webview fills the fixture Responses body (no node proxy required). The composer footer shows `fixture` or `Gateway` when that loop is on.
 
 The window is the **agent conversation shell** (`agent/src/ui/shell.tsx`)
 inside Tauri — same visual family as Storybook 「대화 셸」. Placeholder verb
@@ -51,7 +51,7 @@ fixture click on `Next`. `내 사업자 KB계좌번호 알아?` and
 (local aliases + fixture/Gateway `run_path(사업자 계좌번호)`).
 `KB스타기업뱅킹 열어` / `KB 사업자 홈` / `path_cold_start` load
 `kb-star-biz-iphone` from the `ppomi-path` catalog (Home → KB, Face ID).
-`지금 데이터 뭐 있어?` has no catalog path yet. Casual chat (`안녕`, `뭐해`, `thanks`) is a secretary reply, not `run_path`.
+`지금 데이터 뭐 있어?` has no catalog path yet. Casual chat (`안녕`, `뭐해`, `thanks`, `너 모델 뭐야?`) is a secretary reply, not `run_path`.
 
 No IA header, no empty-state chips, no greeting — composer-only empty
 inside the real shell chrome.
