@@ -112,7 +112,7 @@ test("bare 알아 stays path_not_found", async () => {
   assert.equal(result.status, "path_not_found");
 });
 
-test("fixture proxy never errors on a full Responses body", async () => {
+test("fixture CLI proxy answers 안녕 as secretary text, not run_path", async () => {
   const result = await proxyResponses(
     { input: [{ role: "user", content: "안녕" }], model: "client", stream: true, store: true },
     { env: { PPOMI_CHAT: "fixture" } },
@@ -121,6 +121,28 @@ test("fixture proxy never errors on a full Responses body", async () => {
   assert.equal(result.fixture, true);
   assert.equal("error" in result, false);
   assert.ok(result.response);
+  const dumped = JSON.stringify(result);
+  assert.match(dumped, /안녕하세요\. 무엇을 도와드릴까요\?/);
+  assert.doesNotMatch(dumped, /function_call|run_path|path_not_found|그 일에 맞는 경로/);
+});
+
+test("host CLI --proxy-responses fixture 안녕 is a secretary message", () => {
+  const result = spawnHost(
+    hostFile,
+    ["--proxy-responses"],
+    { AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "fixture" },
+    "{\"input\":[{\"role\":\"user\",\"content\":\"안녕\"}]}\n",
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const body = JSON.parse(result.stdout) as {
+    configured: boolean;
+    fixture?: boolean;
+    response?: { output?: readonly { type?: string; name?: string }[] };
+  };
+  assert.equal(body.configured, true);
+  assert.equal(body.fixture, true);
+  assert.equal(body.response?.output?.[0]?.type, "message");
+  assert.doesNotMatch(result.stdout, /function_call|run_path|path_not_found|그 일에 맞는 경로/);
 });
 
 test("gateway probe is configured only when a key or fixture is set", async () => {

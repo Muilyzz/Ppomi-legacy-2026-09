@@ -3,11 +3,14 @@ import { test } from "node:test";
 import {
   CEO_GATEWAY_PROMPT,
   GATEWAY_FAIL_TEXT,
+  SECRETARY_TEXT,
   SECRETS_CATALOG_INTENT,
   defaultComplete,
   fixtureIntent,
   fixtureResponses,
   functionCallOf,
+  isSmallTalk,
+  probeChatMode,
   redactSecrets,
   sendChat,
   toolFromModelCall,
@@ -195,6 +198,92 @@ test("toolFromModelCall marks via gateway and redacts long digits", () => {
 test("functionCallOf reads the Responses function_call", () => {
   const call = functionCallOf(fixtureResponses({ input: CEO_GATEWAY_PROMPT }));
   assert.deepEqual(call, { call_id: "call_run_path", name: "run_path", intent: SECRETS_CATALOG_INTENT });
+});
+
+test("fixture 안녕 is a secretary bubble, never path_not_found or run_path", async () => {
+  assert.equal(isSmallTalk("안녕"), true);
+  assert.equal(isSmallTalk("뭐해"), true);
+  assert.equal(isSmallTalk("thanks"), true);
+  assert.equal(isSmallTalk("지금 데이터 뭐 있어?"), false);
+  assert.equal(fixtureIntent("안녕"), null);
+  assert.equal(functionCallOf(fixtureResponses({ input: "안녕" })), null);
+  assert.equal(fixtureResponses({ input: "안녕" }).output?.[0]?.content?.[0]?.text, SECRETARY_TEXT);
+  const intents: string[] = [];
+  const turn = await sendChat("안녕", {
+    complete: async body => fixtureResponses(body),
+    runPath: async intent => {
+      intents.push(intent);
+      return previewSpine(intent);
+    },
+  });
+  assert.equal(turn.mode, "gateway");
+  assert.deepEqual(turn.lines, [{ kind: "bubble", role: "assistant", text: SECRETARY_TEXT }]);
+  assert.deepEqual(intents, []);
+  assert.doesNotMatch(JSON.stringify(turn), /path_not_found|그 일에 맞는 경로/);
+});
+
+test("local fallback 안녕 is the same secretary bubble", async () => {
+  const turn = await sendChat("안녕", {
+    complete: async () => null,
+    runPath: async () => {
+      throw new Error("run_path should not run for greetings");
+    },
+  });
+  assert.equal(turn.mode, "local");
+  assert.deepEqual(turn.lines, [{ kind: "bubble", role: "assistant", text: SECRETARY_TEXT }]);
+});
+
+test("mistaken greeting tool call is ignored", async () => {
+  const turn = await sendChat("안녕", {
+    complete: async () => fixtureResponses({ input: "다음" }),
+    runPath: async () => {
+      throw new Error("run_path should not run for greetings");
+    },
+  });
+  assert.deepEqual(turn.lines, [{ kind: "bubble", role: "assistant", text: SECRETARY_TEXT }]);
+});
+
+test("task miss still uses the path_not_found bubble", async () => {
+  const turn = await sendChat("지금 데이터 뭐 있어?", {
+    complete: async body => fixtureResponses(body),
+    runPath: async intent => previewSpine(intent),
+  });
+  assert.equal(turn.mode, "gateway");
+  assert.equal(turn.lines[0]?.kind, "tool");
+  assert.equal(turn.lines[1]?.kind, "bubble");
+  if (turn.lines[1]?.kind !== "bubble") return;
+  assert.equal(turn.lines[1].text, "그 일에 맞는 경로가 아직 없습니다.");
+});
+
+test("probeChatMode reads fixture from the gateway probe", async () => {
+  const bag = globalThis as { __TAURI__?: { core?: { invoke: (cmd: string, args: Record<string, unknown>) => Promise<unknown> } } };
+  const previous = bag.__TAURI__;
+  bag.__TAURI__ = {
+    core: {
+      invoke: async (_cmd, args) => {
+        assert.deepEqual(args, { body: { probe: true } });
+        return { configured: true, fixture: true };
+      },
+    },
+  };
+  try {
+    assert.equal(await probeChatMode(), "fixture");
+    bag.__TAURI__ = {
+      core: {
+        invoke: async () => ({ configured: true, fixture: false }),
+      },
+    };
+    assert.equal(await probeChatMode(), "gateway");
+    bag.__TAURI__ = {
+      core: {
+        invoke: async () => ({ configured: false }),
+      },
+    };
+    assert.equal(await probeChatMode(), "local");
+  } finally {
+    if (previous === undefined) delete bag.__TAURI__;
+    else bag.__TAURI__ = previous;
+  }
 });
 
 test("fixture Gateway keeps KB open off the secrets remap", async () => {

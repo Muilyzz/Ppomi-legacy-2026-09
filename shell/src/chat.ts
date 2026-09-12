@@ -7,9 +7,16 @@ export const SECRETS_CATALOG_INTENT = "사업자 계좌번호";
 export const GATEWAY_FAIL_TEXT = "모델 연결에 실패했습니다.";
 
 const TEXT_MODEL = "openai/gpt-6-astra";
+export const SECRETARY_TEXT = "안녕하세요. 무엇을 도와드릴까요?";
+const PATH_MISS_TEXT = "그 일에 맞는 경로가 아직 없습니다.";
+// ponytail: whole-utterance small talk only; upgrade if live chat needs a real classifier
+const SMALL_TALK =
+  /^(안녕(하세요|하십니까)?|하이|헬로|hello|hey|hi|thanks?( you)?|thx|고마워[요]?|고맙습니다|감사합니다|뭐\s*해(요)?)\s*[!?.~ㅎㅋ]*$/i;
+
 const INSTRUCTIONS = [
-  "You are 뽀미 in the Mac conversation shell.",
-  "Call run_path when the person wants a host path.",
+  "You are 뽀미, a calm Korean secretary in the Mac conversation shell. The dog mascot is visual only.",
+  "Greetings, thanks, and small talk (안녕, 뭐해, thanks): one short polite Korean sentence. Never call run_path.",
+  "Call run_path only when the person wants a host path.",
   "Home / next / browse → intent 다음.",
   "KB스타기업뱅킹 열어 / KB 사업자 홈 / path_cold_start → pass the spoken intent.",
   "Saved business or KB account / KB스타비즈 / 넣어둔 번호 / last four digits → intent 사업자 계좌번호.",
@@ -19,7 +26,7 @@ const INSTRUCTIONS = [
 const RUN_PATH_TOOL = {
   type: "function",
   name: "run_path",
-  description: "Run a Ppomi host path (Home next, business-account secret, KB스타기업뱅킹). Pass a catalog intent.",
+  description: "Run a Ppomi host path (Home next, business-account secret, KB스타기업뱅킹). Do not call for greetings or small talk. Pass a catalog intent.",
   parameters: {
     type: "object",
     additionalProperties: false,
@@ -46,6 +53,8 @@ export type GatewayProxy = {
   readonly response?: ResponsesBody;
   readonly error?: string;
 };
+
+export type ChatMode = "fixture" | "gateway" | "local";
 
 export type ChatTurn = {
   readonly mode: "gateway" | "local";
@@ -100,9 +109,18 @@ function toolOutputText(input: unknown): string {
   return typeof row?.output === "string" ? row.output : JSON.stringify(row?.output ?? "");
 }
 
+export function isSmallTalk(text: string): boolean {
+  return SMALL_TALK.test(text.trim());
+}
+
+function secretaryLines(): Line[] {
+  return [{ kind: "bubble", role: "assistant", text: SECRETARY_TEXT }];
+}
+
 /** Offline stand-in for a Gateway Responses turn. Maps paraphrases itself — not the local MATCH_SECRETS regex. */
-export function fixtureIntent(text: string): string {
+export function fixtureIntent(text: string): string | null {
   const trimmed = text.trim();
+  if (isSmallTalk(trimmed)) return null;
   if (/^(다음|browse|next|열어|home)$/i.test(trimmed)) return "다음";
   if (MATCH_KB_OPEN.test(trimmed)) return trimmed;
   if (/스타비즈|마지막|last\s*4|digits|넣어둔|번호|사업자|계좌|account|kb/i.test(trimmed)) {
@@ -114,7 +132,7 @@ export function fixtureIntent(text: string): string {
 export function fixtureResponses(body: Record<string, unknown>): ResponsesBody {
   if (hasToolOutput(body.input)) {
     const blob = toolOutputText(body.input);
-    let text = "그 일에 맞는 경로가 아직 없습니다.";
+    let text = PATH_MISS_TEXT;
     try {
       text = textFromSpine(JSON.parse(blob) as SpineView);
     } catch {
@@ -125,6 +143,9 @@ export function fixtureResponses(body: Record<string, unknown>): ResponsesBody {
     return { output: [{ type: "message", content: [{ type: "output_text", text }] }] };
   }
   const intent = fixtureIntent(userTextFromInput(body.input));
+  if (intent === null) {
+    return { output: [{ type: "message", content: [{ type: "output_text", text: SECRETARY_TEXT }] }] };
+  }
   return {
     output: [{
       type: "function_call",
@@ -208,27 +229,56 @@ export async function defaultComplete(body: Record<string, unknown>): Promise<Re
   return await response.json() as ResponsesBody;
 }
 
+export async function probeChatMode(): Promise<ChatMode> {
+  if (previewFixture()) return "fixture";
+  const invoke = tauriInvoke();
+  if (invoke !== null) {
+    try {
+      const proxy = await invoke("ai_gateway", { body: { probe: true } }) as GatewayProxy;
+      if (proxy.fixture) return "fixture";
+      if (proxy.configured) return "gateway";
+    } catch {
+      return "local";
+    }
+    return "local";
+  }
+  try {
+    const response = await fetch("/__ppomi/gateway");
+    if (!response.ok) return "local";
+    const proxy = await response.json() as GatewayProxy;
+    if (proxy.fixture) return "fixture";
+    if (proxy.configured) return "gateway";
+  } catch {
+    return "local";
+  }
+  return "local";
+}
+
 export async function sendChat(
   text: string,
   deps: { complete?: CompleteFn; runPath?: RunPathFn } = {},
 ): Promise<ChatTurn> {
   const complete = deps.complete ?? defaultComplete;
   const runPath = deps.runPath ?? invokeRunPath;
+  const chat = text.trim();
   let first: ResponsesBody | null;
   try {
-    first = await complete(responsesRequest(text));
+    first = await complete(responsesRequest(chat));
   } catch {
-    const spine = await runPath(text);
+    const spine = await runPath(chat);
     if (spine.status === "path_not_found") {
       return { mode: "gateway", lines: [{ kind: "bubble", role: "assistant", text: GATEWAY_FAIL_TEXT }] };
     }
     return { mode: "local", lines: linesFromSpine(spine) };
   }
-  if (first === null) return { mode: "local", lines: linesFromSpine(await runPath(text)) };
+  if (first === null) {
+    if (isSmallTalk(chat)) return { mode: "local", lines: secretaryLines() };
+    return { mode: "local", lines: linesFromSpine(await runPath(chat)) };
+  }
 
   const call = functionCallOf(first);
-  if (call === null) {
-    const spoken = redactSecrets(assistantTextOf(first) || "응답이 비어 있습니다.");
+  if (call === null || isSmallTalk(chat)) {
+    const spoken = redactSecrets(assistantTextOf(first) || (isSmallTalk(chat) ? SECRETARY_TEXT : "응답이 비어 있습니다."));
     return { mode: "gateway", lines: [{ kind: "bubble", role: "assistant", text: spoken }] };
   }
 
@@ -236,7 +286,7 @@ export async function sendChat(
   const safe = redactSpine(spine);
   let follow: ResponsesBody | null = null;
   try {
-    follow = await complete(responsesRequest(text, [
+    follow = await complete(responsesRequest(chat, [
       { type: "function_call", call_id: call.call_id, name: call.name, arguments: JSON.stringify({ intent: call.intent }) },
       { type: "function_call_output", call_id: call.call_id, output: JSON.stringify(safe) },
     ]));
