@@ -13,7 +13,7 @@ const frame = (width, node) => <div style={{width, height: '100dvh', overflow: '
 
 export default {
   title: '작업대',
-  parameters: {skin: ['shell', 'workbench']},
+  parameters: {skin: ['shell', 'workbench'], componentOutline: false},
   render: ({width, ...args}) => { const el = document.createElement('div'); createRoot(el).render(width ? frame(width, <Workbench {...args} />) : <Workbench {...args} />); return el; },
   argTypes: {
     width: {control: 'number', description: '작업대 폭(px) · 비우면 뷰포트'},
