@@ -112,6 +112,17 @@ test("bare 알아 stays path_not_found", async () => {
   assert.equal(result.status, "path_not_found");
 });
 
+test("fixture proxy never errors on a full Responses body", async () => {
+  const result = await proxyResponses(
+    { input: [{ role: "user", content: "안녕" }], model: "client", stream: true, store: true },
+    { env: { PPOMI_CHAT: "fixture" } },
+  );
+  assert.equal(result.configured, true);
+  assert.equal(result.fixture, true);
+  assert.equal("error" in result, false);
+  assert.ok(result.response);
+});
+
 test("gateway probe is configured only when a key or fixture is set", async () => {
   const off = await proxyResponses({ probe: true }, { env: {} });
   assert.deepEqual(off, { configured: false, fixture: false });

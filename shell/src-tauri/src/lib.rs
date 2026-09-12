@@ -133,8 +133,19 @@ fn run_path(intent: String, body: String, live: bool) -> Result<Value, String> {
     )
 }
 
+fn fixture_ack() -> Value {
+    serde_json::json!({ "configured": true, "fixture": true })
+}
+
+fn chat_fixture(env_chat: Option<&str>) -> bool {
+    env_chat == Some("fixture")
+}
+
 #[tauri::command]
 fn ai_gateway(body: Value) -> Result<Value, String> {
+    if chat_fixture(env::var("PPOMI_CHAT").ok().as_deref()) {
+        return Ok(fixture_ack());
+    }
     let mut cmd = Command::new(node_bin());
     cmd.arg("--experimental-strip-types")
         .arg(host_script())
@@ -189,6 +200,18 @@ mod tests {
     fn gateway_probe_json_is_host_stdout() {
         let value = parse_host_output("{\"configured\":false,\"fixture\":false}\n", "", true).unwrap();
         assert_eq!(value["configured"], false);
+    }
+
+    #[test]
+    fn fixture_env_acks_without_node() {
+        assert!(chat_fixture(Some("fixture")));
+        assert!(!chat_fixture(Some("")));
+        assert!(!chat_fixture(None));
+        let value = fixture_ack();
+        assert_eq!(value["configured"], true);
+        assert_eq!(value["fixture"], true);
+        assert!(value.get("response").is_none());
+        assert!(value.get("error").is_none());
     }
 
     #[test]
