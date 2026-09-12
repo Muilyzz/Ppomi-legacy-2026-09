@@ -124,6 +124,8 @@ test('잠김 HTML: 원문 없고 접힘, 칩만. 열림: 원문 + open', () => {
   assert.doesNotMatch(locked, /009876543210/);
   assert.doesNotMatch(locked, /<details open/);
   assert.match(locked, /class="secrets"/);
+  assert.match(locked, /class="jtitle"/);
+  assert.match(locked, /class="card"/);
   assert.match(locked, /<ul>/);
   assert.match(locked, /••••/);
   assert.match(opened, />열림</);
