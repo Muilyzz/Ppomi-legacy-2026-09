@@ -38,5 +38,5 @@ export default {
     wrap.appendChild(node);
     return wrap;
   }],
-  parameters: {backgrounds: {disable: true}, layout: 'fullscreen'},
+  parameters: {backgrounds: {disable: true}, layout: 'fullscreen', docs: {codePanel: true}},
 };
