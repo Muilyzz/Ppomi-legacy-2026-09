@@ -58,8 +58,9 @@
   <body>
     <main>
       <div id="log" role="log" aria-label="현재 대화"></div>
+      <!-- UX lock: blank log + composer. No IA header, chips, or greeting above. -->
       <form id="composer">
-        <input id="intent" type="text" name="intent" placeholder="할 일" aria-label="할 일" autocomplete="off" />
+        <input id="intent" type="text" name="intent" placeholder="시킬 일을 적어 주세요" aria-label="시킬 일을 적어 주세요" autocomplete="off" />
         <button type="submit">보내기</button>
       </form>
     </main>

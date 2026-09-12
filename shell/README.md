@@ -24,10 +24,10 @@ LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
 
 Same `LOCAL_SIGN_ID` every local Mac build (Swift `make-app.sh`). Quit the old app first — the script does. Do not keep `*-prev.app` or `dist/backup/*.app`; those mixed copies are why TCC listed 「previous」. Do not `tccutil reset` as routine. Ad-hoc is not for permission smoke. `tauri dev` / `target/` are not install paths.
 
-The window is messages + composer only (placeholder hint OK). Type `다음` or
-`browse` and send: `run_path` → `src/host.ts` → `ppomi-brain` →
-`path-home-next` → `ppomi-body-macos` fixture click on `Next`. No mode header
-(절차 · 기억 · 할 일) and no suggestion chips.
+The window is a blank log + composer. Placeholder verb only:
+`시킬 일을 적어 주세요`. Type `다음` or `browse` and send: `run_path` →
+`src/host.ts` → `ppomi-brain` → `path-home-next` → `ppomi-body-macos`
+fixture click on `Next`. No IA header, no empty-state chips, no greeting.
 
 Live Mac AX (손쉬운 사용 on the terminal or the app):
 
