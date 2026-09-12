@@ -25,11 +25,11 @@ npm --prefix shell test
 npm --prefix shell run dev
 ```
 
-**셸 UI = agent 웹 UI를 Tauri에 올린 것.** 창은 `agent/src/ui/shell.tsx`(Storybook 「대화 셸」과 같은 뼈대)다. placeholder는 동사 힌트(`시킬 일을 적어 주세요`). 보내기는 설정된 경우 Vercel AI Gateway Responses 루프(`AI_GATEWAY_API_KEY`, 키는 웹뷰에 없음)를 타고, 모델이 `run_path` 툴을 호출하면 기존 스파인(`host.ts` → brain → body / secrets)을 재사용한다. ToolCard의 `via: "gateway"`는 **모델 function_call**이다. 키/픽스처가 없으면 예전 로컬 매처로 조용히 폴백한다.
+**셸 UI = agent 웹 UI를 Tauri에 올린 것.** 창은 `agent/src/ui/shell.tsx`(Storybook 「대화 셸」과 같은 뼈대)다. placeholder는 동사 힌트(`시킬 일을 적어 주세요`). 보내기는 설정된 경우 Vercel AI Gateway Responses 루프(`AI_GATEWAY_API_KEY`, 키는 웹뷰에 없음)를 타고, 모델이 `run_path` 툴을 호출하면 기존 스파인(`host.ts` → brain → body / secrets / `ppomi-path` catalog)을 재사용한다. ToolCard의 `via: "gateway"`는 **모델 function_call**이다. 키/픽스처가 없으면 예전 로컬 매처로 조용히 폴백한다.
 
-입력 `다음` → 보내기. IPC `run_path`가 Node `shell/src/host.ts`를 띄우고 `ppomi-brain`이 `path-home-next`를 고른 뒤 `ppomi-body-macos` fixture가 `Next`를 클릭한다. `내 사업자 KB계좌번호 알아?`는 `path-secrets-account` → `ppomi-secrets` get(`ppomi/kb-star-biz/account`). 말풍선은 마스킹/`****last4`만 (원문 금지). 기본은 fixture. 경로 결과는 말풍선 + 도구 카드로 보이고, `path_not_found`도 JSON(종료 0)이다.
+입력 `다음` → 보내기. IPC `run_path`가 Node `shell/src/host.ts`를 띄우고 `ppomi-brain`이 `path-home-next`를 고른 뒤 `ppomi-body-macos` fixture가 `Next`를 클릭한다. `내 사업자 KB계좌번호 알아?`는 `path-secrets-account` → `ppomi-secrets` get(`ppomi/kb-star-biz/account`). `KB스타기업뱅킹 열어` / `KB 사업자 홈`은 `ppomi-path` 카탈로그의 `kb-star-biz-iphone`(Home → KB, Face ID HITL). 말풍선은 마스킹/`****last4`만 (원문 금지). 기본은 fixture. 경로 결과는 말풍선 + 도구 카드로 보이고, `path_not_found`도 JSON(종료 0)이다.
 
-**CEO: Gateway vs 로컬 매처.** `KB스타비즈에 넣어둔 번호 마지막만 보여줘` 는 로컬 regex에 안 걸린다. 키 없음 → `path_not_found`. `AI_GATEWAY_API_KEY` 또는 `PPOMI_CHAT=fixture` / `?chat=fixture` → 모델이 `run_path`(`사업자 계좌번호`)를 호출하고 ToolCard + `****7890`.
+**CEO: Gateway vs 로컬 매처.** `KB스타비즈에 넣어둔 번호 마지막만 보여줘` 는 로컬 regex에 안 걸린다. 키 없음 → `path_not_found`. `AI_GATEWAY_API_KEY` 또는 `PPOMI_CHAT=fixture` / `?chat=fixture` → 모델이 `run_path`(`사업자 계좌번호`)를 호출하고 ToolCard + `****7890`. 설치는 `open --env PPOMI_CHAT=fixture '/Applications/뽀미.app'` — prefix `PPOMI_CHAT=fixture open …` 는 GUI에 안 들어간다.
 
 **Chat UX lock (CEO + 리서처).** 입력창 위에 IA 머리글(절차 · 기억 · 할 일)과 빈 화면 제안 칩(플레이북 찾기 등)을 두지 않는다. 인사 말풍선도 없다. 빈 화면은 진짜 셸 크롬 안의 입력창만. HITL/진행 중일 때만 입력창 안·바로 아래 칩 하나 — 지금은 만들지 않는다.
 
@@ -67,6 +67,14 @@ Safari(또는 `PPOMI_MAC_BROWSER=chrome`)로 example.com을 열고 "More informa
 PPOMI_SECRETS_LIVE=1 npm --prefix shell run host -- --intent '내 사업자 KB계좌번호 알아?' --live
 PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent '내 사업자 KB계좌번호 알아?' --live
 PPOMI_SECRETS_LIVE=1 node --experimental-strip-types packages/ppomi-secrets/example/src/main.ts
+```
+
+KB스타기업뱅킹 UI path(카탈로그 SSOT). 기본은 fixture, live는 `PPOMI_BODY_LIVE` + iPhone Mirroring body 훅. Face ID/로그인은 당사자. 계좌 원문은 말풍선/StepResult에 없음.
+
+```sh
+npm --prefix shell run host -- --intent 'KB스타기업뱅킹 열어'
+PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 'KB스타기업뱅킹 열어' --live
+PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-iphone-mirroring/example/src/main.ts
 ```
 
 Mac 창 재설치는 계속 같은 서명:
