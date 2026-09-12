@@ -13,7 +13,7 @@ struct SettingsView: View {
         Form {
             Section("시작하기") {
                 if !Permissions.ready {
-                    Text("시스템 설정 › 개인정보 보호 및 보안에서 손쉬운 사용과 화면 기록을 켜세요. 목록에 뽀미가 있으면 체크하고, 화면 기록을 켠 뒤에는 아래 ‘뽀미 다시 실행’을 누르세요.")
+                    Text("시스템 설정 › 개인정보 보호 및 보안에서 손쉬운 사용과 화면 기록을 켜세요. \(Permissions.addAppHint)")
                         .foregroundStyle(Color.bad)
                 }
                 ForEach(items) { i in

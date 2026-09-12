@@ -31,9 +31,23 @@ enum Permissions {
 
     private static var mirroringURL: URL? { NSWorkspace.shared.urlForApplication(withBundleIdentifier: Mirroring.bundleID) }
 
+    /// Sequoia+ PrivacySecurity URLs. Legacy `preference.security` often lands on Screen Recording instead of Accessibility.
+    static func privacyURL(_ anchor: String, legacy: Bool = false) -> URL {
+        URL(string: legacy
+            ? "x-apple.systempreferences:com.apple.preference.security?\(anchor)"
+            : "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?\(anchor)")!
+    }
+    static var repeatsPrivacyPane: Bool { ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 15 }
+    static let addAppHint = "목록에 「뽀미」가 없으면 + 로 /Applications/뽀미.app 을 고르세요. 이상한 이름(이전 빌드)은 − 로 지운 뒤 뽀미.app 만 넣으세요. 켠 뒤 종료하고 다시 실행."
+
     @discardableResult
     static func pane(_ anchor: String) -> Bool {
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)")!)
+        func open() -> Bool {
+            NSWorkspace.shared.open(privacyURL(anchor)) || NSWorkspace.shared.open(privacyURL(anchor, legacy: true))
+        }
+        let ok = open()
+        if repeatsPrivacyPane { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { _ = open() } }
+        return ok
     }
     static func openSettings() {
         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
@@ -69,6 +83,7 @@ enum Permissions {
     }
 
     /// AX prompt + Screen Recording request. Does not mark asked: those APIs often no-op with no dialog.
+    /// After `tccutil` empties the list, this prompt is once-per-process — quit and open a fresh 뽀미 first.
     static func requestSystemPrompts() {
         if !accessibility {
             _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary)
@@ -78,16 +93,22 @@ enum Permissions {
         }
     }
 
-    /// Open each missing TCC pane. Two URLs in one tick often keep only the last, so the second waits a beat.
+    /// Accessibility first, then ScreenCapture after the Sequoia retry — do not rely on a leftover pane.
+    static func openPrivacyPanesInOrder(_ anchors: [String]) {
+        guard let first = anchors.first else { return }
+        _ = pane(first)
+        let rest = Array(anchors.dropFirst())
+        guard !rest.isEmpty else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + (repeatsPrivacyPane ? 2 : 1)) { openPrivacyPanesInOrder(rest) }
+    }
+
+    /// Open each missing TCC pane. Accessibility before Screen Recording.
     @discardableResult
     static func openMissingPrivacyPanes() -> [String] {
         let anchors = missingPrivacyPanes(accessibility: accessibility, screen: screenCapture)
-        guard let first = anchors.first else { return [] }
+        guard !anchors.isEmpty else { return [] }
         NSApp.activate()
-        _ = pane(first)
-        if anchors.count > 1 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { _ = pane(anchors[1]) }
-        }
+        openPrivacyPanesInOrder(anchors)
         if !accessibility { store.set(true, forKey: askedAXKey) }
         if !screenCapture { store.set(true, forKey: askedScreenKey) }
         return anchors
@@ -99,7 +120,7 @@ enum Permissions {
         if ready { return .ready }
         let alert = NSAlert()
         alert.messageText = "손쉬운 사용과 화면 기록이 필요해요"
-        alert.informativeText = "허용하기를 누르면 시스템 설정에서 손쉬운 사용과 화면 기록을 켤 수 있습니다."
+        alert.informativeText = "허용하기를 누르면 손쉬운 사용 칸이 먼저 열립니다. " + addAppHint
         alert.addButton(withTitle: "허용하기")
         alert.addButton(withTitle: "나중에")
         guard alert.runModal() == .alertFirstButtonReturn else { return need() }
@@ -114,14 +135,14 @@ enum Permissions {
         let mic = AVCaptureDevice.authorizationStatus(for: .audio)
         return [
             Item(id: "ax", name: "손쉬운 사용", ok: accessibility,
-                 note: "시스템 설정 › 개인정보 보호 및 보안 › 손쉬운 사용에서 뽀미를 켜세요. 폰을 두드리고 창을 옮기는 손 · 필수",
+                 note: "시스템 설정 › 개인정보 보호 및 보안 › 손쉬운 사용. " + addAppHint + " 폰을 두드리는 손 · 필수",
                  button: "설정 열기") {
                 // A bundle-less binary is not in the list until it asks once; the prompt registers it, then the pane opens.
                 _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary)
                 pane("Privacy_Accessibility")
             },
             Item(id: "screen", name: "화면 기록", ok: screenCapture,
-                 note: "같은 개인정보 보호에서 화면 기록을 켜세요. 미러링 창을 읽는 눈 · 필수 · 켠 뒤에는 아래 ‘뽀미 다시 실행’",
+                 note: "같은 개인정보 보호 › 화면 기록. " + addAppHint + " 미러링을 읽는 눈 · 필수",
                  button: "설정 열기") {
                 if !CGRequestScreenCaptureAccess() { pane("Privacy_ScreenCapture") }
             },

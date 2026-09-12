@@ -20,12 +20,24 @@ final class PermissionUXTests: XCTestCase {
                        ["Privacy_Accessibility", "Privacy_ScreenCapture"])
     }
 
+    func testPrivacyURLsPreferSettingsExtensionThenLegacySecurity() {
+        XCTAssertEqual(Permissions.privacyURL("Privacy_Accessibility").absoluteString,
+                       "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility")
+        XCTAssertEqual(Permissions.privacyURL("Privacy_ScreenCapture").absoluteString,
+                       "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture")
+        XCTAssertEqual(Permissions.privacyURL("Privacy_Accessibility", legacy: true).absoluteString,
+                       "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+        XCTAssertEqual(Permissions.privacyURL("Privacy_ScreenCapture", legacy: true).absoluteString,
+                       "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+    }
+
     func testStartupRowsKeepMicOptionalAndNameTheTwoRequiredPanes() {
         let items = Permissions.items()
         XCTAssertEqual(items.map(\.id), ["ax", "screen", "mic", "mirror", "relaunch", "lock"])
         XCTAssertTrue(items.first { $0.id == "ax" }?.note.contains("손쉬운 사용") == true)
+        XCTAssertTrue(items.first { $0.id == "ax" }?.note.contains("/Applications/뽀미.app") == true)
         XCTAssertTrue(items.first { $0.id == "screen" }?.note.contains("화면 기록") == true)
-        XCTAssertTrue(items.first { $0.id == "screen" }?.note.contains("다시 실행") == true)
+        XCTAssertTrue(items.first { $0.id == "screen" }?.note.contains("뽀미.app") == true)
         XCTAssertTrue(items.first { $0.id == "mic" }?.note.contains("선택") == true)
     }
 
