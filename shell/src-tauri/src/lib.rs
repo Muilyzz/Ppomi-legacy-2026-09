@@ -46,8 +46,9 @@ fn repo_root() -> PathBuf {
 }
 
 /// The window has no approval gate yet, so the IPC never arms a live body: `live` is refused
-/// with a coded error, and the arming variables are stripped from the child's environment so a
-/// `PPOMI_BODY_LIVE=1` inherited by the app cannot turn the fixture run into real control.
+/// with a coded error, and every arming variable (`PPOMI_BODY_LIVE`, `PPOMI_BODY_AX`,
+/// `PPOMI_BODY`, `PPOMI_SECRETS_LIVE`) is stripped from the child's environment so a value
+/// inherited by the app cannot turn the fixture run into real control or a real Keychain read.
 /// Async so the node run does not block the main thread and the webview.
 #[tauri::command]
 async fn run_path(intent: String, body: String, live: bool) -> Result<Value, HostError> {
@@ -75,6 +76,7 @@ fn spawn_host(intent: &str, body: &str) -> Result<Value, HostError> {
         .env_remove("PPOMI_BODY_LIVE")
         .env_remove("PPOMI_BODY_AX")
         .env_remove("PPOMI_BODY")
+        .env_remove("PPOMI_SECRETS_LIVE")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

@@ -51,7 +51,7 @@ open /Applications/뽀미.app
 PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body macos --live
 ```
 
-플래그만 있으면 거부(종료 1, fixture를 live로 꾸미지 않는다). 변수만 있으면 fixture(다른 프로브용으로 export해 둔 값이 무장시키면 안 된다). `PPOMI_BODY_AX`는 `packages/ppomi-body-macos/example`의 스위치일 뿐 셸을 무장시키지 않는다. 창의 `run_path`는 `live`를 거부하고(`live_refused`), 자식 node 환경에서 `PPOMI_BODY_LIVE`·`PPOMI_BODY_AX`·`PPOMI_BODY`를 지운다 — 승인 게이트가 생기기 전까지 창에서 live는 없다.
+플래그만 있으면 거부(종료 1, fixture를 live로 꾸미지 않는다). 변수만 있으면 fixture(다른 프로브용으로 export해 둔 값이 무장시키면 안 된다). `PPOMI_BODY_AX`는 `packages/ppomi-body-macos/example`의 스위치일 뿐 셸을 무장시키지 않는다. 창의 `run_path`는 `live`를 거부하고(`live_refused`), 자식 node 환경으로 `PPOMI_BODY_LIVE`·`PPOMI_BODY_AX`·`PPOMI_BODY`·`PPOMI_SECRETS_LIVE`를 절대 넘기지 않는다(실기기 제어도, 실제 Keychain/CredMan 읽기도 창에서는 무장되지 않는다) — 승인 게이트가 생기기 전까지 창에서 live는 없다.
 
 Safari(또는 `PPOMI_MAC_BROWSER=chrome`)로 example.com을 열고 "More information"만 클릭한다. 멈춤은 `completed`가 아니다: 손쉬운 사용 거부 = `grant_denied`, Mac 아님·Safari/Chrome 없음·링크 없음 = `needs_human`, 도구 오류 = `failed`(드라이버 코드 + URL 리댁션 메시지). `completed`는 `Runtime`이 게이트를 지나 클릭을 끝냈을 때만 나오고, JSON의 `run`(core `RunResult`: `driver`·`code`·`attempt`·`target`)이 그 증거다. 예제는 `packages/ppomi-body-macos/example`.
 

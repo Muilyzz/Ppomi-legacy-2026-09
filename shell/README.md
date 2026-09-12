@@ -29,10 +29,12 @@ The window is a blank log + composer. Placeholder verb only:
 `src/host.ts` → `ppomi-brain` → `path-home-next` → `ppomi-body-macos`
 fixture click on `Next`. No IA header, no empty-state chips, no greeting.
 The window never arms live: `run_path` refuses `live: true` (`live_refused`)
-and strips `PPOMI_BODY_LIVE` / `PPOMI_BODY_AX` / `PPOMI_BODY` from the node
-child, so a variable inherited from another probe's shell cannot turn the
-fixture run into real control. Each reply shows the brain status plus the core
-`run` (`driver`, `status`, `attempt`, `code`).
+and never forwards `PPOMI_BODY_LIVE`, `PPOMI_BODY_AX`, `PPOMI_BODY`,
+`PPOMI_SECRETS_LIVE` to the node child, so a variable inherited from another
+probe's shell cannot turn the fixture run into real control or a real
+Keychain/CredMan read. The JSON reply carries the core `run` (`driver`,
+`status`, `attempt`, `code`) next to the brain status; this window prints the
+brain status.
 
 Live Mac AX is **CLI only** and needs two keys, the `--live` flag **and**
 `PPOMI_BODY_LIVE=1` (손쉬운 사용 on the terminal):
