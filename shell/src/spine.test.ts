@@ -177,8 +177,35 @@ test("errorCodeOf reads Rust { code } objects, code: message strings, and falls 
 });
 
 test("preview secrets matcher covers similar Korean and English intents", () => {
-  for (const intent of ["KB 계좌번호", "사업자 계좌", "account number", "통장번호"]) {
+  for (const intent of [
+    "KB 계좌번호",
+    "사업자 계좌",
+    "account number",
+    "통장번호",
+    "KB스타비즈에 넣어둔 번호 마지막만 보여줘",
+  ]) {
     assert.equal(previewSpine(intent).pathId, "path-secrets-account", intent);
   }
   assert.equal(previewSpine("알아?").status, "path_not_found");
+  assert.equal(previewSpine("지금 데이터 뭐 있어?").status, "path_not_found");
+});
+
+test("KB open intents are a tool card plus a short Korean Face ID bubble", () => {
+  for (const intent of ["KB스타기업뱅킹 열어", "KB 사업자 홈", "path_cold_start"]) {
+    const view = previewSpine(intent);
+    assert.equal(view.status, "needs_human", intent);
+    assert.equal(view.pathId, "kb-star-biz-iphone", intent);
+    const lines = linesFromSpine(view);
+    assert.equal(lines[0]?.kind, "tool");
+    assert.equal(lines[1]?.kind, "bubble");
+    if (lines[0]?.kind !== "tool" || lines[1]?.kind !== "bubble") return;
+    assert.equal(lines[0].tool.name, "run_path");
+    assert.equal(lines[0].tool.label, "kb-star-biz-iphone");
+    assert.equal(lines[0].tool.state, "output-available");
+    assert.equal(lines[1].text, "KB스타기업뱅킹을 열었습니다. Face ID로 로그인하면 이어서 볼게요.");
+    const dumped = JSON.stringify(lines);
+    assert.doesNotMatch(dumped, /001234567890|1234567890/);
+    assert.doesNotMatch(dumped, /path_not_found/);
+  }
+  assert.equal(previewSpine("열어").pathId, "path-home-next");
 });

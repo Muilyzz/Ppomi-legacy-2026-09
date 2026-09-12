@@ -1,16 +1,36 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Bubble, Composer, ErrorBanner, Log, Pane, Shell, ToolCard } from "../../agent/src/ui/shell";
-import { sendChat } from "./chat";
+import { probeChatMode, sendChat, type ChatMode } from "./chat";
 import type { Line } from "./spine";
 import "../../agent/src/index.css";
 import "../../agent/src/tokens.css";
 import "../../agent/src/style.css";
 
+function modeCaption(mode: ChatMode): string {
+  switch (mode) {
+    case "fixture":
+      return "fixture";
+    case "gateway":
+      return "Gateway";
+    case "local":
+      return "";
+    default: {
+      const exhaustive: never = mode;
+      return exhaustive;
+    }
+  }
+}
+
 function App() {
   const [lines, setLines] = useState<Line[]>([]);
   const [status, setStatus] = useState<"ready" | "submitted">("ready");
   const [error, setError] = useState("");
+  const [mode, setMode] = useState<ChatMode>("local");
+
+  useEffect(() => {
+    void probeChatMode().then(setMode);
+  }, []);
 
   const send = async (text: string) => {
     setStatus("submitted");
@@ -44,12 +64,17 @@ function App() {
             </Log>
           }
           composer={
-            <Composer
-              status={status}
-              placeholder="시킬 일을 적어 주세요"
-              onSend={send}
-              onStop={() => {}}
-            />
+            <>
+              {modeCaption(mode) !== "" && (
+                <p className="text-muted-foreground px-1 pb-1 text-xs" aria-label="chat mode">{modeCaption(mode)}</p>
+              )}
+              <Composer
+                status={status}
+                placeholder="시킬 일을 적어 주세요"
+                onSend={send}
+                onStop={() => {}}
+              />
+            </>
           }
         />
       }

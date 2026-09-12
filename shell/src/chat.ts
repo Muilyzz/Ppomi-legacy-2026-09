@@ -9,6 +9,8 @@ import {
   type SpineView,
 } from "./spine.ts";
 
+const MATCH_KB_OPEN = /kb스타기업뱅킹|kb\s*사업자\s*홈|path_cold_start|kb-enterprise/i;
+
 export const CEO_GATEWAY_PROMPT = "KB스타비즈에 넣어둔 번호 마지막만 보여줘";
 export const SECRETS_CATALOG_INTENT = "사업자 계좌번호";
 export const GATEWAY_FAIL_TEXT = "모델 연결에 실패했습니다.";
@@ -29,18 +31,29 @@ export function gatewayFailText(code: string): string {
 }
 
 const TEXT_MODEL = "openai/gpt-6-astra";
+export const SECRETARY_TEXT = "안녕하세요. 무엇을 도와드릴까요?";
+export const SECRETARY_IDENTITY = "뽀미입니다. 비서처럼 대답하고, 경로가 있는 일만 실행합니다.";
+const PATH_MISS_TEXT = "그 일에 맞는 경로가 아직 없습니다.";
+// ponytail: whole-utterance chat vs path; expand only when a new miss hits run_path
+const SMALL_TALK =
+  /^(안녕(하세요|하십니까)?|하이|헬로|hello|hey|hi|thanks?( you)?|thx|고마워[요]?|고맙습니다|감사합니다|뭐\s*해(요)?)\s*[!?.~ㅎㅋ]*$/i;
+const IDENTITY_TALK =
+  /모델\s*뭐|무슨\s*모델|어떤\s*모델|what\s+model|which\s+model|너\s*누구|누구야|누구세요|who\s+are\s+you|what\s+are\s+you|자기소개|할\s*수\s*있|what\s+can\s+you|capabilities|너\s*뭐야/i;
+
 const INSTRUCTIONS = [
-  "You are 뽀미 in the Mac conversation shell.",
-  "Call run_path when the person wants a host path.",
+  "You are 뽀미, a calm Korean secretary in the Mac conversation shell. The dog mascot is visual only.",
+  "Chat that is not a host path — greetings, thanks, who you are, what model, capabilities, small talk: answer in one or two short polite Korean sentences. Never call run_path.",
+  "Call run_path only for a real host path. You may answer with text and no tools.",
   "Home / next / browse → intent 다음.",
-  "Saved business or KB account / KB스타비즈 / last four digits → intent 사업자 계좌번호.",
+  "KB스타기업뱅킹 열어 / KB 사업자 홈 / path_cold_start → pass the spoken intent.",
+  "Saved business or KB account / KB스타비즈 / 넣어둔 번호 / last four digits → intent 사업자 계좌번호.",
   "Never write a full account number. Only ****last4 from the tool result.",
 ].join(" ");
 
 const RUN_PATH_TOOL = {
   type: "function",
   name: "run_path",
-  description: "Run a Ppomi host path (Home next, business-account secret). Pass a catalog intent.",
+  description: "Run a Ppomi host path (Home next, business-account secret, KB스타기업뱅킹). Do not call for chat, identity, model, or capabilities questions. Pass a catalog intent.",
   parameters: {
     type: "object",
     additionalProperties: false,
@@ -68,6 +81,8 @@ export type GatewayProxy = {
   readonly error?: string;
 };
 
+export type ChatMode = "fixture" | "gateway" | "local";
+
 export type ChatTurn = {
   readonly mode: "gateway" | "local";
   readonly lines: Line[];
@@ -77,6 +92,11 @@ export type CompleteFn = (body: Record<string, unknown>) => Promise<ResponsesBod
 export type RunPathFn = (intent: string) => Promise<SpineView>;
 
 type Invoke = (cmd: string, args: Record<string, unknown>) => Promise<unknown>;
+export type ClerkSessionFn = () => Promise<string | undefined>;
+
+function withClerkSession(body: Record<string, unknown>, token: string | undefined): Record<string, unknown> {
+  return token ? { ...body, clerkSession: token } : body;
+}
 
 function tauriInvoke(): Invoke | null {
   const core = (globalThis as { __TAURI__?: { core?: { invoke: Invoke } } }).__TAURI__?.core;
@@ -121,10 +141,29 @@ function toolOutputText(input: unknown): string {
   return typeof row?.output === "string" ? row.output : JSON.stringify(row?.output ?? "");
 }
 
-/** Offline stand-in for a Gateway Responses turn. Maps paraphrases itself — not the local MATCH_SECRETS regex. */
-export function fixtureIntent(text: string): string {
+export function isSmallTalk(text: string): boolean {
+  return SMALL_TALK.test(text.trim());
+}
+
+export function isConversation(text: string): boolean {
   const trimmed = text.trim();
+  return SMALL_TALK.test(trimmed) || IDENTITY_TALK.test(trimmed);
+}
+
+export function secretaryReply(text: string): string {
+  return IDENTITY_TALK.test(text.trim()) ? SECRETARY_IDENTITY : SECRETARY_TEXT;
+}
+
+function secretaryLines(text: string): Line[] {
+  return [{ kind: "bubble", role: "assistant", text: secretaryReply(text) }];
+}
+
+/** Offline stand-in for a Gateway Responses turn. Maps paraphrases itself — not the local MATCH_SECRETS regex. */
+export function fixtureIntent(text: string): string | null {
+  const trimmed = text.trim();
+  if (isConversation(trimmed)) return null;
   if (/^(다음|browse|next|열어|home)$/i.test(trimmed)) return "다음";
+  if (MATCH_KB_OPEN.test(trimmed)) return trimmed;
   if (/스타비즈|마지막|last\s*4|digits|넣어둔|번호|사업자|계좌|account|kb/i.test(trimmed)) {
     return SECRETS_CATALOG_INTENT;
   }
@@ -134,16 +173,21 @@ export function fixtureIntent(text: string): string {
 export function fixtureResponses(body: Record<string, unknown>): ResponsesBody {
   if (hasToolOutput(body.input)) {
     const blob = toolOutputText(body.input);
-    const masked = blob.match(/\*{4}\d{4}/);
-    const pathId = blob.includes("path-home-next") ? "path-home-next" : "";
-    const text = masked !== null
-      ? `저장된 사업자 계좌는 \`${masked[0]}\`입니다.`
-      : pathId === "path-home-next"
-        ? "다음을 눌렀습니다."
-        : "그 일에 맞는 경로가 아직 없습니다.";
+    let text = PATH_MISS_TEXT;
+    try {
+      text = textFromSpine(JSON.parse(blob) as SpineView);
+    } catch {
+      const masked = blob.match(/\*{4}\d{4}/);
+      if (masked !== null) text = `저장된 사업자 계좌는 \`${masked[0]}\`입니다.`;
+      else if (blob.includes("path-home-next")) text = "다음을 눌렀습니다.";
+    }
     return { output: [{ type: "message", content: [{ type: "output_text", text }] }] };
   }
-  const intent = fixtureIntent(userTextFromInput(body.input));
+  const spoken = userTextFromInput(body.input);
+  const intent = fixtureIntent(spoken);
+  if (intent === null) {
+    return { output: [{ type: "message", content: [{ type: "output_text", text: secretaryReply(spoken) }] }] };
+  }
   return {
     output: [{
       type: "function_call",
@@ -178,7 +222,7 @@ export function assistantTextOf(response: ResponsesBody): string {
 
 export function toolFromModelCall(call: { name: string; intent: string }, result: SpineView): SpineTool {
   const safe = redactSpine(result);
-  const failed = safe.status !== "completed" || safe.pathId === null;
+  const failed = (safe.status !== "completed" && safe.status !== "needs_human") || safe.pathId === null;
   return {
     name: call.name,
     label: safe.pathId ?? call.name,
@@ -205,16 +249,21 @@ export function responsesRequest(text: string, extraInput: readonly Record<strin
  * the local matcher. Every failure — IPC rejected, proxy error, upstream status — throws a
  * `GatewayError` so the person sees the code instead of a disguised miss.
  */
-export async function defaultComplete(body: Record<string, unknown>): Promise<ResponsesBody | null> {
-  if (previewFixture()) return fixtureResponses(body);
+export async function defaultComplete(
+  body: Record<string, unknown>,
+  deps: { session?: ClerkSessionFn } = {},
+): Promise<ResponsesBody | null> {
+  const payload = withClerkSession(body, await (deps.session ?? (async () => undefined))());
+  if (previewFixture()) return fixtureResponses(payload);
   const invoke = tauriInvoke();
   if (invoke !== null) {
     let proxy: GatewayProxy;
     try {
-      proxy = await invoke("ai_gateway", { body }) as GatewayProxy;
+      proxy = await invoke("ai_gateway", { body: payload }) as GatewayProxy;
     } catch (error) {
       throw new GatewayError(errorCodeOf(error, "gateway_ipc_failed"), errorMessageOf(error));
     }
+    if (proxy.fixture) return proxy.response ?? fixtureResponses(payload);
     if (!proxy.configured) return null;
     if (proxy.error !== undefined || proxy.response === undefined) {
       throw new GatewayError(proxy.error ?? "model_unavailable");
@@ -224,7 +273,7 @@ export async function defaultComplete(body: Record<string, unknown>): Promise<Re
   const response = await fetch("/__ppomi/responses", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
   if (response.status === 503) return null;
   if (!response.ok) throw new GatewayError("model_unavailable", `HTTP ${response.status}`);
@@ -250,24 +299,54 @@ function gatewayFailure(error: unknown, stage: string): { code: string; text: st
   return { code, text: gatewayFailText(code) };
 }
 
+export async function probeChatMode(deps: { session?: ClerkSessionFn } = {}): Promise<ChatMode> {
+  const probe = withClerkSession({ probe: true }, await (deps.session ?? (async () => undefined))());
+  if (previewFixture()) return "fixture";
+  const invoke = tauriInvoke();
+  if (invoke !== null) {
+    try {
+      const proxy = await invoke("ai_gateway", { body: probe }) as GatewayProxy;
+      if (proxy.fixture) return "fixture";
+      if (proxy.configured) return "gateway";
+    } catch {
+      return "local";
+    }
+    return "local";
+  }
+  try {
+    const response = await fetch("/__ppomi/gateway");
+    if (!response.ok) return "local";
+    const proxy = await response.json() as GatewayProxy;
+    if (proxy.fixture) return "fixture";
+    if (proxy.configured) return "gateway";
+  } catch {
+    return "local";
+  }
+  return "local";
+}
+
 export async function sendChat(
   text: string,
   deps: { complete?: CompleteFn; runPath?: RunPathFn } = {},
 ): Promise<ChatTurn> {
   const complete = deps.complete ?? defaultComplete;
   const runPath = deps.runPath ?? invokeRunPath;
+  const chat = text.trim();
   let first: ResponsesBody | null;
   try {
-    first = await complete(responsesRequest(text));
+    first = await complete(responsesRequest(chat));
   } catch (error) {
     const failure = gatewayFailure(error, "request");
     return { mode: "gateway", lines: [{ kind: "bubble", role: "assistant", text: failure.text }] };
   }
-  if (first === null) return localTurn(await runPath(text));
+  if (first === null) {
+    if (isConversation(chat)) return { mode: "local", lines: secretaryLines(chat) };
+    return localTurn(await runPath(chat));
+  }
 
   const call = functionCallOf(first);
-  if (call === null) {
-    const spoken = redactSecrets(assistantTextOf(first) || "응답이 비어 있습니다.");
+  if (call === null || isConversation(chat)) {
+    const spoken = redactSecrets(assistantTextOf(first) || (isConversation(chat) ? secretaryReply(chat) : "응답이 비어 있습니다."));
     return { mode: "gateway", lines: [{ kind: "bubble", role: "assistant", text: spoken }] };
   }
 
@@ -276,7 +355,7 @@ export async function sendChat(
   let follow: ResponsesBody | null = null;
   let followFailure: string | null = null;
   try {
-    follow = await complete(responsesRequest(text, [
+    follow = await complete(responsesRequest(chat, [
       { type: "function_call", call_id: call.call_id, name: call.name, arguments: JSON.stringify({ intent: call.intent }) },
       { type: "function_call_output", call_id: call.call_id, output: JSON.stringify(safe) },
     ]));

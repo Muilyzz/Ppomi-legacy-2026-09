@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
-import { proxyResponses } from "./gateway.ts";
-import { parseArgs, parseBodyKind, runSpine, secretsPath } from "./host.ts";
+import { gatewayConfig, httpsGatewayBase, parseGatewayEnvFile, processGatewayKey, proxyResponses } from "./gateway.ts";
+import { verifyClerkSession } from "./clerk-session.ts";
+import { clerkTestEnv, liveClerkSession, unsignedClerkSession } from "./clerk-test-keys.ts";
+import { KB_STAR_BIZ_PATH_ID, parseArgs, parseBodyKind, runSpine, secretsPath } from "./host.ts";
 
 const hostFile = join(dirname(fileURLToPath(import.meta.url)), "host.ts");
 
@@ -75,7 +77,14 @@ function assertMaskedAccount(result: { status: string; pathId: string | null; no
 }
 
 test("Korean business-account intents choose the secrets path", async () => {
-  for (const intent of [ceoIntent, "KB 계좌번호", "사업자 계좌 알려줘", "account number", "통장번호"]) {
+  for (const intent of [
+    ceoIntent,
+    "KB스타비즈에 넣어둔 번호 마지막만 보여줘",
+    "KB 계좌번호",
+    "사업자 계좌 알려줘",
+    "account number",
+    "통장번호",
+  ]) {
     const result = await runSpine({ intent, body: "macos", live: false });
     assertMaskedAccount(result);
   }
@@ -105,6 +114,52 @@ test("bare 알아 stays path_not_found", async () => {
   assert.equal(result.status, "path_not_found");
 });
 
+test("fixture CLI proxy answers 안녕 as secretary text, not run_path", async () => {
+  const result = await proxyResponses(
+    { input: [{ role: "user", content: "안녕" }], model: "client", stream: true, store: true },
+    { env: { PPOMI_CHAT: "fixture" } },
+  );
+  assert.equal(result.configured, true);
+  assert.equal(result.fixture, true);
+  assert.equal("error" in result, false);
+  assert.ok(result.response);
+  const dumped = JSON.stringify(result);
+  assert.match(dumped, /안녕하세요\. 무엇을 도와드릴까요\?/);
+  assert.doesNotMatch(dumped, /function_call|run_path|path_not_found|그 일에 맞는 경로/);
+});
+
+test("host CLI --proxy-responses fixture 너 모델 뭐야? is secretary text", () => {
+  const result = spawnHost(
+    hostFile,
+    ["--proxy-responses"],
+    { AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "fixture" },
+    "{\"input\":[{\"role\":\"user\",\"content\":\"너 모델 뭐야?\"}]}\n",
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const dumped = result.stdout;
+  assert.match(dumped, /뽀미입니다/);
+  assert.doesNotMatch(dumped, /function_call|run_path|path_not_found|그 일에 맞는 경로/);
+});
+
+test("host CLI --proxy-responses fixture 안녕 is a secretary message", () => {
+  const result = spawnHost(
+    hostFile,
+    ["--proxy-responses"],
+    { AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "fixture" },
+    "{\"input\":[{\"role\":\"user\",\"content\":\"안녕\"}]}\n",
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const body = JSON.parse(result.stdout) as {
+    configured: boolean;
+    fixture?: boolean;
+    response?: { output?: readonly { type?: string; name?: string }[] };
+  };
+  assert.equal(body.configured, true);
+  assert.equal(body.fixture, true);
+  assert.equal(body.response?.output?.[0]?.type, "message");
+  assert.doesNotMatch(result.stdout, /function_call|run_path|path_not_found|그 일에 맞는 경로/);
+});
+
 test("gateway probe is configured only when a key or fixture is set", async () => {
   const off = await proxyResponses({ probe: true }, { env: {} });
   assert.deepEqual(off, { configured: false, fixture: false });
@@ -112,6 +167,152 @@ test("gateway probe is configured only when a key or fixture is set", async () =
   assert.deepEqual(fixture, { configured: true, fixture: true });
   const live = await proxyResponses({ probe: true }, { env: { AI_GATEWAY_API_KEY: "k" } });
   assert.equal(live.configured, true);
+  assert.equal(live.fixture, false);
+  assert.equal(processGatewayKey({ AI_GATEWAY_API_KEY: "k" }), "k");
+});
+
+function fileKeyEnv(home: string, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  return { HOME: home, ...clerkTestEnv, ...extra };
+}
+
+test("HOME/.ppomi/.env supplies the Gateway key when process env is empty", async () => {
+  const home = mkdtempSync(join(tmpdir(), "ppomi-home-"));
+  try {
+    mkdirSync(join(home, ".ppomi"), { mode: 0o700 });
+    writeFileSync(
+      join(home, ".ppomi", ".env"),
+      "VERCEL_OIDC_TOKEN=unused-oidc\nAI_GATEWAY_API_KEY=file-secret-key\n",
+      { mode: 0o600 },
+    );
+    assert.equal(parseGatewayEnvFile("VERCEL_OIDC_TOKEN=unused-oidc\n").AI_GATEWAY_API_KEY, undefined);
+    assert.equal(gatewayConfig({ HOME: home })?.key, "file-secret-key");
+    assert.equal(processGatewayKey({ HOME: home }), undefined);
+    const unsigned = await proxyResponses({ probe: true }, { env: fileKeyEnv(home) });
+    assert.deepEqual(unsigned, { configured: false, fixture: false });
+    const session = liveClerkSession();
+    assert.equal(await verifyClerkSession(session, clerkTestEnv), true);
+    const probe = await proxyResponses(
+      { probe: true, clerkSession: session },
+      { env: fileKeyEnv(home) },
+    );
+    assert.deepEqual(probe, { configured: true, fixture: false });
+    const fixtureWins = await proxyResponses({ probe: true }, {
+      env: { HOME: home, PPOMI_CHAT: "fixture" },
+    });
+    assert.deepEqual(fixtureWins, { configured: true, fixture: true });
+    assert.equal(gatewayConfig({ HOME: home, AI_GATEWAY_API_KEY: "process-key" })?.key, "process-key");
+    assert.doesNotMatch(JSON.stringify(probe), /file-secret-key|unused-oidc|clerkSession|user_2/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("PPOMI_ROOT/shell/.env is the repo fallback when HOME file has no key", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ppomi-root-"));
+  try {
+    mkdirSync(join(root, "shell"));
+    writeFileSync(join(root, "shell", ".env"), "AI_GATEWAY_API_KEY=root-secret-key\n", { mode: 0o600 });
+    assert.equal(gatewayConfig({ HOME: root, PPOMI_ROOT: root })?.key, "root-secret-key");
+    assert.equal(gatewayConfig({ HOME: root }), null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("file Gateway key is unused until a Clerk session is verified", async () => {
+  const home = mkdtempSync(join(tmpdir(), "ppomi-clerk-gate-"));
+  const calls: string[] = [];
+  try {
+    mkdirSync(join(home, ".ppomi"), { mode: 0o700 });
+    writeFileSync(join(home, ".ppomi", ".env"), "AI_GATEWAY_API_KEY=file-secret-key\n", { mode: 0o600 });
+    const blocked = await proxyResponses(
+      { input: [{ role: "user", content: "너 모델 뭐야?" }], clerkSession: unsignedClerkSession() },
+      {
+        env: fileKeyEnv(home),
+        fetch: async url => {
+          calls.push(String(url));
+          return new Response("{}", { status: 200 });
+        },
+      },
+    );
+    assert.deepEqual(blocked, { configured: false, fixture: false });
+    assert.equal(calls.length, 0);
+    const session = liveClerkSession();
+    const result = await proxyResponses(
+      { input: [{ role: "user", content: "너 모델 뭐야?" }], clerkSession: session, model: "client" },
+      {
+        env: fileKeyEnv(home),
+        fetch: async (url, init) => {
+          calls.push(String(url));
+          const sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          assert.equal("clerkSession" in sent, false);
+          assert.equal("probe" in sent, false);
+          assert.doesNotMatch(JSON.stringify(sent), /file-secret-key|user_2AbCdEfGhIjK/);
+          return new Response(JSON.stringify({ output: [] }), { status: 200, headers: { "content-type": "application/json" } });
+        },
+      },
+    );
+    assert.equal(result.configured, true);
+    assert.equal(calls.length, 1);
+    assert.doesNotMatch(JSON.stringify(result), /file-secret-key|clerkSession|user_2AbCdEfGhIjK/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("http Gateway base is refused so the key is never posted", async () => {
+  const calls: string[] = [];
+  assert.equal(httpsGatewayBase("http://attacker.example/v1"), null);
+  assert.equal(httpsGatewayBase("https://ai-gateway.vercel.sh/v1"), "https://ai-gateway.vercel.sh/v1");
+  const home = mkdtempSync(join(tmpdir(), "ppomi-http-base-"));
+  try {
+    mkdirSync(join(home, ".ppomi"), { mode: 0o700 });
+    writeFileSync(
+      join(home, ".ppomi", ".env"),
+      "AI_GATEWAY_API_KEY=file-secret-key\nAI_GATEWAY_BASE_URL=http://attacker.example/v1\n",
+      { mode: 0o600 },
+    );
+    assert.equal(gatewayConfig(fileKeyEnv(home)), null);
+    const forged = await proxyResponses(
+      { input: [{ role: "user", content: "hi" }], clerkSession: liveClerkSession() },
+      {
+        env: fileKeyEnv(home),
+        fetch: async url => {
+          calls.push(String(url));
+          return new Response("{}", { status: 200 });
+        },
+      },
+    );
+    assert.deepEqual(forged, { configured: false, fixture: false });
+    assert.equal(calls.length, 0);
+    const processHttp = await proxyResponses(
+      { input: [{ role: "user", content: "hi" }] },
+      {
+        env: { AI_GATEWAY_API_KEY: "secret-key", AI_GATEWAY_BASE_URL: "http://attacker.example/v1" },
+        fetch: async url => {
+          calls.push(String(url));
+          return new Response("{}", { status: 200 });
+        },
+      },
+    );
+    assert.deepEqual(processHttp, { configured: false, fixture: false });
+    assert.equal(calls.length, 0);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("group-readable ~/.ppomi/.env is refused", async () => {
+  const home = mkdtempSync(join(tmpdir(), "ppomi-env-mode-"));
+  try {
+    mkdirSync(join(home, ".ppomi"), { mode: 0o700 });
+    writeFileSync(join(home, ".ppomi", ".env"), "AI_GATEWAY_API_KEY=file-secret-key\n", { mode: 0o644 });
+    assert.equal(gatewayConfig({ HOME: home }), null);
+    const probe = await proxyResponses({ probe: true, clerkSession: liveClerkSession() }, { env: fileKeyEnv(home) });
+    assert.deepEqual(probe, { configured: false, fixture: false });
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test("gateway proxy posts to the AI Gateway and never echoes the key", async () => {
@@ -136,20 +337,55 @@ test("gateway proxy posts to the AI Gateway and never echoes the key", async () 
   assert.doesNotMatch(JSON.stringify(result), /secret-key/);
 });
 
+test("host CLI --proxy-responses reads ~/.ppomi/.env without echoing the key", () => {
+  const home = mkdtempSync(join(tmpdir(), "ppomi-cli-home-"));
+  try {
+    mkdirSync(join(home, ".ppomi"), { mode: 0o700 });
+    writeFileSync(join(home, ".ppomi", ".env"), "AI_GATEWAY_API_KEY=cli-file-secret\n", { mode: 0o600 });
+    const unsigned = spawnHost(
+      hostFile,
+      ["--proxy-responses"],
+      { ...clerkTestEnv, HOME: home, PPOMI_ROOT: "", AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "", CLERK_SESSION: "" },
+      "{\"probe\":true}\n",
+    );
+    assert.equal(unsigned.status, 0, unsigned.stderr);
+    assert.equal((JSON.parse(unsigned.stdout) as { configured: boolean }).configured, false);
+    writeFileSync(join(home, ".ppomi", "clerk-session"), liveClerkSession(), { mode: 0o600 });
+    const result = spawnHost(
+      hostFile,
+      ["--proxy-responses"],
+      { ...clerkTestEnv, HOME: home, PPOMI_ROOT: "", AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "", CLERK_SESSION: "" },
+      "{\"probe\":true}\n",
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const body = JSON.parse(result.stdout) as { configured: boolean; fixture?: boolean };
+    assert.equal(body.configured, true);
+    assert.equal(body.fixture, false);
+    assert.doesNotMatch(result.stdout, /cli-file-secret|user_2AbCdEfGhIjK/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test("host CLI --proxy-responses probe exits 0 without a key", () => {
-  const result = spawnSync(
-    process.execPath,
-    ["--experimental-strip-types", hostFile, "--proxy-responses"],
-    {
-      encoding: "utf8",
-      cwd: join(dirname(hostFile), ".."),
-      input: "{\"probe\":true}\n",
-      env: { ...process.env, AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "" },
-    },
-  );
-  assert.equal(result.status, 0, result.stderr);
-  const body = JSON.parse(result.stdout) as { configured: boolean };
-  assert.equal(body.configured, false);
+  const home = mkdtempSync(join(tmpdir(), "ppomi-empty-home-"));
+  try {
+    const result = spawnSync(
+      process.execPath,
+      ["--experimental-strip-types", hostFile, "--proxy-responses"],
+      {
+        encoding: "utf8",
+        cwd: join(dirname(hostFile), ".."),
+        input: "{\"probe\":true}\n",
+        env: { ...process.env, HOME: home, PPOMI_ROOT: "", AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "" },
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const body = JSON.parse(result.stdout) as { configured: boolean };
+    assert.equal(body.configured, false);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 const tauriDottedHost = join(dirname(hostFile), "..", "src-tauri", "..", "src", "host.ts");
@@ -197,6 +433,57 @@ test("host CLI --proxy-responses runs via symlink and dotted path", () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+const kbOpenIntent = "KB스타기업뱅킹 열어";
+
+function assertKbColdStart(result: {
+  status: string;
+  pathId: string | null;
+  note: string;
+  body: { steps: readonly { stepId: string; status: string; note: string }[] } | null;
+}): void {
+  assert.equal(result.status, "needs_human");
+  assert.equal(result.pathId, KB_STAR_BIZ_PATH_ID);
+  assert.equal(result.body?.steps.find(step => step.stepId === "go-home")?.status, "ok");
+  assert.equal(result.body?.steps.find(step => step.stepId === "open-kb")?.status, "ok");
+  assert.equal(result.body?.steps.find(step => step.stepId === "human-login")?.status, "needs_human");
+  const dumped = JSON.stringify(result);
+  assert.doesNotMatch(dumped, new RegExp(fixtureAccount));
+  assert.doesNotMatch(dumped, /1234567890/);
+  assert.doesNotMatch(dumped, /\d{6}-\d{2}-\d{6}|\d{12,14}/);
+}
+
+test("Korean KB open intents choose the catalog path and stop at human login", async () => {
+  for (const intent of [kbOpenIntent, "KB 사업자 홈", "path_cold_start"]) {
+    const result = await runSpine({ intent, body: "macos", live: false });
+    assertKbColdStart(result);
+  }
+});
+
+test("host CLI exits 0 for KB스타기업뱅킹 열어 and is not path_not_found", () => {
+  const result = spawnSync(
+    process.execPath,
+    ["--experimental-strip-types", hostFile, "--intent", kbOpenIntent],
+    {
+      encoding: "utf8",
+      cwd: join(dirname(hostFile), ".."),
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const body = JSON.parse(result.stdout) as {
+    status: string;
+    pathId: string | null;
+    note: string;
+    body: { steps: readonly { stepId: string; status: string; note: string }[] } | null;
+  };
+  assertKbColdStart(body);
+});
+
+test("bare 열어 still uses the home path", async () => {
+  const result = await runSpine({ intent: "열어", body: "macos", live: false });
+  assert.equal(result.status, "completed");
+  assert.equal(result.pathId, "path-home-next");
 });
 
 test("live secrets off-darwin skips instead of failing", async () => {

@@ -25,11 +25,11 @@ npm --prefix shell test
 npm --prefix shell run dev
 ```
 
-**셸 UI = agent 웹 UI를 Tauri에 올린 것.** 창은 `agent/src/ui/shell.tsx`(Storybook 「대화 셸」과 같은 뼈대)다. placeholder는 동사 힌트(`시킬 일을 적어 주세요`). 보내기는 설정된 경우 Vercel AI Gateway Responses 루프(`AI_GATEWAY_API_KEY`, 키는 웹뷰에 없음)를 타고, 모델이 `run_path` 툴을 호출하면 기존 스파인(`host.ts` → brain → body / secrets)을 재사용한다. ToolCard의 `via: "gateway"`는 **모델 function_call**이다. 키/픽스처가 없으면 예전 로컬 매처로 조용히 폴백한다.
+**셸 UI = agent 웹 UI를 Tauri에 올린 것.** 창은 `agent/src/ui/shell.tsx`(Storybook 「대화 셸」과 같은 뼈대)다. placeholder는 동사 힌트(`시킬 일을 적어 주세요`). 보내기는 설정된 경우 Vercel AI Gateway Responses 루프(키는 웹뷰에 없음)를 타고, 모델이 `run_path` 툴을 호출하면 기존 스파인(`host.ts` → brain → body / secrets / `ppomi-path` catalog)을 재사용한다. ToolCard의 `via: "gateway"`는 **모델 function_call**이다. 키/픽스처가 없으면 예전 로컬 매처로 조용히 폴백한다.
 
-입력 `다음` → 보내기. IPC `run_path`가 Node `shell/src/host.ts`를 띄우고 `ppomi-brain`이 `path-home-next`를 고른 뒤 `ppomi-body-macos` fixture가 `Next`를 클릭한다. `내 사업자 KB계좌번호 알아?`는 `path-secrets-account` → `ppomi-secrets` get(`ppomi/kb-star-biz/account`). 말풍선은 마스킹/`****last4`만 (원문 금지). 기본은 fixture. 경로 결과는 말풍선 + 도구 카드로 보이고, `path_not_found`도 JSON(종료 0)이다.
+입력 `다음` → 보내기. IPC `run_path`가 Node `shell/src/host.ts`를 띄우고 `ppomi-brain`이 `path-home-next`를 고른 뒤 `ppomi-body-macos` fixture가 `Next`를 클릭한다. `내 사업자 KB계좌번호 알아?`는 `path-secrets-account` → `ppomi-secrets` get(`ppomi/kb-star-biz/account`). `KB스타기업뱅킹 열어` / `KB 사업자 홈`은 `ppomi-path` 카탈로그의 `kb-star-biz-iphone`(Home → KB, Face ID HITL). 말풍선은 마스킹/`****last4`만 (원문 금지). 기본은 fixture. 경로 결과는 말풍선 + 도구 카드로 보이고, `path_not_found`도 JSON(종료 0)이다.
 
-**CEO: Gateway vs 로컬 매처.** `KB스타비즈에 넣어둔 번호 마지막만 보여줘` 는 로컬 regex에 안 걸린다. 키 없음 → `path_not_found`. `AI_GATEWAY_API_KEY` 또는 `PPOMI_CHAT=fixture` / `?chat=fixture` → 모델이 `run_path`(`사업자 계좌번호`)를 호출하고 ToolCard + `****7890`.
+**CEO: paraphrase → secrets.** `내 사업자 KB계좌번호 알아?` 와 `KB스타비즈에 넣어둔 번호 마지막만 보여줘` 는 같은 `path-secrets-account` (`****7890`). Gateway/fixture는 `run_path(사업자 계좌번호)` 로 정규화하고, 로컬 매처·카탈로그 alias(`스타비즈` / `넣어둔 번호` / `마지막만`)도 같은 path. `KB스타기업뱅킹 열어` 는 `kb-star-biz-iphone` (MZZ-69/#93). Gateway/`complete()` 실패는 코드가 보이는 `모델 연결에 실패했습니다. 게이트웨이 오류: <code>` 이며 로컬 `run_path`로 숨기지 않는다. `run_path` IPC 실패는 `실행에 실패했습니다.` — `path_not_found` 말풍선으로 숨기지 않는다. `안녕` / `뭐해` / `thanks` / `너 모델 뭐야?` 는 fixture·로컬에서 비서 답(강아지 마스코트는 시각만). 라이브 Gateway는 같은 말을 툴 없이 텍스트로 답해도 된다. `지금 데이터 뭐 있어?` 는 Gateway가 꺼져 있을 때만 진짜 `path_not_found`. **MZZ-80:** Clerk = who (`web/` `/account` Google). Gateway 키는 호스트 `~/.ppomi/.env`(없으면 `$PPOMI_ROOT/shell/.env`)에만 둔다. 파일 키로 Gateway POST 하려면 Clerk 세션 JWT를 JWKS로 검증한다. 이건 인증 게이트가 아니다 — 같은 OS 사용자는 파일을 읽을 수 있고 `open --env AI_GATEWAY_API_KEY` HITL은 그대로다. Tauri에 Clerk UI/딥링크를 넣지 않는다. `PPOMI_CHAT=fixture` 일 때만 픽스처. 키는 출력하지 않는다. 입력창 아래 라이브면 `Gateway`, 픽스처면 `fixture`.
 
 **Chat UX lock (CEO + 리서처).** 입력창 위에 IA 머리글(절차 · 기억 · 할 일)과 빈 화면 제안 칩(플레이북 찾기 등)을 두지 않는다. 인사 말풍선도 없다. 빈 화면은 진짜 셸 크롬 안의 입력창만. HITL/진행 중일 때만 입력창 안·바로 아래 칩 하나 — 지금은 만들지 않는다.
 
@@ -67,6 +67,14 @@ Safari(또는 `PPOMI_MAC_BROWSER=chrome`)로 example.com을 열고 "More informa
 PPOMI_SECRETS_LIVE=1 npm --prefix shell run host -- --intent '내 사업자 KB계좌번호 알아?' --live
 PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent '내 사업자 KB계좌번호 알아?' --live
 PPOMI_SECRETS_LIVE=1 node --experimental-strip-types packages/ppomi-secrets/example/src/main.ts
+```
+
+KB스타기업뱅킹 UI path(카탈로그 SSOT). 기본은 fixture, live는 `PPOMI_BODY_LIVE` + iPhone Mirroring body 훅. Face ID/로그인은 당사자. 계좌 원문은 말풍선/StepResult에 없음.
+
+```sh
+npm --prefix shell run host -- --intent 'KB스타기업뱅킹 열어'
+PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 'KB스타기업뱅킹 열어' --live
+PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-iphone-mirroring/example/src/main.ts
 ```
 
 Mac 창 재설치는 계속 같은 서명:
