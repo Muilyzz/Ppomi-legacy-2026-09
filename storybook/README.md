@@ -1,6 +1,14 @@
 # storybook
 
-`npm run storybook` — 작업대·분개·증거·절차·시크릿 트리.
+`npm run storybook` — 작업대·분개·증거·절차·시크릿 트리·상태.
+
+상태 큰 면(유휴 / 시크릿 잠김 / 시크릿 열림): http://localhost:6006 → 사이드바 **상태**. 툴바 **스타일 = 뽀미 테마**.
+
+- http://localhost:6006/?path=/story/상태--idle — 기기·연결 요약 + 시크릿 자리
+- http://localhost:6006/?path=/story/상태--locked — 같은 면, 트리 마스킹·접힘
+- http://localhost:6006/?path=/story/상태--unlocked — 같은 면, 원문 트리
+
+앱 「상태·비밀」 wire는 [MZZ-54](https://linear.app/muilyzz/issue/MZZ-54). 이 모듈은 Storybook만.
 
 시크릿 트리(잠김 마스킹 / 열림 원문)는 UI만. Ppomi.app wire는 [MZZ-44](https://linear.app/muilyzz/issue/MZZ-44) 앱 셸 이후.
 

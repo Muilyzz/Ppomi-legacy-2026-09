@@ -38,6 +38,9 @@ td.n,th.n{text-align:right}
 tr[data-event],tr[data-record]{cursor:pointer}
 tr[data-event]:hover td,tr[data-record]:hover td,tr[aria-selected="true"] td{background:#f4f4f4}
 
+/* ---- 상태(status.js) */
+.status{min-height:100dvh}
+
 /* ---- 시크릿(secrets.js) */
 .secrets>.nav{margin:8px 0 16px}
 .secrets ul{list-style:none;margin:0;padding:2px 0 0 14px}
