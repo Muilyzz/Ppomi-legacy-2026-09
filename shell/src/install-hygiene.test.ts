@@ -54,6 +54,46 @@ test("hygiene refuses *-prev.app siblings", () => {
   }
 });
 
+test("hygiene refuses any *-prev.app or 뽀미*.app sibling by glob, not only the two literal names", () => {
+  for (const sibling of ["뽀미 2.app", "뽀미-old.app", "Ppomi copy-prev.app"]) {
+    const dir = scratch();
+    try {
+      mkdirSync(join(dir.root, "Applications", sibling));
+      const result = run(["--hygiene"], { PPOMI_ROOT: dir.root, PPOMI_APP: dir.app });
+      assert.notEqual(result.status, 0, sibling);
+      assert.match(result.stderr, /previous/);
+      assert.ok(result.stderr.includes(sibling), result.stderr);
+    } finally {
+      dir.dispose();
+    }
+  }
+});
+
+test("hygiene accepts the install path itself as the only 뽀미*.app", () => {
+  const dir = scratch();
+  try {
+    mkdirSync(dir.app);
+    const result = run(["--hygiene"], { PPOMI_ROOT: dir.root, PPOMI_APP: dir.app });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /hygiene ok/);
+  } finally {
+    dir.dispose();
+  }
+});
+
+test("--check rejects a PPOMI_APP that is not an absolute *.app path inside a directory", () => {
+  const dir = scratch();
+  try {
+    for (const bad of [join(dir.root, "Applications"), "/.app", "Applications/뽀미.app", `${dir.root}/Applications/../뽀미.app`]) {
+      const result = run(["--check"], { PPOMI_ROOT: dir.root, PPOMI_APP: bad, LOCAL_SIGN_ID: "Apple Development: Test" });
+      assert.notEqual(result.status, 0, bad);
+      assert.match(result.stderr, /PPOMI_APP must/);
+    }
+  } finally {
+    dir.dispose();
+  }
+});
+
 test("hygiene refuses dist/backup copies", () => {
   const dir = scratch();
   try {

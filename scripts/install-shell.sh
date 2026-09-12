@@ -2,12 +2,22 @@
 # Install the Tauri consumer app to ONE path: /Applications/뽀미.app
 # Same LOCAL_SIGN_ID idea as scripts/make-app.sh. Ad-hoc is not for permission smoke.
 # Never writes *-prev.app or dist/backup — those are what Launch Services/TCC labeled 「previous」.
+# PPOMI_ROOT / PPOMI_APP redirect only the read-only --hygiene / --check modes (tests); install always uses the real paths.
 set -eu
 
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
-ROOT=${PPOMI_ROOT:-$ROOT}
-APP=${PPOMI_APP:-/Applications/뽀미.app}
+DEFAULT_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+DEFAULT_APP=/Applications/뽀미.app
 BUNDLE_ID=com.muilyzz.ppomi
+MODE=${1:-}
+
+case "$MODE" in
+    --hygiene|--check)
+        ROOT=${PPOMI_ROOT:-$DEFAULT_ROOT}
+        APP=${PPOMI_APP:-$DEFAULT_APP} ;;
+    *)
+        ROOT=$DEFAULT_ROOT
+        APP=$DEFAULT_APP ;;
+esac
 APPS_DIR=$(dirname "$APP")
 
 usage() {
@@ -22,15 +32,34 @@ refuse() {
     exit 1
 }
 
+# The only path this script may remove or overwrite: absolute, a *.app bundle, inside a directory.
+validate_app() {
+    case "$APP" in
+        /*.app) ;;
+        *) refuse "PPOMI_APP must be an absolute *.app path, got '$APP'." ;;
+    esac
+    case "$APP" in
+        *..*) refuse "PPOMI_APP must not contain '..', got '$APP'." ;;
+    esac
+    [ "$APPS_DIR" != "/" ] || refuse "PPOMI_APP must sit inside a directory, not at the filesystem root, got '$APP'."
+}
+
 # 「previous」 = leftover backup path/name + mixed binaries. Do not keep them runnable.
 hygiene() {
-    [ -e "$APPS_DIR/뽀미-prev.app" ] && refuse "Remove $APPS_DIR/뽀미-prev.app — LS/TCC treats *-prev.app as 「previous」."
-    [ -e "$APPS_DIR/Ppomi-prev.app" ] && refuse "Remove $APPS_DIR/Ppomi-prev.app — LS/TCC treats *-prev.app as 「previous」."
+    validate_app
+    for sibling in "$APPS_DIR"/*-prev.app "$APPS_DIR"/뽀미*.app; do
+        [ -e "$sibling" ] || continue
+        [ "$sibling" = "$APP" ] && continue
+        refuse "Remove $sibling — LS/TCC treats a sibling copy as 「previous」; one consumer path only ($APP)."
+    done
     if [ -d "$ROOT/dist/backup" ]; then
         refuse "Remove $ROOT/dist/backup — runnable copies there show up as 「previous」 in TCC."
     fi
-    if [ "$APP" = "/Applications/뽀미.app" ] && [ -e "/Applications/Ppomi.app" ]; then
-        refuse "Remove /Applications/Ppomi.app — one consumer path only (/Applications/뽀미.app)."
+    if [ "$APP" = "$DEFAULT_APP" ] && [ -e "/Applications/Ppomi.app" ]; then
+        refuse "Remove /Applications/Ppomi.app — one consumer path only ($DEFAULT_APP)."
+    fi
+    if [ -e "$ROOT/dist/Ppomi.app" ]; then
+        echo "warning: $ROOT/dist/Ppomi.app (Swift make-app.sh output) is also $BUNDLE_ID; never launch it as a sibling of $APP." >&2
     fi
 }
 
@@ -73,12 +102,14 @@ install() {
     rm -rf "$APP"
     mkdir -p "$APPS_DIR"
     ditto "$SRC" "$APP"
+    # The build copy is another runnable com.muilyzz.ppomi; left in target/ it becomes the next 「previous」.
+    rm -rf "$SRC"
     codesign --force --deep --sign "$LOCAL_SIGN_ID" --timestamp=none --identifier "$BUNDLE_ID" "$APP"
     codesign --verify --deep --strict "$APP"
     echo "$APP ($BUNDLE_ID, local development signature; not notarized)"
 }
 
-case "${1:-}" in
+case "$MODE" in
     -h|--help) usage ;;
     --hygiene) hygiene; echo "hygiene ok" ;;
     --check) hygiene; require_sign_id; echo "check ok" ;;
