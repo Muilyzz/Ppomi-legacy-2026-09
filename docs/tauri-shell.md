@@ -29,7 +29,7 @@ npm --prefix shell run dev
 
 입력 `다음` → 보내기. IPC `run_path`가 Node `shell/src/host.ts`를 띄우고 `ppomi-brain`이 `path-home-next`를 고른 뒤 `ppomi-body-macos` fixture가 `Next`를 클릭한다. `내 사업자 KB계좌번호 알아?`는 `path-secrets-account` → `ppomi-secrets` get(`ppomi/kb-star-biz/account`). `KB스타기업뱅킹 열어` / `KB 사업자 홈`은 `ppomi-path` 카탈로그의 `kb-star-biz-iphone`(Home → KB, Face ID HITL). 말풍선은 마스킹/`****last4`만 (원문 금지). 기본은 fixture. 경로 결과는 말풍선 + 도구 카드로 보이고, `path_not_found`도 JSON(종료 0)이다.
 
-**CEO: paraphrase → secrets.** `내 사업자 KB계좌번호 알아?` 와 `KB스타비즈에 넣어둔 번호 마지막만 보여줘` 는 같은 `path-secrets-account` (`****7890`). Gateway/fixture는 `run_path(사업자 계좌번호)` 로 정규화하고, 로컬 매처·카탈로그 alias(`스타비즈` / `넣어둔 번호` / `마지막만`)도 같은 path. `KB스타기업뱅킹 열어` 는 `kb-star-biz-iphone` (MZZ-69/#93). Gateway/IPC 실패는 `모델 연결에 실패했습니다.` / `실행에 실패했습니다.` — `path_not_found` 말풍선으로 숨기지 않는다. `지금 데이터 뭐 있어?` 는 목록 path가 없어 진짜 `path_not_found`. 설치는 `open --env PPOMI_CHAT=fixture '/Applications/뽀미.app'`.
+**CEO: paraphrase → secrets.** `내 사업자 KB계좌번호 알아?` 와 `KB스타비즈에 넣어둔 번호 마지막만 보여줘` 는 같은 `path-secrets-account` (`****7890`). Gateway/fixture는 `run_path(사업자 계좌번호)` 로 정규화하고, 로컬 매처·카탈로그 alias(`스타비즈` / `넣어둔 번호` / `마지막만`)도 같은 path. `KB스타기업뱅킹 열어` 는 `kb-star-biz-iphone` (MZZ-69/#93). Gateway/`complete()` 실패는 로컬 `run_path`로 폴백한다. 로컬도 없으면 `모델 연결에 실패했습니다.` (`안녕` 등). `run_path` IPC 실패는 `실행에 실패했습니다.` — `path_not_found` 말풍선으로 숨기지 않는다. `지금 데이터 뭐 있어?` 는 Gateway가 꺼져 있을 때만 진짜 `path_not_found`. 설치는 `open --env PPOMI_CHAT=fixture '/Applications/뽀미.app'`. 종료 후 Dock/Finder 재실행은 그 env를 버린다.
 
 **Chat UX lock (CEO + 리서처).** 입력창 위에 IA 머리글(절차 · 기억 · 할 일)과 빈 화면 제안 칩(플레이북 찾기 등)을 두지 않는다. 인사 말풍선도 없다. 빈 화면은 진짜 셸 크롬 안의 입력창만. HITL/진행 중일 때만 입력창 안·바로 아래 칩 하나 — 지금은 만들지 않는다.
 

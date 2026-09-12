@@ -97,9 +97,7 @@ test("gateway proxy IPC failure is a distinct error, not path_not_found", async 
     complete: async () => {
       throw new Error("node host returned invalid JSON");
     },
-    runPath: async () => {
-      throw new Error("run_path should not run after gateway ipc fail");
-    },
+    runPath: async intent => previewSpine(intent),
   });
   assert.equal(turn.mode, "gateway");
   assert.deepEqual(turn.lines, [{
@@ -107,7 +105,72 @@ test("gateway proxy IPC failure is a distinct error, not path_not_found", async 
     role: "assistant",
     text: GATEWAY_FAIL_TEXT,
   }]);
-  assert.doesNotMatch(JSON.stringify(turn), /invalid JSON|node host|그 일에 맞는 경로/i);
+  assert.doesNotMatch(JSON.stringify(turn), /invalid JSON|node host|그 일에 맞는 경로|path_not_found/i);
+});
+
+test("gateway throw still runs the local KB path", async () => {
+  const kbOpen = "KB스타기업뱅킹 열어";
+  const turn = await sendChat(kbOpen, {
+    complete: async () => {
+      throw new Error("gateway_ipc_failed");
+    },
+    runPath: async intent => previewSpine(intent),
+  });
+  assert.equal(turn.mode, "local");
+  assert.equal(turn.lines[0]?.kind, "tool");
+  assert.equal(turn.lines[1]?.kind, "bubble");
+  if (turn.lines[0]?.kind !== "tool" || turn.lines[1]?.kind !== "bubble") return;
+  assert.equal(turn.lines[0].tool.label, "kb-star-biz-iphone");
+  assert.equal(turn.lines[1].text, "KB스타기업뱅킹을 열었습니다. Face ID로 로그인하면 이어서 볼게요.");
+  assert.doesNotMatch(JSON.stringify(turn), /path_not_found|모델 연결|1234567890/);
+});
+
+test("gateway throw still runs the local secrets path", async () => {
+  const turn = await sendChat("내 사업자 KB계좌번호 알아?", {
+    complete: async () => {
+      throw new Error("model_unavailable");
+    },
+    runPath: async intent => previewSpine(intent),
+  });
+  assert.equal(turn.mode, "local");
+  assert.equal(turn.lines[0]?.kind, "tool");
+  if (turn.lines[0]?.kind !== "tool") return;
+  assert.equal(turn.lines[0].tool.label, "path-secrets-account");
+  assert.doesNotMatch(JSON.stringify(turn), /path_not_found|모델 연결|1234567890/);
+});
+
+test("gateway throw on 안녕 is a model error, not path_not_found", async () => {
+  const turn = await sendChat("안녕", {
+    complete: async () => {
+      throw new Error("model_unavailable");
+    },
+    runPath: async intent => previewSpine(intent),
+  });
+  assert.equal(turn.mode, "gateway");
+  assert.deepEqual(turn.lines, [{
+    kind: "bubble",
+    role: "assistant",
+    text: GATEWAY_FAIL_TEXT,
+  }]);
+  assert.doesNotMatch(JSON.stringify(turn), /path_not_found|그 일에 맞는 경로/i);
+});
+
+test("fixture proxy ack without response still completes", async () => {
+  const bag = globalThis as { __TAURI__?: { core?: { invoke: (cmd: string, args: Record<string, unknown>) => Promise<unknown> } } };
+  const previous = bag.__TAURI__;
+  bag.__TAURI__ = {
+    core: {
+      invoke: async () => ({ configured: true, fixture: true }),
+    },
+  };
+  try {
+    const body = await defaultComplete({ input: "KB스타기업뱅킹 열어" });
+    const call = functionCallOf(body ?? {});
+    assert.equal(call?.intent, "KB스타기업뱅킹 열어");
+  } finally {
+    if (previous === undefined) delete bag.__TAURI__;
+    else bag.__TAURI__ = previous;
+  }
 });
 
 test("local fallback still paints the CEO regex intent as a secrets card", async () => {

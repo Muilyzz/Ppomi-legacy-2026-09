@@ -191,6 +191,7 @@ export async function defaultComplete(body: Record<string, unknown>): Promise<Re
     } catch {
       throw new Error("gateway_ipc_failed");
     }
+    if (proxy.fixture) return proxy.response ?? fixtureResponses(body);
     if (!proxy.configured) return null;
     if (proxy.error !== undefined || proxy.response === undefined) {
       throw new Error(proxy.error ?? "model_unavailable");
@@ -217,7 +218,11 @@ export async function sendChat(
   try {
     first = await complete(responsesRequest(text));
   } catch {
-    return { mode: "gateway", lines: [{ kind: "bubble", role: "assistant", text: GATEWAY_FAIL_TEXT }] };
+    const spine = await runPath(text);
+    if (spine.status === "path_not_found") {
+      return { mode: "gateway", lines: [{ kind: "bubble", role: "assistant", text: GATEWAY_FAIL_TEXT }] };
+    }
+    return { mode: "local", lines: linesFromSpine(spine) };
   }
   if (first === null) return { mode: "local", lines: linesFromSpine(await runPath(text)) };
 
