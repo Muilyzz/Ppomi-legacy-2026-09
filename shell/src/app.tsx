@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Bubble, Composer, ErrorBanner, Log, Pane, Shell, ToolCard } from "../../agent/src/ui/shell";
-import { invokeRunPath, linesFromSpine, type Line } from "./spine";
+import { sendChat } from "./chat";
+import type { Line } from "./spine";
 import "../../agent/src/index.css";
 import "../../agent/src/tokens.css";
 import "../../agent/src/style.css";
@@ -16,8 +17,8 @@ function App() {
     setError("");
     setLines(old => [...old, { kind: "bubble", role: "user", text }]);
     try {
-      const reply = linesFromSpine(await invokeRunPath(text));
-      setLines(old => [...old, ...reply]);
+      const reply = await sendChat(text);
+      setLines(old => [...old, ...reply.lines]);
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : String(caught);
       setError(message);
