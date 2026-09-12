@@ -1,4 +1,5 @@
-// 증빙 잠금 큰 면. OCR 스티치(증거)는 그대로 두고, 여기만 presence·링크·적격/보조. 앱 wire 없음. https://linear.app/muilyzz/issue/MZZ-60
+// 증빙 잠금 큰 면. OCR 스티치(증거)는 그대로 두고, 여기만 presence·링크·적격/보조·미리보기. 앱 wire 없음.
+// https://linear.app/muilyzz/issue/MZZ-67
 import {fn} from 'storybook/test';
 import './evidence-fleet.js';
 import {title, here, fleet, server, items, layers, pick} from './evidence-fleet-fixture.js';
@@ -11,10 +12,11 @@ export default {
   argTypes: {
     here: {control: 'select', options: ['mac', 'win', 'phone'], description: '이 기기'},
     title: {control: 'text'},
+    debug: {control: 'boolean', description: '내부 id'},
     fleet: {table: {disable: true}}, items: {table: {disable: true}},
-    server: {table: {disable: true}}, layers: {table: {disable: true}},
+    server: {table: {disable: true}}, layers: {table: {disable: true}}, open: {table: {disable: true}},
   },
-  args: {title, here, fleet, server, items, layers, onOpen: fn()},
+  args: {title, here, fleet, server, items, layers, debug: false, onOpen: fn()},
 };
 
 export const Panel = {name: '큰 면 · 잠금'};
@@ -24,3 +26,4 @@ export const PeerOffline = {name: '피어 오프라인 · 비활성', args: {ite
 export const Eligible = {name: '적격 · 연결/미연결', args: {items: pick(['ev_tax_001', 'ev_card_002', 'ev_cash_003', 'ev_bill_004']), layers: []}};
 export const Auxiliary = {name: '보조만 · 스냅샷·StepResult', args: {items: pick(['ev_snap_1', 'ev_step_1']), layers: []}};
 export const Presence = {name: '기기 presence · Mac/Win/Phone', args: {items: [], layers: [], server: {memo: '서버 메타만', evidence_ids: []}}};
+export const Preview = {name: '클릭 · 미리보기', args: {open: 'ev_tax_001', items: pick(['ev_tax_001']), layers: []}};

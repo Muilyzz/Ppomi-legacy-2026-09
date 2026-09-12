@@ -88,6 +88,8 @@ tr[data-event]{cursor:pointer} tr[data-event]:hover td{background:var(--surface-
 .ev-fleet .entry{text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:3px}
 .ev-fleet button[disabled]{opacity:.45;cursor:not-allowed;text-decoration:none}
 .ev-fleet ol{margin:.25rem 0 0;padding-left:1.25rem}
+.ev-pop{min-width:16rem;max-width:22rem}
+.ev-pop-preview{min-height:6rem;margin:.75rem 0 .5rem;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border:1px dashed var(--line);border-radius:var(--r)}
 
 /* ---- 값 종류 뷰(facts.js): SVG 기하는 자료(inline), 여기는 꾸밈. 출처 등급은 선 무늬로 겹친다 — 추정은 긴 점선, 개략·AI 추정은 짧은 점선 */
 .fx svg{display:block;width:100%;height:auto;margin:4px 0} .fx svg text{fill:currentColor}
