@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   CEO_GATEWAY_PROMPT,
+  GATEWAY_FAIL_TEXT,
+  GatewayError,
   SECRETS_CATALOG_INTENT,
+  defaultComplete,
   fixtureIntent,
   fixtureResponses,
   functionCallOf,
+  gatewayFailText,
   redactSecrets,
   sendChat,
   toolFromModelCall,
@@ -13,6 +17,28 @@ import {
 import { previewSpine, type SpineView } from "./spine.ts";
 
 const fixtureAccount = "001234567890";
+
+type Invoke = (cmd: string, args: Record<string, unknown>) => Promise<unknown>;
+const bag = globalThis as { __TAURI__?: { core?: { invoke: Invoke } } };
+
+async function withTauri<T>(invoke: Invoke, run: () => Promise<T>): Promise<T> {
+  const previous = bag.__TAURI__;
+  bag.__TAURI__ = { core: { invoke } };
+  try {
+    return await run();
+  } finally {
+    if (previous === undefined) delete bag.__TAURI__;
+    else bag.__TAURI__ = previous;
+  }
+}
+
+const quietConsole = (): (() => void) => {
+  const original = console.error;
+  console.error = () => {};
+  return () => {
+    console.error = original;
+  };
+};
 
 const secretsView: SpineView = {
   status: "completed",
@@ -66,23 +92,105 @@ test("unset Gateway falls back to the local matcher without crashing", async () 
   }]);
 });
 
-test("gateway proxy IPC failure is Korean path_not_found, not Rust invalid JSON", async () => {
-  const turn = await sendChat("지금 데이터 뭐 있어?", {
-    complete: async () => {
-      throw new Error("node host returned invalid JSON");
-    },
-    runPath: async intent => previewSpine(intent),
-  });
-  assert.equal(turn.mode, "local");
-  assert.deepEqual(turn.lines, [{
-    kind: "bubble",
-    role: "assistant",
-    text: "그 일에 맞는 경로가 아직 없습니다.",
-  }]);
-  assert.doesNotMatch(JSON.stringify(turn), /invalid JSON|node host/i);
+test("gateway IPC failure is a visible gateway error with its code — no regex fallback, no run_path", async () => {
+  const restore = quietConsole();
+  try {
+    for (const text of ["다음", "내 사업자 KB계좌번호 알아?", "지금 데이터 뭐 있어?"]) {
+      const turn = await sendChat(text, {
+        complete: async () => {
+          throw new GatewayError("gateway_host_failed", "node host returned invalid JSON; stderr=boom");
+        },
+        runPath: async () => {
+          throw new Error("run_path must not run after a gateway failure");
+        },
+      });
+      assert.equal(turn.mode, "gateway", text);
+      assert.deepEqual(turn.lines, [{
+        kind: "bubble",
+        role: "assistant",
+        text: gatewayFailText("gateway_host_failed"),
+      }]);
+      assert.match(turn.lines[0]?.kind === "bubble" ? turn.lines[0].text : "", /게이트웨이 오류: gateway_host_failed/);
+      assert.match(turn.lines[0]?.kind === "bubble" ? turn.lines[0].text : "", new RegExp(GATEWAY_FAIL_TEXT));
+      assert.doesNotMatch(JSON.stringify(turn), /invalid JSON|node host|boom|그 일에 맞는 경로|다음을 눌렀습니다|\*{4}7890|completed/i);
+    }
+  } finally {
+    restore();
+  }
 });
 
-test("local fallback still paints the CEO regex intent as a secrets card", async () => {
+test("a plain thrown Error from complete() still surfaces as a coded gateway failure", async () => {
+  const restore = quietConsole();
+  try {
+    const turn = await sendChat("다음", {
+      complete: async () => {
+        throw new Error("node host returned invalid JSON");
+      },
+      runPath: async () => {
+        throw new Error("run_path must not run after a gateway failure");
+      },
+    });
+    assert.equal(turn.mode, "gateway");
+    assert.deepEqual(turn.lines, [{ kind: "bubble", role: "assistant", text: gatewayFailText("gateway_failed") }]);
+  } finally {
+    restore();
+  }
+});
+
+test("defaultComplete: IPC rejection and configured proxy errors throw GatewayError; unset gateway is null", async () => {
+  await withTauri(
+    async () => {
+      throw { code: "gateway_host_failed", message: "node host failed to start (/opt/homebrew/bin/node): ENOENT" };
+    },
+    async () => {
+      await assert.rejects(defaultComplete({ input: "x" }), (error: unknown) =>
+        error instanceof GatewayError && error.code === "gateway_host_failed");
+    },
+  );
+  await withTauri(
+    async () => ({ configured: true, error: "model_unavailable" }),
+    async () => {
+      await assert.rejects(defaultComplete({ input: "x" }), (error: unknown) =>
+        error instanceof GatewayError && error.code === "model_unavailable");
+    },
+  );
+  await withTauri(
+    async () => ({ configured: true }),
+    async () => {
+      await assert.rejects(defaultComplete({ input: "x" }), /model_unavailable/);
+    },
+  );
+  await withTauri(
+    async () => ({ configured: false }),
+    async () => {
+      assert.equal(await defaultComplete({ input: "x" }), null);
+    },
+  );
+});
+
+test("a failed follow-up narration keeps the tool card and names the gateway error", async () => {
+  const restore = quietConsole();
+  try {
+    let calls = 0;
+    const turn = await sendChat(CEO_GATEWAY_PROMPT, {
+      complete: async body => {
+        calls += 1;
+        if (calls === 1) return fixtureResponses(body);
+        throw new GatewayError("model_unavailable");
+      },
+      runPath: async () => secretsView,
+    });
+    assert.equal(turn.mode, "gateway");
+    assert.equal(turn.lines[0]?.kind, "tool");
+    assert.equal(turn.lines[1]?.kind, "bubble");
+    if (turn.lines[1]?.kind !== "bubble") return;
+    assert.equal(turn.lines[1].text, "저장된 사업자 계좌는 `****7890`입니다. (게이트웨이 오류: model_unavailable)");
+  } finally {
+    restore();
+  }
+});
+
+test("local fallback (no gateway configured) labels its card via local, never via gateway", async () => {
   const turn = await sendChat("내 사업자 KB계좌번호 알아?", {
     complete: async () => null,
     runPath: async intent => previewSpine(intent),
@@ -90,7 +198,8 @@ test("local fallback still paints the CEO regex intent as a secrets card", async
   assert.equal(turn.mode, "local");
   assert.equal(turn.lines[0]?.kind, "tool");
   if (turn.lines[0]?.kind !== "tool") return;
-  assert.equal(turn.lines[0].tool.input && typeof turn.lines[0].tool.input === "object" && "via" in turn.lines[0].tool.input, false);
+  assert.deepEqual(turn.lines[0].tool.input, { body: "macos", live: false, via: "local" });
+  assert.doesNotMatch(JSON.stringify(turn), /"via":"gateway"/);
 });
 
 test("toolFromModelCall marks via gateway and redacts long digits", () => {

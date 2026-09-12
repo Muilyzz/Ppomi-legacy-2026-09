@@ -1,7 +1,32 @@
-import { invokeRunPath, linesFromSpine, textFromSpine, type Line, type SpineTool, type SpineView } from "./spine.ts";
+import {
+  errorCodeOf,
+  errorMessageOf,
+  invokeRunPath,
+  linesFromSpine,
+  textFromSpine,
+  type Line,
+  type SpineTool,
+  type SpineView,
+} from "./spine.ts";
 
 export const CEO_GATEWAY_PROMPT = "KB스타비즈에 넣어둔 번호 마지막만 보여줘";
 export const SECRETS_CATALOG_INTENT = "사업자 계좌번호";
+export const GATEWAY_FAIL_TEXT = "모델 연결에 실패했습니다.";
+
+/** A Gateway turn that did not produce a Responses body. `code` is what the bubble shows. */
+export class GatewayError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message?: string) {
+    super(message ?? code);
+    this.name = "GatewayError";
+    this.code = code;
+  }
+}
+
+export function gatewayFailText(code: string): string {
+  return `${GATEWAY_FAIL_TEXT} 게이트웨이 오류: ${code}`;
+}
 
 const TEXT_MODEL = "openai/gpt-6-astra";
 const INSTRUCTIONS = [
@@ -175,17 +200,26 @@ export function responsesRequest(text: string, extraInput: readonly Record<strin
   };
 }
 
+/**
+ * `null` means "no Gateway here" (no key, no fixture) and is the only case that may fall back to
+ * the local matcher. Every failure — IPC rejected, proxy error, upstream status — throws a
+ * `GatewayError` so the person sees the code instead of a disguised miss.
+ */
 export async function defaultComplete(body: Record<string, unknown>): Promise<ResponsesBody | null> {
   if (previewFixture()) return fixtureResponses(body);
   const invoke = tauriInvoke();
   if (invoke !== null) {
+    let proxy: GatewayProxy;
     try {
-      const proxy = await invoke("ai_gateway", { body }) as GatewayProxy;
-      if (!proxy.configured || proxy.error !== undefined || proxy.response === undefined) return null;
-      return proxy.response;
-    } catch {
-      return null;
+      proxy = await invoke("ai_gateway", { body }) as GatewayProxy;
+    } catch (error) {
+      throw new GatewayError(errorCodeOf(error, "gateway_ipc_failed"), errorMessageOf(error));
     }
+    if (!proxy.configured) return null;
+    if (proxy.error !== undefined || proxy.response === undefined) {
+      throw new GatewayError(proxy.error ?? "model_unavailable");
+    }
+    return proxy.response;
   }
   const response = await fetch("/__ppomi/responses", {
     method: "POST",
@@ -193,8 +227,27 @@ export async function defaultComplete(body: Record<string, unknown>): Promise<Re
     body: JSON.stringify(body),
   });
   if (response.status === 503) return null;
-  if (!response.ok) throw new Error("모델 응답을 받지 못했습니다.");
+  if (!response.ok) throw new GatewayError("model_unavailable", `HTTP ${response.status}`);
   return await response.json() as ResponsesBody;
+}
+
+/** The regex matcher answered because no Gateway is configured: every card says so. */
+function localTurn(spine: SpineView): ChatTurn {
+  const lines = linesFromSpine(spine).map(line =>
+    line.kind === "tool"
+      ? { ...line, tool: { ...line.tool, input: { ...asRecord(line.tool.input), via: "local" } } }
+      : line);
+  return { mode: "local", lines };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function gatewayFailure(error: unknown, stage: string): { code: string; text: string } {
+  const code = errorCodeOf(error, "gateway_failed");
+  console.error(`Gateway ${stage} failed (${code}): ${errorMessageOf(error)}`);
+  return { code, text: gatewayFailText(code) };
 }
 
 export async function sendChat(
@@ -206,10 +259,11 @@ export async function sendChat(
   let first: ResponsesBody | null;
   try {
     first = await complete(responsesRequest(text));
-  } catch {
-    first = null;
+  } catch (error) {
+    const failure = gatewayFailure(error, "request");
+    return { mode: "gateway", lines: [{ kind: "bubble", role: "assistant", text: failure.text }] };
   }
-  if (first === null) return { mode: "local", lines: linesFromSpine(await runPath(text)) };
+  if (first === null) return localTurn(await runPath(text));
 
   const call = functionCallOf(first);
   if (call === null) {
@@ -220,15 +274,17 @@ export async function sendChat(
   const spine = await runPath(call.intent);
   const safe = redactSpine(spine);
   let follow: ResponsesBody | null = null;
+  let followFailure: string | null = null;
   try {
     follow = await complete(responsesRequest(text, [
       { type: "function_call", call_id: call.call_id, name: call.name, arguments: JSON.stringify({ intent: call.intent }) },
       { type: "function_call_output", call_id: call.call_id, output: JSON.stringify(safe) },
     ]));
-  } catch {
-    follow = null;
+  } catch (error) {
+    followFailure = gatewayFailure(error, "follow-up").code;
   }
-  const spoken = redactSecrets(assistantTextOf(follow ?? {}) || textFromSpine(safe));
+  const narrated = redactSecrets(assistantTextOf(follow ?? {}) || textFromSpine(safe));
+  const spoken = followFailure === null ? narrated : `${narrated} (게이트웨이 오류: ${followFailure})`;
   return {
     mode: "gateway",
     lines: [
