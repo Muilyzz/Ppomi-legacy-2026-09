@@ -332,9 +332,6 @@ function isMain(): boolean {
 async function main(): Promise<void> {
   const result = await runSpine(parseArgs(process.argv.slice(2)));
   process.stdout.write(`${JSON.stringify(result)}\n`);
-  if (result.status === "path_not_found" || result.status === "grant_denied" || result.status === "failed") {
-    process.exitCode = 1;
-  }
 }
 
 if (isMain()) {

@@ -4,7 +4,7 @@
 
 | 계층 | 코드 | 역할 |
 | --- | --- | --- |
-| 셸 | `shell/` | 창 + TS UI + `run_path` IPC |
+| 셸 | `shell/` | 창 + **agent 대화 셸**(Vite) + `run_path` IPC |
 | brain / path | `packages/ppomi-brain`, `packages/ppomi-path` | 경로 선택 · grant · 기록 |
 | body | `packages/ppomi-body`, `ppomi-body-*` | OS 한 걸음 |
 | Swift `Ppomi/` | `Ppomi/` | 과도기 Mac 호스트 · 기존 AX/MCP. 빅뱅 삭제 금지 |
@@ -18,14 +18,15 @@ Apple 실리콘 Mac, macOS 26, Node 22.6+, Rust 1.85+, Xcode.
 UI 배선만:
 
 ```sh
+npm --prefix agent ci          # 대화 셸(React / AI Elements) 의존
 npm --prefix shell ci
 npm --prefix shell test
 npm --prefix shell run dev
 ```
 
-창은 빈 메시지 칸 + 입력만. placeholder는 동사 힌트(`시킬 일을 적어 주세요`). 입력 `다음` → 보내기. IPC `run_path`가 Node `shell/src/host.ts`를 띄우고 `ppomi-brain`이 `path-home-next`를 고른 뒤 `ppomi-body-macos` fixture가 `Next`를 클릭한다.
+**셸 UI = agent 웹 UI를 Tauri에 올린 것.** 창은 `agent/src/ui/shell.tsx`(Storybook 「대화 셸」과 같은 뼈대)다. placeholder는 동사 힌트(`시킬 일을 적어 주세요`). 입력 `다음` → 보내기. IPC `run_path`가 Node `shell/src/host.ts`를 띄우고 `ppomi-brain`이 `path-home-next`를 고른 뒤 `ppomi-body-macos` fixture가 `Next`를 클릭한다. 경로 결과는 말풍선 + 도구 카드로 보이고, `path_not_found`도 JSON(종료 0)이다.
 
-**Chat UX lock (CEO + 리서처).** 입력창 위에 IA 머리글(절차 · 기억 · 할 일)과 빈 화면 제안 칩(플레이북 찾기 등)을 두지 않는다. 인사 말풍선도 없다. HITL/진행 중일 때만 입력창 안·바로 아래 칩 하나 — 지금은 만들지 않는다.
+**Chat UX lock (CEO + 리서처).** 입력창 위에 IA 머리글(절차 · 기억 · 할 일)과 빈 화면 제안 칩(플레이북 찾기 등)을 두지 않는다. 인사 말풍선도 없다. 빈 화면은 진짜 셸 크롬 안의 입력창만. HITL/진행 중일 때만 입력창 안·바로 아래 칩 하나 — 지금은 만들지 않는다.
 
 소비자 앱·권한 스모크는 **설치 경로 하나**: `/Applications/뽀미.app`. `tauri dev` / `target/` / `dist/` 번들에 손쉬운 사용을 주지 않는다.
 
