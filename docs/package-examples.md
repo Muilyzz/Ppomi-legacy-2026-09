@@ -51,6 +51,8 @@ PPOMI_BODY=macos node --experimental-strip-types packages/ppomi-brain/example/sr
 PPOMI_BODY=windows node --experimental-strip-types packages/ppomi-brain/example/src/main.ts
 
 # body 1-step fixtures (live UIA/AX skips off-host)
+# Windows product path is the shared shell (body under shell/, not a C# UI):
+npm --prefix shell run host -- --intent 다음 --body windows
 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts
 node --experimental-strip-types packages/ppomi-body-macos/example/src/main.ts
 # Mac live AX (Safari/Chrome System Events). Deprecated alias: packages/adapter-macos/example

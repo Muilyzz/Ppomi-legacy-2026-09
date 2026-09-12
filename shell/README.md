@@ -35,8 +35,24 @@ PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body macos --
 
 Or check **live** in the window. Off-macOS / no grant is a skip, not a crash.
 
-Windows / Android fixtures use the same IPC (`--body windows|android`). Live OS
-hooks stay the existing `ppomi-body-*` examples (MZZ-55b / MZZ-55c).
+Windows is the same shell, not a second C# chrome. `ppomi-executor` is UIA body.
+
+```sh
+npm --prefix shell run host -- --intent 다음 --body windows
+npm --prefix shell run dev          # pick body=windows
+# packaged (on Windows; needs MSVC + WebView2):
+npm --prefix shell run build
+```
+
+Live UIA (human UAC / Edge). Off-Windows skips. CI unit uses
+`PPOMI_WINDOWS_FAKE_EXECUTOR` against the fake JSONL executor:
+
+```sh
+PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body windows --live
+```
+
+Android fixture uses the same IPC (`--body android`). Live UIAutomator stays
+the existing `ppomi-body-android` example (MZZ-55c).
 
 Packaged `npm --prefix shell run build` still needs `node` on `PATH` (or
 `PPOMI_NODE`) for the TS host. That is a smoke spine, not a store bundle.

@@ -2,6 +2,8 @@
 
 Windows `OsUiDriver` for `ppomi-body`. Maps focus / click / type / read-screen onto the existing `executors/windows` tools.
 
+This is OS body (UIA), not a second product chrome. The consumer window is [`shell/`](../../shell/) (Tauri 2 + TS). Do not add a C# / WinUI app.
+
 This is not a second playbook runner, and it is not a generic `driver` package.
 
 ## Mapping

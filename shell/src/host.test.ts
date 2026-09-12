@@ -1,6 +1,19 @@
 import assert from "node:assert/strict";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { parseArgs, parseBodyKind, runSpine } from "./host.ts";
+
+const fakeExecutor = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "packages",
+  "ppomi-body-windows",
+  "tests",
+  "fixtures",
+  "fake-ppomi-executor.mjs",
+);
 
 test("macos fixture 1-step reaches ppomi-body-macos through brain", async () => {
   const result = await runSpine({ intent: "다음", body: "macos", live: false });
@@ -25,6 +38,35 @@ test("windows and android fixtures share the same spine IPC", async () => {
   assert.equal(android.status, "completed");
   assert.equal(windows.bodyKind, "windows");
   assert.equal(android.bodyKind, "android");
+  assert.equal(windows.body?.status, "completed");
+  assert.equal(windows.body?.steps[0]?.status, "ok");
+  assert.match(windows.hook, /--body windows --live/);
+});
+
+test("live windows off-win32 skips instead of failing", async () => {
+  if (process.platform === "win32") return;
+  const result = await runSpine({ intent: "다음", body: "windows", live: true });
+  assert.equal(result.status, "completed");
+  assert.equal(result.bodyKind, "windows");
+  assert.equal(result.live, true);
+  assert.match(result.note, /not win32/);
+});
+
+test("live windows 1-step reaches the executor protocol through the same spine", async () => {
+  const previous = process.env.PPOMI_WINDOWS_FAKE_EXECUTOR;
+  process.env.PPOMI_WINDOWS_FAKE_EXECUTOR = fakeExecutor;
+  try {
+    const result = await runSpine({ intent: "browse", body: "windows", live: true });
+    assert.equal(result.status, "completed");
+    assert.equal(result.bodyKind, "windows");
+    assert.equal(result.live, true);
+    assert.equal(result.body?.status, "completed");
+    assert.equal(result.body?.steps[0]?.status, "ok");
+    assert.match(result.hook, /--body windows --live/);
+  } finally {
+    if (previous === undefined) delete process.env.PPOMI_WINDOWS_FAKE_EXECUTOR;
+    else process.env.PPOMI_WINDOWS_FAKE_EXECUTOR = previous;
+  }
 });
 
 test("live macos off-darwin skips instead of failing", async () => {

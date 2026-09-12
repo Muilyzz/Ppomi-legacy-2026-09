@@ -8,6 +8,7 @@
 | brain / path | `packages/ppomi-brain`, `packages/ppomi-path` | 경로 선택 · grant · 기록 |
 | body | `packages/ppomi-body`, `ppomi-body-*` | OS 한 걸음 |
 | Swift `Ppomi/` | `Ppomi/` | 과도기 Mac 호스트 · 기존 AX/MCP. 빅뱅 삭제 금지 |
+| Windows executor | `ppomi-body-windows` + `ppomi-executor` | UIA body. C# 제품 창 없음 |
 
 과거 `shell/`(실행기 플러그인 · `agent/` 번들 · Clerk 딥링크)은 `main`에 없고 병렬 브랜치에만 있다. 이 문서는 그 스택을 되살리지 않는다. 아이콘만 재사용한다. 번들 id는 제품과 같은 **`com.muilyzz.ppomi`**.
 
@@ -49,12 +50,52 @@ PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body macos --
 
 창의 **live** 체크와 같다. Safari(또는 `PPOMI_MAC_BROWSER=chrome`)로 example.com을 열고 "More information"만 클릭한다. 손쉬운 사용이 없거나 Mac이 아니면 skip(실패 아님). 예제는 `packages/ppomi-body-macos/example`.
 
-## Windows / Android 호출 자리
+## Windows 셸 (같은 `shell/`, 두 번째 크롬 아님)
 
-같은 `run_path` / `host.ts --body windows|android`가 각 fixture 1-step을 돌린다. Live UIA · UIAutomator는 기존 패키지 예제(MZZ-55b / MZZ-55c):
+Windows 소비자 창은 **이 Tauri 셸**이다. C# / `ppomi-executor`는 UIA **body**이지 제품 UI가 아니다. 새 WinForms/WPF/WinUI 크롬을 만들지 않는다.
+
+Windows 10/11, Node 22.6+, Rust 1.85+ (MSVC), WebView2(보통 기본 설치). Mac용 `install-shell.sh` / `/Applications/뽀미.app`은 쓰지 않는다.
+
+```sh
+npm --prefix shell ci
+npm --prefix shell test
+npm --prefix shell run host -- --intent 다음 --body windows
+npm --prefix shell run dev
+```
+
+창에서 body=`windows` → **실행**. 같은 `run_path` IPC가 `ppomi-brain` → `path-home-next` → `ppomi-body-windows` fixture로 `Next`를 클릭한다.
+
+패키지(NSIS/MSI):
+
+```sh
+npm --prefix shell run build
+```
+
+패키지 앱도 TS 호스트를 위해 `node`(또는 `PPOMI_NODE`)가 PATH에 있어야 한다.
+
+### Live UIA
+
+기본은 fixture. 실기기 executor:
+
+```bat
+set PPOMI_BODY_LIVE=1
+set PPOMI_EXECUTOR=C:\path\to\ppomi-executor.exe
+npm --prefix shell run host -- --intent 다음 --body windows --live
+```
+
+기본 executor 경로: `shell/src-tauri/resources/executor/ppomi-executor.exe` (이 저장소에 바이너리를 두지 않는다. Windows 머신에서 빌드·배치). Isolated Edge + UIA는 사람/UAC가 필요하다. 셸은 executor에 닿으면 skip으로 기록을 남기고, 페이지를 누르는 프로브는 기존 패키지 예제다:
 
 ```sh
 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts
+```
+
+Linux/macOS live는 skip(실패 아님). CI 단위는 `PPOMI_WINDOWS_FAKE_EXECUTOR`로 fake JSONL executor에 1-step click.
+
+## Android 호출 자리
+
+같은 `run_path` / `host.ts --body android`가 fixture 1-step을 돌린다. Live UIAutomator는 기존 패키지 예제(MZZ-55c):
+
+```sh
 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts
 ```
 

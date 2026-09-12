@@ -1,4 +1,6 @@
-import { pathToFileURL } from "node:url";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { allowGrant, grantableEffects, orchestrate } from "../../packages/ppomi-brain/src/index.ts";
 import type {
   BodyRunInput,
@@ -28,6 +30,7 @@ import {
 } from "../../packages/ppomi-body-macos/src/index.ts";
 import {
   FixtureWindowsExecutorTools,
+  LiveWindowsExecutorTools,
   WindowsDriver,
   type FixtureWindowsWindow,
 } from "../../packages/ppomi-body-windows/src/index.ts";
@@ -39,6 +42,12 @@ import {
 
 export const BODY_KINDS = ["macos", "windows", "android"] as const;
 export type BodyKind = (typeof BODY_KINDS)[number];
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const LIVE_WINDOWS_HOST =
+  "PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body windows --live";
+const LIVE_WINDOWS_EXAMPLE =
+  "PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts";
 
 export interface SpineInput {
   readonly intent: string;
@@ -197,15 +206,75 @@ function withHook(result: BodyRunResult, note: string): BodyRunResult {
   };
 }
 
+function windowsExecutorPath(): string {
+  return process.env.PPOMI_EXECUTOR
+    ?? join(repoRoot, "shell", "src-tauri", "resources", "executor", "ppomi-executor.exe");
+}
+
+async function runWindowsLive(input: BodyRunInput): Promise<BodyRunResult> {
+  const fake = process.env.PPOMI_WINDOWS_FAKE_EXECUTOR;
+  if (fake !== undefined && fake !== "") {
+    const tools = LiveWindowsExecutorTools.start({
+      executorPath: "unused-when-launch-is-given",
+      launch: { command: process.execPath, args: [fake] },
+    });
+    try {
+      const app = tools.listApps("").apps[0];
+      if (app === undefined) {
+        return skipped(input.path, "live windows fake executor listed no app");
+      }
+      tools.allowApps([app.packageName]);
+      return runDriver(input.path, new WindowsDriver(tools), {
+        id: input.path.id,
+        steps: [{ id: "open-next", kind: "click", target: "Go", effect: "navigate" }],
+      });
+    } finally {
+      tools.close();
+    }
+  }
+
+  if (process.platform !== "win32") {
+    return skipped(
+      input.path,
+      `live windows skipped (not win32). On Windows: ${LIVE_WINDOWS_HOST} — needs ppomi-executor + Edge; UAC/UIA grant is human. Package probe: ${LIVE_WINDOWS_EXAMPLE}`,
+    );
+  }
+
+  const executor = windowsExecutorPath();
+  if (!existsSync(executor)) {
+    return skipped(
+      input.path,
+      `live windows skipped (no ppomi-executor). Set PPOMI_EXECUTOR. UAC/UIA is human. Then: ${LIVE_WINDOWS_HOST} or ${LIVE_WINDOWS_EXAMPLE}`,
+    );
+  }
+
+  try {
+    const tools = LiveWindowsExecutorTools.start({ executorPath: executor });
+    try {
+      const apps = tools.listApps("").apps;
+      return skipped(
+        input.path,
+        `live windows executor reachable (${apps.length} apps). Isolated Edge UIA is human/UAC — ${LIVE_WINDOWS_EXAMPLE}`,
+      );
+    } finally {
+      tools.close();
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return skipped(input.path, `live windows executor start failed (${message}). UAC? ${LIVE_WINDOWS_EXAMPLE}`);
+  }
+}
+
 async function runWindows(input: BodyRunInput, live: boolean): Promise<BodyRunResult> {
-  const window: FixtureWindowsWindow = { ...demoWindow, packageName: "win:1:1" };
-  const result = await runDriver(
-    input.path,
-    new WindowsDriver(new FixtureWindowsExecutorTools(window)),
-    fixturePlaybook(input.path),
-  );
-  if (!live) return result;
-  return withHook(result, "live windows is MZZ-55b — PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts");
+  if (!live) {
+    const window: FixtureWindowsWindow = { ...demoWindow, packageName: "win:1:1" };
+    return runDriver(
+      input.path,
+      new WindowsDriver(new FixtureWindowsExecutorTools(window)),
+      fixturePlaybook(input.path),
+    );
+  }
+  return runWindowsLive(input);
 }
 
 async function runAndroid(input: BodyRunInput, live: boolean): Promise<BodyRunResult> {
@@ -243,7 +312,7 @@ function hookFor(kind: BodyKind): string {
     case "macos":
       return "PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body macos --live";
     case "windows":
-      return "PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts";
+      return LIVE_WINDOWS_HOST;
     case "android":
       return "PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts";
     default: {

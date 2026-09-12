@@ -30,7 +30,7 @@
 
 ## 제품 표면
 
-소비자 UI는 [`shell/`](shell/)의 **Tauri 2 + TypeScript**다. Swift [`Ppomi/`](Ppomi/)는 OS body(손쉬운 사용·화면 기록·키체인)와 과도기 호스트이며 UI 대체재가 아니다. 소비자 앱은 **`/Applications/뽀미.app`** 하나, 번들 id `com.muilyzz.ppomi`. `*-prev.app`이나 `dist/backup/` 사본을 실행 가능한 형제로 두지 않는다 — 권한 목록의 「previous」는 그 백업 경로/이름과 섞인 바이너리 때문이다. 설치·실행은 [docs/tauri-shell.md](docs/tauri-shell.md).
+소비자 UI는 [`shell/`](shell/)의 **Tauri 2 + TypeScript**다. Swift [`Ppomi/`](Ppomi/)는 OS body(손쉬운 사용·화면 기록·키체인)와 과도기 호스트이며 UI 대체재가 아니다. **Windows도 같은 셸의 body**다 — C# / `ppomi-executor`는 UIA 손이지 두 번째 앱 크롬이 아니다. 소비자 앱은 **`/Applications/뽀미.app`** 하나(Windows에서는 같은 `shell/` 패키지), 번들 id `com.muilyzz.ppomi`. `*-prev.app`이나 `dist/backup/` 사본을 실행 가능한 형제로 두지 않는다 — 권한 목록의 「previous」는 그 백업 경로/이름과 섞인 바이너리 때문이다. 설치·실행은 [docs/tauri-shell.md](docs/tauri-shell.md).
 
 ## 설치
 
@@ -145,6 +145,10 @@ npm --prefix shell test
 npm --prefix shell run dev     # 창만. 권한 스모크 아님
 LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
 # → /Applications/뽀미.app  (같은 인증서·경로만. 애드혹·tccutil reset 아님)
+
+# Windows body (같은 셸. C# UI 없음)
+npm --prefix shell run host -- --intent 다음 --body windows
+PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body windows --live
 ```
 
 Swift `Ppomi/`는 과도기 호스트다.
