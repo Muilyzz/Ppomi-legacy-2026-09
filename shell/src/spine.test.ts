@@ -45,3 +45,28 @@ test("preview spine matches host intents", () => {
   assert.equal(previewSpine("다음").status, "completed");
   assert.equal(previewSpine("no-such-path").status, "path_not_found");
 });
+
+const ceoIntent = "내 사업자 KB계좌번호 알아?";
+
+test("secrets intent is a tool card plus a masked Korean reply", () => {
+  const view = previewSpine(ceoIntent);
+  assert.equal(view.status, "completed");
+  assert.equal(view.pathId, "path-secrets-account");
+  const lines = linesFromSpine(view);
+  assert.equal(lines[0]?.kind, "tool");
+  assert.equal(lines[1]?.kind, "bubble");
+  if (lines[0]?.kind !== "tool" || lines[1]?.kind !== "bubble") return;
+  assert.equal(lines[0].tool.name, "run_path");
+  assert.equal(lines[0].tool.label, "path-secrets-account");
+  assert.equal(lines[1].text, "저장된 사업자 계좌는 `****7890`입니다.");
+  const dumped = JSON.stringify(lines);
+  assert.doesNotMatch(dumped, /001234567890/);
+  assert.doesNotMatch(dumped, /1234567890/);
+});
+
+test("preview secrets matcher covers similar Korean and English intents", () => {
+  for (const intent of ["KB 계좌번호", "사업자 계좌", "account number", "통장번호"]) {
+    assert.equal(previewSpine(intent).pathId, "path-secrets-account", intent);
+  }
+  assert.equal(previewSpine("알아?").status, "path_not_found");
+});

@@ -29,8 +29,12 @@ The window is the **agent conversation shell** (`agent/src/ui/shell.tsx`)
 inside Tauri — same visual family as Storybook 「대화 셸」. Placeholder verb
 only: `시킬 일을 적어 주세요`. Type `다음` or `browse` and send: `run_path` →
 `src/host.ts` → `ppomi-brain` → `path-home-next` → `ppomi-body-macos`
-fixture click on `Next`. Path results land in chat bubbles / tool cards.
-Handled outcomes (`path_not_found` included) return JSON and exit 0.
+fixture click on `Next`. `내 사업자 KB계좌번호 알아?` (and 계좌번호 / KB 계좌 /
+account number) selects `path-secrets-account` and reads `ppomi-secrets`
+(`ppomi/kb-star-biz/account`). Chat shows a tool card plus masked `****last4`
+only — never the plaintext account. Fixture is the default. Path results land
+in chat bubbles / tool cards. Handled outcomes (`path_not_found` included)
+return JSON and exit 0.
 No IA header, no empty-state chips, no greeting — composer-only empty
 inside the real shell chrome.
 
@@ -41,6 +45,20 @@ PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body macos --
 ```
 
 Off-macOS / no grant is a skip, not a crash.
+
+Live Keychain / Credential Manager read (empty key → "저장된 사업자 계좌가 없습니다"):
+
+```sh
+PPOMI_SECRETS_LIVE=1 npm --prefix shell run host -- --intent '내 사업자 KB계좌번호 알아?' --live
+PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent '내 사업자 KB계좌번호 알아?' --live
+PPOMI_SECRETS_LIVE=1 node --experimental-strip-types packages/ppomi-secrets/example/src/main.ts
+```
+
+Mac window install is still the one signed path:
+
+```sh
+LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
+```
 
 Windows / Android fixtures use the same IPC (`--body windows|android`). Live OS
 hooks stay the existing `ppomi-body-*` examples (MZZ-55b / MZZ-55c).

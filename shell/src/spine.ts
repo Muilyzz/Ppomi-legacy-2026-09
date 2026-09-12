@@ -37,6 +37,12 @@ export type Line =
 type Invoke = (cmd: string, args: Record<string, unknown>) => Promise<unknown>;
 
 const MATCH_HOME = /^(다음|browse|next|열어|home)$/i;
+const MATCH_SECRETS =
+  /사업자\s*계좌|사업자\s*kb|kb\s*계좌|kb\s*account|계좌번호|통장번호|account\s*number|\baccount\b|계좌/i;
+
+const SECRETS_PATH_ID = "path-secrets-account";
+const SECRETS_MASK = "****7890";
+const SECRETS_KEY = "ppomi/kb-star-biz/account";
 
 function tauriInvoke(): Invoke | null {
   const core = (globalThis as { __TAURI__?: { core?: { invoke: Invoke } } }).__TAURI__?.core;
@@ -45,28 +51,44 @@ function tauriInvoke(): Invoke | null {
 
 /** Browser / `vite preview` only. Packaged Tauri always has IPC. */
 export function previewSpine(intent: string, body = "macos"): SpineView {
-  if (!MATCH_HOME.test(intent.trim())) {
+  const text = intent.trim();
+  if (MATCH_HOME.test(text)) {
     return {
-      status: "path_not_found",
-      pathId: null,
-      note: "no path matched the intent",
+      status: "completed",
+      pathId: "path-home-next",
+      note: "clicked Next",
       bodyKind: body,
       live: false,
       hook: "",
-      body: null,
+      body: {
+        status: "completed",
+        steps: [{ stepId: "open-next", status: "ok", note: "clicked Next" }],
+      },
+    };
+  }
+  if (MATCH_SECRETS.test(text)) {
+    const note = `${SECRETS_MASK} ${SECRETS_KEY}`;
+    return {
+      status: "completed",
+      pathId: SECRETS_PATH_ID,
+      note,
+      bodyKind: body,
+      live: false,
+      hook: "",
+      body: {
+        status: "completed",
+        steps: [{ stepId: "read-account", status: "ok", note }],
+      },
     };
   }
   return {
-    status: "completed",
-    pathId: "path-home-next",
-    note: "clicked Next",
+    status: "path_not_found",
+    pathId: null,
+    note: "no path matched the intent",
     bodyKind: body,
     live: false,
     hook: "",
-    body: {
-      status: "completed",
-      steps: [{ stepId: "open-next", status: "ok", note: "clicked Next" }],
-    },
+    body: null,
   };
 }
 
@@ -89,12 +111,22 @@ export function textFromSpine(result: SpineView): string {
     case "failed":
       return "실행에 실패했습니다.";
     case "completed":
-      return result.pathId === "path-home-next" ? "다음을 눌렀습니다." : "실행했습니다.";
+      if (result.pathId === "path-home-next") return "다음을 눌렀습니다.";
+      if (result.pathId === SECRETS_PATH_ID) return secretsBubble(result);
+      return "실행했습니다.";
     default: {
       const exhaustive: never = result.status;
       return exhaustive;
     }
   }
+}
+
+function secretsBubble(result: SpineView): string {
+  const blob = `${result.note} ${result.body?.steps.map(step => step.note).join(" ") ?? ""}`;
+  const masked = blob.match(/\*{4}\d{4}/);
+  // Bubble is markdown; backticks keep ****last4 visible.
+  if (masked !== null) return `저장된 사업자 계좌는 \`${masked[0]}\`입니다.`;
+  return "저장된 사업자 계좌가 없습니다.";
 }
 
 export function toolFromSpine(result: SpineView): SpineTool | null {
