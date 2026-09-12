@@ -28,11 +28,11 @@ Same `LOCAL_SIGN_ID` every local Mac build (Swift `make-app.sh`). Quit the old a
 Reinstall after the host JSON hotfix (quit the running app first):
 
 ```sh
-PPOMI_CHAT=fixture LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
-PPOMI_CHAT=fixture open /Applications/뽀미.app
+LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
+open --env PPOMI_CHAT=fixture /Applications/뽀미.app
 ```
 
-`지금 데이터 뭐 있어?` should be the Korean path-not-found bubble (or fixture tool + that text), never `node host returned invalid JSON`. Node spawn clears inherited `NODE_PATH` / Grok Electron injects.
+Prefixing `PPOMI_CHAT=fixture open …` does **not** pass env into the GUI app. `지금 데이터 뭐 있어?` should be the Korean path-not-found bubble (or fixture tool + that text), never `node host returned invalid JSON`. Node spawn clears inherited `NODE_PATH` / Grok Electron injects.
 
 The window is the **agent conversation shell** (`agent/src/ui/shell.tsx`)
 inside Tauri — same visual family as Storybook 「대화 셸」. Placeholder verb
