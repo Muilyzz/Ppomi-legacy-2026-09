@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
+import type { PathDefinition } from "../../packages/ppomi-brain/src/index.ts";
 import { proxyResponses } from "./gateway.ts";
-import { parseArgs, parseBodyKind, runSpine, secretsPath } from "./host.ts";
+import { LIVE_APPROVAL_TOKEN, gatesFor, homePath, parseArgs, parseBodyKind, pendingGate, runSpine, secretsPath } from "./host.ts";
 
 const hostFile = join(dirname(fileURLToPath(import.meta.url)), "host.ts");
 
@@ -45,20 +46,115 @@ test("windows and android fixtures share the same spine IPC", async () => {
   assert.equal(android.bodyKind, "android");
 });
 
-test("live macos off-darwin skips instead of failing", async () => {
+test("live macos off-darwin skips instead of failing (once the person approved live)", async () => {
   if (process.platform === "darwin") return;
-  const result = await runSpine({ intent: "다음", body: "macos", live: true });
+  const result = await runSpine({ intent: "다음", body: "macos", live: true, approvals: [LIVE_APPROVAL_TOKEN] });
   assert.equal(result.status, "completed");
   assert.match(result.note, /not darwin/);
+  assert.equal(result.approval, null);
 });
 
-test("parseArgs reads intent, body, and live", () => {
+test("live requested without the live token stops at the live gate before anything runs", async () => {
+  const result = await runSpine({ intent: "다음", body: "macos", live: true });
+  assert.equal(result.status, "needs_human");
+  assert.equal(result.body?.status, "stopped");
+  assert.equal(result.approval?.effect, "live");
+  assert.equal(result.approval?.token, LIVE_APPROVAL_TOKEN);
+  assert.match(result.note, /needs_approval: live/);
+});
+
+test("parseArgs reads intent, body, live and approvals; --live is the person's live approval", () => {
   assert.equal(parseBodyKind(undefined), "macos");
   assert.deepEqual(parseArgs(["열어", "--body", "windows", "--live"]), {
     intent: "열어",
     body: "windows",
     live: true,
+    approvals: [LIVE_APPROVAL_TOKEN],
   });
+  assert.deepEqual(parseArgs(["--intent", ceoIntent, "--approve", "path-secrets-account/read-account"]), {
+    intent: ceoIntent,
+    body: "macos",
+    live: false,
+    approvals: ["path-secrets-account/read-account"],
+  });
+  assert.throws(() => parseArgs(["--approve"]), /--approve needs/);
+});
+
+const commitPath: PathDefinition = {
+  id: "path-demo-submit",
+  title: "Demo submit",
+  intents: ["demo submit"],
+  requiredEffects: ["input", "transmit"],
+  requiredSurfaces: ["app"],
+  steps: [
+    { id: "open-next", title: "Next", effect: "input" },
+    { id: "submit", title: "Next", effect: "transmit" },
+  ],
+};
+
+const financialPath: PathDefinition = {
+  id: "path-demo-pay",
+  title: "Demo pay",
+  intents: ["demo pay"],
+  requiredEffects: ["financial_submit"],
+  requiredSurfaces: ["app"],
+  steps: [{ id: "pay", title: "Next", effect: "financial_submit" }],
+};
+
+test("a safe path (navigate / input only) runs with no gate", () => {
+  assert.deepEqual(gatesFor(homePath, false), []);
+  assert.equal(pendingGate(homePath, false, []), null);
+});
+
+test("a commit step stops the whole run before anything executes until its token is presented", async () => {
+  const result = await runSpine({ intent: "demo submit", body: "macos", live: false }, { paths: [commitPath] });
+  assert.equal(result.status, "needs_human");
+  assert.equal(result.body?.status, "stopped");
+  assert.equal(result.body?.stopReason, "needs_human");
+  assert.deepEqual(result.body?.steps.map(step => step.status), ["needs_human", "needs_human"]);
+  assert.deepEqual(result.approval, {
+    pathId: "path-demo-submit",
+    stepId: "submit",
+    effect: "commit",
+    title: "Next",
+    token: "path-demo-submit/submit",
+    what: result.approval?.what,
+  });
+  assert.match(result.approval?.what ?? "", /되돌릴 수 없는/);
+  assert.match(result.note, /needs_approval: path-demo-submit\/submit/);
+  assert.doesNotMatch(JSON.stringify(result), /"status":"ok"|completed/);
+});
+
+test("the wrong token does not unlock the gate", async () => {
+  const result = await runSpine(
+    { intent: "demo submit", body: "macos", live: false, approvals: ["path-demo-submit/open-next", "path-home-next/submit"] },
+    { paths: [commitPath] },
+  );
+  assert.equal(result.status, "needs_human");
+  assert.equal(result.approval?.token, "path-demo-submit/submit");
+});
+
+test("the exact token runs the commit step once and marks it approved", async () => {
+  const result = await runSpine(
+    { intent: "demo submit", body: "macos", live: false, approvals: ["path-demo-submit/submit"] },
+    { paths: [commitPath] },
+  );
+  assert.equal(result.status, "completed");
+  assert.equal(result.approval, null);
+  assert.deepEqual(result.body?.steps.map(step => step.status), ["ok", "ok"]);
+  assert.match(result.body?.steps[1]?.note ?? "", /approved path-demo-submit\/submit/);
+  assert.doesNotMatch(result.body?.steps[0]?.note ?? "", /approved/);
+});
+
+test("financial_submit is never unlockable: no gate is offered and the runtime hands the step to the person", async () => {
+  assert.deepEqual(gatesFor(financialPath, false), []);
+  const result = await runSpine(
+    { intent: "demo pay", body: "macos", live: false, approvals: ["path-demo-pay/pay"] },
+    { paths: [financialPath] },
+  );
+  assert.equal(result.status, "needs_human");
+  assert.equal(result.approval, null);
+  assert.match(result.note, /commit step: the person takes this step/);
 });
 
 const ceoIntent = "내 사업자 KB계좌번호 알아?";
@@ -74,17 +170,27 @@ function assertMaskedAccount(result: { status: string; pathId: string | null; no
   assert.doesNotMatch(dumped, /1234567890/);
 }
 
-test("Korean business-account intents choose the secrets path", async () => {
+const SECRETS_APPROVAL = "path-secrets-account/read-account";
+
+test("Korean business-account intents choose the secrets path — gated until approved, then masked", async () => {
   for (const intent of [ceoIntent, "KB 계좌번호", "사업자 계좌 알려줘", "account number", "통장번호"]) {
-    const result = await runSpine({ intent, body: "macos", live: false });
-    assertMaskedAccount(result);
+    const gated = await runSpine({ intent, body: "macos", live: false });
+    assert.equal(gated.status, "needs_human", intent);
+    assert.equal(gated.pathId, secretsPath.id, intent);
+    assert.equal(gated.approval?.effect, "secrets", intent);
+    assert.equal(gated.approval?.token, SECRETS_APPROVAL, intent);
+    assert.match(gated.approval?.what ?? "", /Keychain/);
+    assert.doesNotMatch(JSON.stringify(gated), /\*{4}7890|1234567890/);
+    const approved = await runSpine({ intent, body: "macos", live: false, approvals: [SECRETS_APPROVAL] });
+    assertMaskedAccount(approved);
+    assert.equal(approved.approval, null);
   }
 });
 
 test("host CLI exits 0 for the CEO secrets intent and prints no plaintext", () => {
   const result = spawnSync(
     process.execPath,
-    ["--experimental-strip-types", hostFile, "--intent", ceoIntent],
+    ["--experimental-strip-types", hostFile, "--intent", ceoIntent, "--approve", SECRETS_APPROVAL],
     {
       encoding: "utf8",
       cwd: join(dirname(hostFile), ".."),
@@ -199,9 +305,12 @@ test("host CLI --proxy-responses runs via symlink and dotted path", () => {
   }
 });
 
-test("live secrets off-darwin skips instead of failing", async () => {
+test("live secrets off-darwin skips instead of failing (secrets and live both approved)", async () => {
   if (process.platform === "darwin" || process.platform === "win32") return;
-  const result = await runSpine({ intent: ceoIntent, body: "macos", live: true });
+  const gated = await runSpine({ intent: ceoIntent, body: "macos", live: true, approvals: [SECRETS_APPROVAL] });
+  assert.equal(gated.status, "needs_human");
+  assert.equal(gated.approval?.effect, "live");
+  const result = await runSpine({ intent: ceoIntent, body: "macos", live: true, approvals: [SECRETS_APPROVAL, LIVE_APPROVAL_TOKEN] });
   assert.equal(result.status, "completed");
   assert.match(result.note, /not darwin|no Keychain|Credential Manager/i);
   assert.doesNotMatch(JSON.stringify(result), new RegExp(fixtureAccount));

@@ -3,12 +3,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { proxyResponses } from "./gateway.ts";
 import { allowGrant, grantableEffects, orchestrate } from "../../packages/ppomi-brain/src/index.ts";
 import type {
+  ActionEffect,
   BodyRunInput,
   BodyRunResult,
   BodyRuntime,
   BodyStepStatus,
   OrchestrationResult,
   PathDefinition,
+  PathStep,
   SessionIdentity,
 } from "../../packages/ppomi-brain/src/index.ts";
 import {
@@ -17,7 +19,9 @@ import {
   Runtime,
   type OsUiDriver,
   type Playbook,
+  type PlaybookStep,
   type RunResult,
+  type StepEffect,
   type StepResultStatus,
 } from "../../packages/ppomi-body/src/index.ts";
 import {
@@ -53,12 +57,41 @@ export interface SpineInput {
   readonly intent: string;
   readonly body: BodyKind;
   readonly live: boolean;
+  /**
+   * Approval tokens for this one run (`<pathId>/<stepId>` for a commit step or a secrets read,
+   * `live` for real-device arming). A token comes only from an explicit action — the 실행 button
+   * in the window or `--approve` / `--live` on the CLI — never from the environment.
+   */
+  readonly approvals?: readonly string[];
 }
+
+/** What a gate is asking the person to allow; `token` is what an approving call passes back. */
+export type GateEffect = "commit" | "secrets" | "live";
+
+export interface ApprovalRequest {
+  readonly pathId: string;
+  readonly stepId: string;
+  readonly effect: GateEffect;
+  readonly title: string;
+  readonly what: string;
+  readonly token: string;
+}
+
+export const LIVE_APPROVAL_TOKEN = "live";
 
 export interface SpineResult extends OrchestrationResult {
   readonly bodyKind: BodyKind;
   readonly live: boolean;
   readonly hook: string;
+  /** The gate that stopped this run before anything executed; `null` when the run was not gated or was approved. */
+  readonly approval: ApprovalRequest | null;
+}
+
+/** The only body effects a model-initiated run may perform on its own; anything else needs a token first. */
+export const SAFE_EFFECTS: readonly StepEffect[] = ["navigate", "input"];
+
+function isSafeEffect(effect: StepEffect | "read"): boolean {
+  return effect === "read" || SAFE_EFFECTS.includes(effect);
 }
 
 const identity: SessionIdentity = {
@@ -75,7 +108,7 @@ const demoWindow = {
   ],
 } as const;
 
-const homePath: PathDefinition = {
+export const homePath: PathDefinition = {
   id: "path-home-next",
   title: "Home next",
   intents: ["browse", "next", "다음", "열어", "home"],
@@ -112,10 +145,89 @@ const paths = [homePath, secretsPath];
 export const SECRETS_LIVE_HOOK =
   "PPOMI_SECRETS_LIVE=1 npm --prefix shell run host -- --intent '내 사업자 KB계좌번호 알아?' --live";
 
-function fixturePlaybook(path: PathDefinition): Playbook {
+/**
+ * Brain effect → body effect. `lookup` is a read; `input`/`save` are declared mutations the
+ * runtime may perform; `transmit` is a `commit` (the runtime hands it off unless a person approved
+ * exactly that step); `financial_submit` is a `commit` no token can unlock — the brain never issues it.
+ */
+function lowerEffect(effect: ActionEffect): StepEffect | "read" {
+  switch (effect) {
+    case "lookup":
+      return "read";
+    case "input":
+    case "save":
+      return "input";
+    case "transmit":
+    case "financial_submit":
+      return "commit";
+    default: {
+      const exhaustive: never = effect;
+      return exhaustive;
+    }
+  }
+}
+
+function approvalToken(path: PathDefinition, step: PathStep): string {
+  return `${path.id}/${step.id}`;
+}
+
+function gate(path: PathDefinition, step: PathStep, effect: GateEffect, what: string): ApprovalRequest {
+  return { pathId: path.id, stepId: step.id, effect, title: step.title, what, token: effect === "live" ? LIVE_APPROVAL_TOKEN : approvalToken(path, step) };
+}
+
+/** Every gate on this run, in the order the person has to clear them. Empty for a safe path. */
+export function gatesFor(path: PathDefinition, live: boolean): readonly ApprovalRequest[] {
+  const gates: ApprovalRequest[] = [];
+  const first = path.steps[0];
+  if (path.id === secretsPath.id && first !== undefined) {
+    gates.push(gate(path, first, "secrets", `Keychain / Credential Manager에서 ${KB_STAR_BIZ_ACCOUNT_KEY}를 읽어 마지막 4자리만 보여줍니다.`));
+  }
+  if (live && first !== undefined) {
+    gates.push(gate(path, first, "live", `실기기 제어(live)로 「${path.title}」 경로를 실행합니다.`));
+  }
+  for (const step of path.steps) {
+    if (!isSafeEffect(lowerEffect(step.effect)) && step.effect !== "financial_submit") {
+      gates.push(gate(path, step, "commit", `「${step.title}」을(를) 실행합니다 — 되돌릴 수 없는 제출 단계입니다.`));
+    }
+  }
+  return gates;
+}
+
+/** The first gate without a token. Nothing on the path runs while this is non-null. */
+export function pendingGate(path: PathDefinition, live: boolean, approvals: readonly string[]): ApprovalRequest | null {
+  return gatesFor(path, live).find(item => !approvals.includes(item.token)) ?? null;
+}
+
+/**
+ * The playbook the runtime executes, lowered from the path's data. A commit step keeps
+ * `effect: "commit"` — the runtime's own handoff — unless its exact token was approved, in which
+ * case it becomes a declared `input` for this run only. `financial_submit` never lowers.
+ */
+function playbookFor(path: PathDefinition, approvals: readonly string[]): Playbook {
+  const steps: PlaybookStep[] = path.steps.map(step => {
+    const lowered = lowerEffect(step.effect);
+    if (lowered === "read") return { id: step.id, kind: "read" };
+    const approved = lowered === "commit" && step.effect !== "financial_submit" && approvals.includes(approvalToken(path, step));
+    return { id: step.id, kind: "click", target: step.title, effect: approved ? "input" : lowered };
+  });
+  return { id: path.id, steps };
+}
+
+function approvedStepIds(path: PathDefinition, approvals: readonly string[]): ReadonlySet<string> {
+  return new Set(path.steps.filter(step => approvals.includes(approvalToken(path, step))).map(step => step.id));
+}
+
+/** Stopped before anything ran: every step waits on the same gate. Never `completed`. */
+function needsApproval(path: PathDefinition, pending: ApprovalRequest): BodyRunResult {
   return {
-    id: path.id,
-    steps: [{ id: "open-next", kind: "click", target: "Next", effect: "navigate" }],
+    status: "stopped",
+    stopReason: "needs_human",
+    steps: path.steps.map(step => ({
+      stepId: step.id,
+      effect: step.effect,
+      status: "needs_human" as const,
+      note: `needs_approval: ${pending.token} (${pending.effect}) — nothing executed`,
+    })),
   };
 }
 
@@ -140,14 +252,15 @@ function mapStatus(status: StepResultStatus | undefined, code: string | undefine
   }
 }
 
-function toBodyResult(run: RunResult, path: PathDefinition): BodyRunResult {
+function toBodyResult(run: RunResult, path: PathDefinition, approved: ReadonlySet<string> = new Set()): BodyRunResult {
   const steps = path.steps.map((step, index) => {
     const row = run.stepResults[index];
+    const note = row?.observation.summary ?? row?.code ?? "no step result";
     return {
       stepId: step.id,
       effect: step.effect,
       status: mapStatus(row?.status, row?.code),
-      note: row?.observation.summary ?? row?.code ?? "no step result",
+      note: approved.has(step.id) ? `${note}; approved ${approvalToken(path, step)}` : note,
     };
   });
   const blocking = steps.find(step => step.status !== "ok");
@@ -164,12 +277,13 @@ async function runDriver(
   path: PathDefinition,
   driver: OsUiDriver,
   playbook: Playbook,
+  approvals: readonly string[] = [],
 ): Promise<BodyRunResult> {
   const run = await new Runtime(
     new OsSurface(driver),
     new FixedPermissionGate(["ui.read", "ui.control"]),
   ).run(playbook);
-  return toBodyResult(run, path);
+  return toBodyResult(run, path, approvedStepIds(path, approvals));
 }
 
 function skipped(path: PathDefinition, note: string): BodyRunResult {
@@ -185,13 +299,14 @@ function skipped(path: PathDefinition, note: string): BodyRunResult {
   };
 }
 
-async function runMacos(input: BodyRunInput, live: boolean): Promise<BodyRunResult> {
+async function runMacos(input: BodyRunInput, live: boolean, approvals: readonly string[]): Promise<BodyRunResult> {
   if (!live) {
     const window: FixtureMacosWindow = { ...demoWindow };
     return runDriver(
       input.path,
       new MacosDriver(new FixtureMacosNativeTools(window)),
-      fixturePlaybook(input.path),
+      playbookFor(input.path, approvals),
+      approvals,
     );
   }
   if (process.platform !== "darwin") {
@@ -232,23 +347,25 @@ function withHook(result: BodyRunResult, note: string): BodyRunResult {
   };
 }
 
-async function runWindows(input: BodyRunInput, live: boolean): Promise<BodyRunResult> {
+async function runWindows(input: BodyRunInput, live: boolean, approvals: readonly string[]): Promise<BodyRunResult> {
   const window: FixtureWindowsWindow = { ...demoWindow, packageName: "win:1:1" };
   const result = await runDriver(
     input.path,
     new WindowsDriver(new FixtureWindowsExecutorTools(window)),
-    fixturePlaybook(input.path),
+    playbookFor(input.path, approvals),
+    approvals,
   );
   if (!live) return result;
   return withHook(result, "live windows is MZZ-55b — PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts");
 }
 
-async function runAndroid(input: BodyRunInput, live: boolean): Promise<BodyRunResult> {
+async function runAndroid(input: BodyRunInput, live: boolean, approvals: readonly string[]): Promise<BodyRunResult> {
   const window: FixtureAndroidWindow = { ...demoWindow, packageName: "com.ppomi.androidtarget" };
   const result = await runDriver(
     input.path,
     new AndroidDriver(new FixtureAndroidNativeTools(window)),
-    fixturePlaybook(input.path),
+    playbookFor(input.path, approvals),
+    approvals,
   );
   if (!live) return result;
   return withHook(result, "live android is MZZ-55c — PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts");
@@ -301,17 +418,31 @@ function runSecrets(path: PathDefinition, live: boolean): BodyRunResult {
   }
 }
 
-function bodyFor(kind: BodyKind, live: boolean): BodyRuntime {
+interface GateCapture {
+  approval: ApprovalRequest | null;
+}
+
+/**
+ * The gate sits in front of every body, whoever asked (model function_call, local matcher, CLI):
+ * a secrets read, a live run or a commit step stops the whole run before any step executes until
+ * the matching token is presented. A safe path (navigate / input only, fixture) runs at once.
+ */
+function bodyFor(kind: BodyKind, live: boolean, approvals: readonly string[], capture: GateCapture): BodyRuntime {
   return {
     run(input) {
+      const pending = pendingGate(input.path, live, approvals);
+      if (pending !== null) {
+        capture.approval = pending;
+        return needsApproval(input.path, pending);
+      }
       if (input.path.id === secretsPath.id) return runSecrets(input.path, live);
       switch (kind) {
         case "macos":
-          return runMacos(input, live);
+          return runMacos(input, live, approvals);
         case "windows":
-          return runWindows(input, live);
+          return runWindows(input, live, approvals);
         case "android":
-          return runAndroid(input, live);
+          return runAndroid(input, live, approvals);
         default: {
           const exhaustive: never = kind;
           return exhaustive;
@@ -350,10 +481,16 @@ export function parseBodyKind(value: string | undefined): BodyKind {
   }
 }
 
+/**
+ * `--approve <pathId>/<stepId>` (repeatable) clears one gate for this run. `--live` typed on the
+ * command line is the person's own live approval; `PPOMI_BODY_LIVE=1` alone requests live but
+ * approves nothing, so the run stops at the live gate instead of arming.
+ */
 export function parseArgs(argv: readonly string[]): SpineInput {
   let intent = "다음";
   let body = parseBodyKind(process.env.PPOMI_BODY);
   let live = process.env.PPOMI_BODY_LIVE === "1" || process.env.PPOMI_BODY_AX === "1";
+  const approvals: string[] = [];
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--intent") {
@@ -368,8 +505,16 @@ export function parseArgs(argv: readonly string[]): SpineInput {
       i += 1;
       continue;
     }
+    if (arg === "--approve") {
+      const value = argv[i + 1];
+      if (value === undefined || value.length === 0) throw new Error("--approve needs <pathId>/<stepId> or live");
+      approvals.push(value);
+      i += 1;
+      continue;
+    }
     if (arg === "--live") {
       live = true;
+      approvals.push(LIVE_APPROVAL_TOKEN);
       continue;
     }
     if (!arg.startsWith("-")) {
@@ -378,15 +523,23 @@ export function parseArgs(argv: readonly string[]): SpineInput {
     }
     throw new Error(`unknown argument: ${arg}`);
   }
-  return { intent, body, live };
+  return { intent, body, live, approvals };
 }
 
-export async function runSpine(input: SpineInput): Promise<SpineResult> {
+export interface SpineDeps {
+  /** Catalog override for tests (a path with a commit step). Default: the built-in paths. */
+  readonly paths?: readonly PathDefinition[];
+}
+
+export async function runSpine(input: SpineInput, deps: SpineDeps = {}): Promise<SpineResult> {
+  const catalog = deps.paths ?? paths;
+  const approvals = input.approvals ?? [];
+  const capture: GateCapture = { approval: null };
   const result = await orchestrate(
     {
       paths: {
-        list: () => paths,
-        load: (id: string) => paths.find(path => path.id === id) ?? null,
+        list: () => catalog,
+        load: (id: string) => catalog.find(path => path.id === id) ?? null,
       },
       session: {
         current: () => identity,
@@ -399,12 +552,12 @@ export async function runSpine(input: SpineInput): Promise<SpineResult> {
           ...(identity.seatId !== undefined ? { seatId: identity.seatId } : {}),
         }),
       },
-      body: bodyFor(input.body, input.live),
+      body: bodyFor(input.body, input.live, approvals, capture),
     },
     { text: input.intent, surface: "app" },
   );
   const hook = result.pathId === secretsPath.id ? SECRETS_LIVE_HOOK : hookFor(input.body);
-  return { ...result, bodyKind: input.body, live: input.live, hook };
+  return { ...result, bodyKind: input.body, live: input.live, hook, approval: capture.approval };
 }
 
 export { gatewayConfig, proxyResponses } from "./gateway.ts";
