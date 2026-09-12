@@ -29,7 +29,13 @@ export default {
     root.style.setProperty('--ui-scale', ctx.globals.scale);
     const wrap = document.createElement('div'), css = skin(ctx.globals.style, ctx.parameters.skin);
     if (css) { const s = document.createElement('style'); s.textContent = css; wrap.appendChild(s); }
-    wrap.appendChild(story());
+    const node = story();
+    // 빨간 점선 = 컴포넌트 실제 경계. 패딩은 그 바깥(잘림·클릭용)만. 대화 셸은 componentOutline:false.
+    if (ctx.parameters.componentOutline !== false) {
+      node.style.outline = '1px dotted red';
+      wrap.style.padding = '1px';
+    }
+    wrap.appendChild(node);
     return wrap;
   }],
   parameters: {backgrounds: {disable: true}, layout: 'fullscreen'},
