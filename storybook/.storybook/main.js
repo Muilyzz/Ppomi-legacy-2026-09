@@ -6,6 +6,7 @@ const agentModule = (name) => fileURLToPath(new URL(`../../agent/node_modules/${
 export default {
   stories: ['../*.stories.{js,jsx}'],
   framework: '@storybook/html-vite',
+  addons: ['@storybook/addon-docs'],
   viteFinal: (config) => ({
     ...config,
     // 대화 셸은 AI Elements(shadcn + Tailwind v4)로 그린다: agent/src/index.css 가 Tailwind 를 토큰에 매핑한다.
