@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
-import { gatewayConfig, parseGatewayEnvFile, processGatewayKey, proxyResponses } from "./gateway.ts";
+import { gatewayConfig, httpsGatewayBase, parseGatewayEnvFile, processGatewayKey, proxyResponses } from "./gateway.ts";
 import { verifyClerkSession } from "./clerk-session.ts";
+import { clerkTestEnv, liveClerkSession, unsignedClerkSession } from "./clerk-test-keys.ts";
 import { KB_STAR_BIZ_PATH_ID, parseArgs, parseBodyKind, runSpine, secretsPath } from "./host.ts";
 
 const hostFile = join(dirname(fileURLToPath(import.meta.url)), "host.ts");
@@ -170,15 +171,8 @@ test("gateway probe is configured only when a key or fixture is set", async () =
   assert.equal(processGatewayKey({ AI_GATEWAY_API_KEY: "k" }), "k");
 });
 
-function testClerkJwt(payload: Record<string, unknown> = {}): string {
-  const body = {
-    sub: "user_2AbCdEfGhIjK",
-    exp: Math.floor(Date.now() / 1000) + 86400,
-    iss: "https://foo.clerk.accounts.dev",
-    ...payload,
-  };
-  const header = Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString("base64url");
-  return `${header}.${Buffer.from(JSON.stringify(body)).toString("base64url")}.sig`;
+function fileKeyEnv(home: string, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  return { HOME: home, ...clerkTestEnv, ...extra };
 }
 
 test("HOME/.ppomi/.env supplies the Gateway key when process env is empty", async () => {
@@ -193,13 +187,13 @@ test("HOME/.ppomi/.env supplies the Gateway key when process env is empty", asyn
     assert.equal(parseGatewayEnvFile("VERCEL_OIDC_TOKEN=unused-oidc\n").AI_GATEWAY_API_KEY, undefined);
     assert.equal(gatewayConfig({ HOME: home })?.key, "file-secret-key");
     assert.equal(processGatewayKey({ HOME: home }), undefined);
-    const unsigned = await proxyResponses({ probe: true }, { env: { HOME: home } });
+    const unsigned = await proxyResponses({ probe: true }, { env: fileKeyEnv(home) });
     assert.deepEqual(unsigned, { configured: false, fixture: false });
-    const session = testClerkJwt();
-    assert.equal(verifyClerkSession(session), true);
+    const session = liveClerkSession();
+    assert.equal(await verifyClerkSession(session, clerkTestEnv), true);
     const probe = await proxyResponses(
       { probe: true, clerkSession: session },
-      { env: { HOME: home } },
+      { env: fileKeyEnv(home) },
     );
     assert.deepEqual(probe, { configured: true, fixture: false });
     const fixtureWins = await proxyResponses({ probe: true }, {
@@ -232,9 +226,9 @@ test("file Gateway key is unused until a Clerk session is verified", async () =>
     mkdirSync(join(home, ".ppomi"), { mode: 0o700 });
     writeFileSync(join(home, ".ppomi", ".env"), "AI_GATEWAY_API_KEY=file-secret-key\n", { mode: 0o600 });
     const blocked = await proxyResponses(
-      { input: [{ role: "user", content: "너 모델 뭐야?" }], clerkSession: "not-a-jwt" },
+      { input: [{ role: "user", content: "너 모델 뭐야?" }], clerkSession: unsignedClerkSession() },
       {
-        env: { HOME: home },
+        env: fileKeyEnv(home),
         fetch: async url => {
           calls.push(String(url));
           return new Response("{}", { status: 200 });
@@ -243,11 +237,11 @@ test("file Gateway key is unused until a Clerk session is verified", async () =>
     );
     assert.deepEqual(blocked, { configured: false, fixture: false });
     assert.equal(calls.length, 0);
-    const session = testClerkJwt();
+    const session = liveClerkSession();
     const result = await proxyResponses(
       { input: [{ role: "user", content: "너 모델 뭐야?" }], clerkSession: session, model: "client" },
       {
-        env: { HOME: home },
+        env: fileKeyEnv(home),
         fetch: async (url, init) => {
           calls.push(String(url));
           const sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
@@ -261,6 +255,61 @@ test("file Gateway key is unused until a Clerk session is verified", async () =>
     assert.equal(result.configured, true);
     assert.equal(calls.length, 1);
     assert.doesNotMatch(JSON.stringify(result), /file-secret-key|clerkSession|user_2AbCdEfGhIjK/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("http Gateway base is refused so the key is never posted", async () => {
+  const calls: string[] = [];
+  assert.equal(httpsGatewayBase("http://attacker.example/v1"), null);
+  assert.equal(httpsGatewayBase("https://ai-gateway.vercel.sh/v1"), "https://ai-gateway.vercel.sh/v1");
+  const home = mkdtempSync(join(tmpdir(), "ppomi-http-base-"));
+  try {
+    mkdirSync(join(home, ".ppomi"), { mode: 0o700 });
+    writeFileSync(
+      join(home, ".ppomi", ".env"),
+      "AI_GATEWAY_API_KEY=file-secret-key\nAI_GATEWAY_BASE_URL=http://attacker.example/v1\n",
+      { mode: 0o600 },
+    );
+    assert.equal(gatewayConfig(fileKeyEnv(home)), null);
+    const forged = await proxyResponses(
+      { input: [{ role: "user", content: "hi" }], clerkSession: liveClerkSession() },
+      {
+        env: fileKeyEnv(home),
+        fetch: async url => {
+          calls.push(String(url));
+          return new Response("{}", { status: 200 });
+        },
+      },
+    );
+    assert.deepEqual(forged, { configured: false, fixture: false });
+    assert.equal(calls.length, 0);
+    const processHttp = await proxyResponses(
+      { input: [{ role: "user", content: "hi" }] },
+      {
+        env: { AI_GATEWAY_API_KEY: "secret-key", AI_GATEWAY_BASE_URL: "http://attacker.example/v1" },
+        fetch: async url => {
+          calls.push(String(url));
+          return new Response("{}", { status: 200 });
+        },
+      },
+    );
+    assert.deepEqual(processHttp, { configured: false, fixture: false });
+    assert.equal(calls.length, 0);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("group-readable ~/.ppomi/.env is refused", async () => {
+  const home = mkdtempSync(join(tmpdir(), "ppomi-env-mode-"));
+  try {
+    mkdirSync(join(home, ".ppomi"), { mode: 0o700 });
+    writeFileSync(join(home, ".ppomi", ".env"), "AI_GATEWAY_API_KEY=file-secret-key\n", { mode: 0o644 });
+    assert.equal(gatewayConfig({ HOME: home }), null);
+    const probe = await proxyResponses({ probe: true, clerkSession: liveClerkSession() }, { env: fileKeyEnv(home) });
+    assert.deepEqual(probe, { configured: false, fixture: false });
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
@@ -296,16 +345,16 @@ test("host CLI --proxy-responses reads ~/.ppomi/.env without echoing the key", (
     const unsigned = spawnHost(
       hostFile,
       ["--proxy-responses"],
-      { HOME: home, PPOMI_ROOT: "", AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "", CLERK_SESSION: "" },
+      { ...clerkTestEnv, HOME: home, PPOMI_ROOT: "", AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "", CLERK_SESSION: "" },
       "{\"probe\":true}\n",
     );
     assert.equal(unsigned.status, 0, unsigned.stderr);
     assert.equal((JSON.parse(unsigned.stdout) as { configured: boolean }).configured, false);
-    writeFileSync(join(home, ".ppomi", "clerk-session"), testClerkJwt(), { mode: 0o600 });
+    writeFileSync(join(home, ".ppomi", "clerk-session"), liveClerkSession(), { mode: 0o600 });
     const result = spawnHost(
       hostFile,
       ["--proxy-responses"],
-      { HOME: home, PPOMI_ROOT: "", AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "", CLERK_SESSION: "" },
+      { ...clerkTestEnv, HOME: home, PPOMI_ROOT: "", AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "", CLERK_SESSION: "" },
       "{\"probe\":true}\n",
     );
     assert.equal(result.status, 0, result.stderr);

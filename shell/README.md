@@ -37,7 +37,7 @@ Prefixing `PPOMI_CHAT=fixture open …` does **not** pass env into the GUI app. 
 The window is the **agent conversation shell** (`agent/src/ui/shell.tsx`)
 inside Tauri — same visual family as Storybook 「대화 셸」. Placeholder verb
 only: `시킬 일을 적어 주세요`. Send goes through a Vercel AI Gateway
-Responses loop when configured (Clerk-gated host key, HITL process `AI_GATEWAY_API_KEY`, or `PPOMI_CHAT=fixture`).
+Responses loop when configured (host key after Clerk JWKS verify, HITL process `AI_GATEWAY_API_KEY`, or `PPOMI_CHAT=fixture`).
 The model may call one host tool, `run_path`, which reuses the existing
 spine (`src/host.ts` → `ppomi-brain` → body / `ppomi-secrets` / `ppomi-path`
 catalog). The ToolCard is painted from that **model function_call**
@@ -60,16 +60,20 @@ inside the real shell chrome.
 
 The webview never holds the key (Tauri CSP is IPC-only). Packaged app:
 `ai_gateway` IPC → `host.ts --proxy-responses` → `https://ai-gateway.vercel.sh/v1/responses`.
-Who: Clerk session (Google → `web/` `/account`). Host key: `~/.ppomi/.env` only
-after that session verifies (interim). HITL escape: process `AI_GATEWAY_API_KEY`
-(`open --env`, not Dock). Else `$PPOMI_ROOT/shell/.env` with the same Clerk gate
-(optional `AI_GATEWAY_BASE_URL`, `AI_TEXT_MODEL` in the same file). `VERCEL_OIDC_TOKEN` is ignored.
+Who: Clerk session (Google → `web/` `/account`). Host key: `~/.ppomi/.env` (mode 0600
+or refused; optional `$PPOMI_ROOT/shell/.env`). File-held key is POSTed only after
+Clerk JWKS + aud/azp verify — not an auth gate. HITL escape: process
+`AI_GATEWAY_API_KEY` (`open --env`, not Dock). `AI_GATEWAY_BASE_URL` must be https.
+`VERCEL_OIDC_TOKEN` is ignored.
 Vite preview: same proxy at `/__ppomi/responses`, or `?chat=fixture` for an
 offline model-shaped function_call.
 
 ```sh
 # packaged Mac — Dock / open, no --env
-# ~/.ppomi/.env          AI_GATEWAY_API_KEY=…   (host secret)
+# ~/.ppomi/.env  chmod 600
+#   AI_GATEWAY_API_KEY=…
+#   CLERK_ISSUER=https://<app>.clerk.accounts.dev
+#   CLERK_AUTHORIZED_PARTIES=https://your-web-origin
 # ~/.ppomi/clerk-session  Clerk session JWT     (after web /account)
 open /Applications/뽀미.app
 # HITL only — not the product path

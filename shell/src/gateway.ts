@@ -1,11 +1,19 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fixtureResponses } from "./chat.ts";
-import { clerkSessionToken, verifyClerkSession } from "./clerk-session.ts";
+import { clerkSessionToken, secretFileOk, verifyClerkSession } from "./clerk-session.ts";
 
 const GATEWAY = "https://ai-gateway.vercel.sh/v1";
 const TEXT_MODEL = "openai/gpt-6-astra";
-const FILE_KEYS = ["AI_GATEWAY_API_KEY", "AI_GATEWAY_BASE_URL", "AI_TEXT_MODEL"] as const;
+const FILE_KEYS = [
+  "AI_GATEWAY_API_KEY",
+  "AI_GATEWAY_BASE_URL",
+  "AI_TEXT_MODEL",
+  "CLERK_ISSUER",
+  "CLERK_AUTHORIZED_PARTIES",
+  "CLERK_AZP",
+  "CLERK_AUD",
+] as const;
 
 export function gatewayEnvFiles(env: NodeJS.ProcessEnv): string[] {
   const files: string[] = [];
@@ -52,7 +60,7 @@ export function mergeGatewayFileEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   let needModel = !merged.AI_TEXT_MODEL;
   if (!needKey && !needBase && !needModel) return merged;
   for (const file of gatewayEnvFiles(merged)) {
-    if (!existsSync(file)) continue;
+    if (!existsSync(file) || !secretFileOk(file)) continue;
     let parsed: Record<string, string>;
     try {
       parsed = parseGatewayEnvFile(readFileSync(file, "utf8"));
@@ -71,15 +79,32 @@ export function mergeGatewayFileEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
       merged.AI_TEXT_MODEL = parsed.AI_TEXT_MODEL;
       needModel = false;
     }
+    for (const clerkKey of ["CLERK_ISSUER", "CLERK_AUTHORIZED_PARTIES", "CLERK_AZP", "CLERK_AUD"] as const) {
+      if (!merged[clerkKey] && parsed[clerkKey]) merged[clerkKey] = parsed[clerkKey];
+    }
   }
   return merged;
+}
+
+/** https only. http / credentials / non-URL → refuse (do not POST the key). */
+export function httpsGatewayBase(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:") return null;
+    if (url.username !== "" || url.password !== "") return null;
+    return value.replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
 }
 
 export function gatewayConfig(env: NodeJS.ProcessEnv = process.env): { key: string; base: string; model: string } | null {
   const resolved = mergeGatewayFileEnv(env);
   const key = resolved.AI_GATEWAY_API_KEY ?? "";
   if (!usableKey(key)) return null;
-  const base = (resolved.AI_GATEWAY_BASE_URL || GATEWAY).replace(/\/+$/, "");
+  const base = httpsGatewayBase(resolved.AI_GATEWAY_BASE_URL || GATEWAY);
+  if (base === null) return null;
   const model = resolved.AI_TEXT_MODEL || TEXT_MODEL;
   return { key, base, model };
 }
@@ -92,15 +117,17 @@ function asRecord(body: unknown): Record<string, unknown> {
   return body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : {};
 }
 
-function liveConfigured(
+async function liveConfigured(
   raw: NodeJS.ProcessEnv,
+  env: NodeJS.ProcessEnv,
   body: unknown,
   config: { key: string; base: string; model: string } | null,
-): boolean {
+  fetchFn: typeof fetch | undefined,
+): Promise<boolean> {
   if (raw.PPOMI_CHAT === "fixture") return true;
   if (config === null) return false;
   if (processGatewayKey(raw) !== undefined) return true;
-  return verifyClerkSession(clerkSessionToken(body, raw));
+  return verifyClerkSession(clerkSessionToken(body, env), env, fetchFn ? { fetch: fetchFn } : {});
 }
 
 export async function proxyResponses(
@@ -111,7 +138,7 @@ export async function proxyResponses(
   const env = mergeGatewayFileEnv(raw);
   const fixture = raw.PPOMI_CHAT === "fixture";
   const config = gatewayConfig(env);
-  const live = liveConfigured(raw, body, config);
+  const live = await liveConfigured(raw, env, body, config, deps.fetch);
   if (isProbe(body)) return { configured: live, fixture };
   if (fixture) return { configured: true, fixture: true, response: fixtureResponses(asRecord(body)) };
   if (!live || config === null) return { configured: false, fixture: false };

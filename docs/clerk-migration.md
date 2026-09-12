@@ -184,9 +184,9 @@ using (clerk_user_id = (select auth.jwt() ->> 'sub'));
 
 슬라이스 2: 웹 세션만 Clerk — PR #4의 GoTrue 웹 기기와 이 Clerk 세션 중 하나만 남긴다. 슬라이스 3 (MZZ-39: "Mac/Windows 클라이언트 딥링크·토큰 교환"): Mac/iPad/**Windows** 딥링크·토큰 교환(PR #4의 Windows PKCE 포함), Android password grant 교체. `X-Ppomi-Device`와 기기 등록 RPC는 남긴다.
 
-## Mac 대화 셸 (MZZ-80, interim)
+## Mac 대화 셸 (MZZ-80)
 
-Tauri 셸에 Clerk UI나 옛 딥링크를 넣지 않는다. who = 이 앱의 `/account` Google. Gateway 키는 호스트 `~/.ppomi/.env`에만 두고, Clerk 세션 JWT(`~/.ppomi/clerk-session` 또는 `complete()`가 넘기는 `clerkSession`)가 확인된 뒤에만 `ai_gateway`가 쓴다. `open --env AI_GATEWAY_API_KEY` 는 HITL. 원격 Clerk-gated proxy와 Mac 슬라이스 3이 이 파일을 대체한다.
+Tauri 셸에 Clerk UI나 옛 딥링크를 넣지 않는다. who = 이 앱의 `/account` Google. Gateway 키는 호스트 `~/.ppomi/.env`(mode 0600, 아니면 거부)에만 둔다. 파일 키로 Gateway POST 하려면 Clerk 세션 JWT를 JWKS로 검증하고 `iss`/`aud`/`azp` allowlist에 맞아야 한다. 이건 인증 게이트가 아니다: 같은 OS 사용자는 파일을 읽을 수 있고, `open --env AI_GATEWAY_API_KEY` HITL은 그대로다. `AI_GATEWAY_BASE_URL`은 https만. 원격 Clerk 프록시와 Mac 슬라이스 3이 이 파일을 대체한다.
 
 ## 하지 않는 일 (이 PR)
 
