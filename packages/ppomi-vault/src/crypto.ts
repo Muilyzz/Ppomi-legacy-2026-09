@@ -1,138 +1,221 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  createPrivateKey,
-  createPublicKey,
-  diffieHellman,
-  generateKeyPairSync,
-  hkdfSync,
-  randomBytes,
-  type KeyObject,
-} from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
+import * as sodiumNs from "libsodium-wrappers-sumo";
 
 export const VAULT_VERSION = "ppomi-vault-v1";
-export const WRAP_VERSION = "ppomi-vault-wrap-v1";
+export const RECOVERY_AAD = "ppomi-vault-recovery-v1";
 export const KEY_LEN = 32;
-export const NONCE_LEN = 12;
-export const TAG_LEN = 16;
-export const X25519_LEN = 32;
-const BOX_OVERHEAD = NONCE_LEN + TAG_LEN;
+
+type Sodium = typeof sodiumNs;
 
 export interface DeviceKeyPair {
   readonly publicKey: Uint8Array;
   readonly privateKey: Uint8Array;
 }
 
-export function createVaultKey(): Uint8Array {
-  return randomBytes(KEY_LEN);
+export interface KdfLimits {
+  readonly opsLimit: number;
+  readonly memLimit: number;
+}
+
+export interface RecoveryWrap {
+  readonly wrappedDek: Uint8Array;
+  readonly salt: Uint8Array;
+  readonly verifier: Uint8Array;
+}
+
+export interface AuthRequestPublic {
+  readonly requestId: string;
+  readonly identityId: string;
+  readonly publicKey: Uint8Array;
+  readonly fingerprint: string;
+  readonly expiresAt: number;
+}
+
+export interface AuthRequest {
+  readonly public: AuthRequestPublic;
+  readonly device: DeviceKeyPair;
+}
+
+export async function readyVault(): Promise<void> {
+  await sodiumNs.ready;
+}
+
+function n(): Sodium {
+  // ESM named import is a namespace; AEAD symbols land on the default after ready.
+  const sodium = (sodiumNs as unknown as { default?: Sodium }).default;
+  if (sodium === undefined || typeof sodium.crypto_aead_xchacha20poly1305_ietf_encrypt !== "function") {
+    throw new Error("readyVault");
+  }
+  return sodium;
+}
+
+export function nonceLen(): number {
+  return n().crypto_aead_xchacha20poly1305_ietf_NPUBBYTES;
+}
+
+export function tagLen(): number {
+  return n().crypto_aead_xchacha20poly1305_ietf_ABYTES;
+}
+
+/** Fast Argon2id for tests/example. Production callers should use `interactiveKdfLimits`. */
+export function minKdfLimits(): KdfLimits {
+  const s = n();
+  return { opsLimit: s.crypto_pwhash_OPSLIMIT_MIN, memLimit: s.crypto_pwhash_MEMLIMIT_MIN };
+}
+
+export function interactiveKdfLimits(): KdfLimits {
+  const s = n();
+  return { opsLimit: s.crypto_pwhash_OPSLIMIT_INTERACTIVE, memLimit: s.crypto_pwhash_MEMLIMIT_INTERACTIVE };
+}
+
+export function createDek(): Uint8Array {
+  return n().randombytes_buf(KEY_LEN);
 }
 
 export function createDeviceKeyPair(): DeviceKeyPair {
-  const pair = generateKeyPairSync("x25519");
+  const pair = n().crypto_box_keypair();
+  return { publicKey: pair.publicKey, privateKey: pair.privateKey };
+}
+
+export function payloadAad(identityId: string, keyId: string): Uint8Array {
+  return new TextEncoder().encode(`${VAULT_VERSION}|${identityId}|${keyId}`);
+}
+
+export function seal(plaintext: Uint8Array, dek: Uint8Array, aad: Uint8Array): Uint8Array {
+  const s = n();
+  assertLen(dek, KEY_LEN, "dek");
+  const nonce = s.randombytes_buf(s.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+  const ciphertext = s.crypto_aead_xchacha20poly1305_ietf_encrypt(plaintext, aad, null, nonce, dek);
+  const out = new Uint8Array(nonce.length + ciphertext.length);
+  out.set(nonce, 0);
+  out.set(ciphertext, nonce.length);
+  return out;
+}
+
+export function open(box: Uint8Array, dek: Uint8Array, aad: Uint8Array): Uint8Array {
+  const s = n();
+  assertLen(dek, KEY_LEN, "dek");
+  const npub = s.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES;
+  if (box.byteLength < npub + s.crypto_aead_xchacha20poly1305_ietf_ABYTES + 1) throw new Error("invalid");
+  const nonce = box.subarray(0, npub);
+  const ciphertext = box.subarray(npub);
+  return s.crypto_aead_xchacha20poly1305_ietf_decrypt(null, ciphertext, aad, nonce, dek);
+}
+
+/** Wrap DEK to a device/auth-request X25519 public key (`crypto_box_seal`). */
+export function wrapDekForDevice(dek: Uint8Array, recipientPublicKey: Uint8Array): Uint8Array {
+  assertLen(dek, KEY_LEN, "dek");
+  return n().crypto_box_seal(dek, recipientPublicKey);
+}
+
+export function unwrapDekForDevice(wrapped: Uint8Array, device: DeviceKeyPair): Uint8Array {
+  const dek = n().crypto_box_seal_open(wrapped, device.publicKey, device.privateKey);
+  if (dek.byteLength !== KEY_LEN) throw new Error("invalid");
+  return dek;
+}
+
+/** Wrap DEK with Argon2id(passphrase). Server keeps wrapped DEK + salt + verifier only. */
+export function wrapDekForRecovery(dek: Uint8Array, passphrase: string, limits: KdfLimits): RecoveryWrap {
+  const s = n();
+  assertLen(dek, KEY_LEN, "dek");
+  if (passphrase.length === 0) throw new Error("passphrase");
+  const salt = s.randombytes_buf(s.crypto_pwhash_SALTBYTES);
+  const wrappingKey = deriveRecoveryKey(passphrase, salt, limits);
+  const nonce = s.randombytes_buf(s.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+  const ciphertext = s.crypto_aead_xchacha20poly1305_ietf_encrypt(
+    dek,
+    new TextEncoder().encode(RECOVERY_AAD),
+    null,
+    nonce,
+    wrappingKey,
+  );
+  const wrappedDek = new Uint8Array(nonce.length + ciphertext.length);
+  wrappedDek.set(nonce, 0);
+  wrappedDek.set(ciphertext, nonce.length);
+  return { wrappedDek, salt, verifier: recoveryVerifier(wrappingKey) };
+}
+
+export function unwrapDekForRecovery(
+  wrap: RecoveryWrap,
+  passphrase: string,
+  limits: KdfLimits,
+): Uint8Array {
+  const s = n();
+  const wrappingKey = deriveRecoveryKey(passphrase, wrap.salt, limits);
+  if (!equalBytes(recoveryVerifier(wrappingKey), wrap.verifier)) throw new Error("invalid");
+  const npub = s.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES;
+  const dek = s.crypto_aead_xchacha20poly1305_ietf_decrypt(
+    null,
+    wrap.wrappedDek.subarray(npub),
+    new TextEncoder().encode(RECOVERY_AAD),
+    wrap.wrappedDek.subarray(0, npub),
+    wrappingKey,
+  );
+  if (dek.byteLength !== KEY_LEN) throw new Error("invalid");
+  return dek;
+}
+
+/** Public fingerprint phrase of an auth-request pubkey (server may store this). */
+export function pairingFingerprint(publicKey: Uint8Array): string {
+  const digest = n().crypto_generichash(8, publicKey, null);
+  const hex = Buffer.from(digest).toString("hex");
+  return `${hex.slice(0, 4)}-${hex.slice(4, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}`;
+}
+
+export function fingerprintsMatch(left: string, right: string): boolean {
+  const a = Buffer.from(left, "utf8");
+  const b = Buffer.from(right, "utf8");
+  return a.byteLength === b.byteLength && timingSafeEqual(a, b);
+}
+
+/** Win: one-time auth-request keypair. Server gets `public` only. */
+export function createAuthRequest(identityId: string, ttlMs = 5 * 60 * 1000): AuthRequest {
+  const device = createDeviceKeyPair();
   return {
-    publicKey: rawPublic(pair.publicKey),
-    privateKey: rawPrivate(pair.privateKey),
+    public: {
+      requestId: Buffer.from(n().randombytes_buf(8)).toString("hex"),
+      identityId,
+      publicKey: device.publicKey,
+      fingerprint: pairingFingerprint(device.publicKey),
+      expiresAt: Date.now() + ttlMs,
+    },
+    device,
   };
 }
 
-export function payloadAad(identityId: string, keyId: string): Buffer {
-  return Buffer.from(`${VAULT_VERSION}|${identityId}|${keyId}`, "utf8");
+export function approveAuthRequest(
+  dek: Uint8Array,
+  request: AuthRequestPublic,
+  confirmedFingerprint: string,
+): Uint8Array {
+  if (Date.now() >= request.expiresAt) throw new Error("expired");
+  const computed = pairingFingerprint(request.publicKey);
+  if (!fingerprintsMatch(computed, request.fingerprint) || !fingerprintsMatch(computed, confirmedFingerprint)) {
+    throw new Error("fingerprint");
+  }
+  return wrapDekForDevice(dek, request.publicKey);
 }
 
-export function seal(plaintext: Uint8Array, key: Uint8Array, aad: Uint8Array): Buffer {
-  assertLen(key, KEY_LEN, "vault key");
-  const nonce = randomBytes(NONCE_LEN);
-  const cipher = createCipheriv("aes-256-gcm", key, nonce);
-  cipher.setAAD(Buffer.from(aad));
-  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-  return Buffer.concat([nonce, ciphertext, cipher.getAuthTag()]);
+function deriveRecoveryKey(passphrase: string, salt: Uint8Array, limits: KdfLimits): Uint8Array {
+  const s = n();
+  return s.crypto_pwhash(
+    KEY_LEN,
+    passphrase,
+    salt,
+    limits.opsLimit,
+    limits.memLimit,
+    s.crypto_pwhash_ALG_ARGON2ID13,
+  );
 }
 
-export function open(box: Uint8Array, key: Uint8Array, aad: Uint8Array): Buffer {
-  assertLen(key, KEY_LEN, "vault key");
-  if (box.byteLength < BOX_OVERHEAD + 1) throw new Error("invalid");
-  const buf = Buffer.from(box);
-  const nonce = buf.subarray(0, NONCE_LEN);
-  const tag = buf.subarray(buf.byteLength - TAG_LEN);
-  const ciphertext = buf.subarray(NONCE_LEN, buf.byteLength - TAG_LEN);
-  const decipher = createDecipheriv("aes-256-gcm", key, nonce);
-  decipher.setAAD(Buffer.from(aad));
-  decipher.setAuthTag(tag);
-  return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+function recoveryVerifier(wrappingKey: Uint8Array): Uint8Array {
+  return n().crypto_generichash(KEY_LEN, wrappingKey, new TextEncoder().encode("ppomi-vault-verify-v1"));
 }
 
-/** Existing-device approve: wrap the vault key to a published X25519 public key. */
-export function wrapVaultKey(vaultKey: Uint8Array, recipientPublicKey: Uint8Array, identityId: string): Buffer {
-  assertLen(vaultKey, KEY_LEN, "vault key");
-  assertLen(recipientPublicKey, X25519_LEN, "device public key");
-  const ephemeral = generateKeyPairSync("x25519");
-  const shared = diffieHellman({
-    privateKey: ephemeral.privateKey,
-    publicKey: publicFromRaw(recipientPublicKey),
-  });
-  const wrappingKey = Buffer.from(hkdfSync("sha256", shared, identityId.toLowerCase(), WRAP_VERSION, KEY_LEN));
-  const aad = wrapAad(identityId, recipientPublicKey);
-  const box = seal(vaultKey, wrappingKey, aad);
-  return Buffer.concat([rawPublic(ephemeral.publicKey), box]);
-}
-
-export function unwrapVaultKey(wrapped: Uint8Array, device: DeviceKeyPair, identityId: string): Buffer {
-  assertLen(device.publicKey, X25519_LEN, "device public key");
-  assertLen(device.privateKey, X25519_LEN, "device private key");
-  if (wrapped.byteLength !== X25519_LEN + BOX_OVERHEAD + KEY_LEN) throw new Error("invalid");
-  const buf = Buffer.from(wrapped);
-  const ephemeralPublic = buf.subarray(0, X25519_LEN);
-  const box = buf.subarray(X25519_LEN);
-  const shared = diffieHellman({
-    privateKey: privateFromRaw(device),
-    publicKey: publicFromRaw(ephemeralPublic),
-  });
-  const wrappingKey = Buffer.from(hkdfSync("sha256", shared, identityId.toLowerCase(), WRAP_VERSION, KEY_LEN));
-  const opened = open(box, wrappingKey, wrapAad(identityId, device.publicKey));
-  if (opened.byteLength !== KEY_LEN) throw new Error("invalid");
-  return opened;
-}
-
-function wrapAad(identityId: string, recipientPublicKey: Uint8Array): Buffer {
-  return Buffer.concat([
-    Buffer.from(`${WRAP_VERSION}|${identityId.toLowerCase()}|`, "utf8"),
-    Buffer.from(recipientPublicKey),
-  ]);
-}
-
-function rawPublic(key: KeyObject): Buffer {
-  const jwk = key.export({ format: "jwk" });
-  if (jwk.x === undefined) throw new Error("invalid");
-  const raw = Buffer.from(jwk.x, "base64url");
-  assertLen(raw, X25519_LEN, "device public key");
-  return raw;
-}
-
-function rawPrivate(key: KeyObject): Buffer {
-  const jwk = key.export({ format: "jwk" });
-  if (jwk.d === undefined) throw new Error("invalid");
-  const raw = Buffer.from(jwk.d, "base64url");
-  assertLen(raw, X25519_LEN, "device private key");
-  return raw;
-}
-
-function publicFromRaw(raw: Uint8Array): KeyObject {
-  return createPublicKey({
-    format: "jwk",
-    key: { kty: "OKP", crv: "X25519", x: Buffer.from(raw).toString("base64url") },
-  });
-}
-
-function privateFromRaw(device: DeviceKeyPair): KeyObject {
-  return createPrivateKey({
-    format: "jwk",
-    key: {
-      kty: "OKP",
-      crv: "X25519",
-      x: Buffer.from(device.publicKey).toString("base64url"),
-      d: Buffer.from(device.privateKey).toString("base64url"),
-    },
-  });
+function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
+  const a = Buffer.from(left);
+  const b = Buffer.from(right);
+  return a.byteLength === b.byteLength && timingSafeEqual(a, b);
 }
 
 function assertLen(bytes: Uint8Array, length: number, label: string): void {
