@@ -1,7 +1,7 @@
 // storybook/secrets.js — 키체인/로컬 시크릿 블롭을 키–값 트리로 본다. 스키마별 폼 없음.
 // 잠김: 잎 마스킹 + 접힘. 뒷 4자리(****뒷4)는 계좌 키 허용 목록(accountKeys)에 있는 잎만; 값 모양(숫자 길이)은 근거가 아니라
 // OTP·PIN·전화·주민·사업자 모양의 숫자와 숫자 잎은 전부 ••••. 열림(스토리북은 인증 흉내): 원문 + 펼침. 복사는 onCopy 스텁(로컬만).
-// 앱 셸 wire는 MZZ-44 이후. CSS 없음: .sec .nav .meta .lbl .mute code details.
+// 앱 셸 wire는 MZZ-44 이후. CSS 없음: .sec .nav .meta .lbl .mute .entry code details. 꾸밈은 theme.css / simple.css 의 .secrets.
 (function (root) {
 'use strict';
 
@@ -62,17 +62,19 @@ function node(value, path, st) {
   var key = path.length ? path[path.length - 1] : 'value';
   var secret = typeof value === 'string' || typeof value === 'number';
   var text = value == null ? '—' : secret && !st.unlocked ? maskLeaf(path, value, st.accountKeys) : String(value);
-  var copy = st.unlocked && secret ? ' <button type="button" data-copy="' + esc(JSON.stringify(path)) + '">복사</button>' : '';
+  var copy = st.unlocked && secret ? ' <button class="entry" type="button" data-copy="' + esc(JSON.stringify(path)) + '">복사</button>' : '';
   return '<span class="lbl">' + esc(key) + '</span> ' +
     (st.unlocked || !secret ? '<code>' + esc(text) + '</code>' : '<span class="mute">' + esc(text) + '</span>') + copy;
 }
 
 function html(st) {
   var chips = chipsOf(st.blob, st.accountKeys).map(function (c) { return '<small class="meta">' + esc(c.key) + ' · ' + esc(c.chip) + '</small>'; }).join(' ');
-  return '<div class="sec">로컬 시크릿 <span class="r"><small class="meta">' + (st.unlocked ? '열림' : '잠김') + '</small></span></div>' +
+  return '<div class="secrets">' +
+    '<div class="sec">로컬 시크릿 <span class="r"><small class="meta">' + (st.unlocked ? '열림' : '잠김') + '</small></span></div>' +
     (chips ? '<p>' + chips + '</p>' : '') +
     '<nav class="nav" aria-label="열람"><button type="button" data-unlock>' + (st.unlocked ? '잠그기' : '인증하고 열기') + '</button></nav>' +
-    (st.blob == null ? '<p class="meta">시크릿 없음</p>' : node(st.blob, [], st));
+    (st.blob == null ? '<p class="meta">시크릿 없음</p>' : node(st.blob, [], st)) +
+    '</div>';
 }
 
 function mount(el, opts) {

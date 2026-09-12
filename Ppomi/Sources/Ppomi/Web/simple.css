@@ -38,6 +38,13 @@ td.n,th.n{text-align:right}
 tr[data-event],tr[data-record]{cursor:pointer}
 tr[data-event]:hover td,tr[data-record]:hover td,tr[aria-selected="true"] td{background:#f4f4f4}
 
+/* ---- 시크릿(secrets.js) */
+.secrets ul{list-style:none;margin:0;padding:2px 0 0 14px}
+.secrets li{margin:3px 0}
+.secrets>p{display:flex;flex-wrap:wrap;gap:4px 12px}
+.secrets .entry{color:#777}
+.secrets .mute{font-variant-numeric:tabular-nums}
+
 /* ---- 분개(journal.js) */
 .jtitle{display:flex;align-items:baseline;gap:8px;margin:0 0 4px}
 .jnav{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;margin:8px 0 12px}
