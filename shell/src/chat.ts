@@ -4,6 +4,7 @@ const MATCH_KB_OPEN = /kb스타기업뱅킹|kb\s*사업자\s*홈|path_cold_start
 
 export const CEO_GATEWAY_PROMPT = "KB스타비즈에 넣어둔 번호 마지막만 보여줘";
 export const SECRETS_CATALOG_INTENT = "사업자 계좌번호";
+export const GATEWAY_FAIL_TEXT = "모델 연결에 실패했습니다.";
 
 const TEXT_MODEL = "openai/gpt-6-astra";
 const INSTRUCTIONS = [
@@ -184,13 +185,17 @@ export async function defaultComplete(body: Record<string, unknown>): Promise<Re
   if (previewFixture()) return fixtureResponses(body);
   const invoke = tauriInvoke();
   if (invoke !== null) {
+    let proxy: GatewayProxy;
     try {
-      const proxy = await invoke("ai_gateway", { body }) as GatewayProxy;
-      if (!proxy.configured || proxy.error !== undefined || proxy.response === undefined) return null;
-      return proxy.response;
+      proxy = await invoke("ai_gateway", { body }) as GatewayProxy;
     } catch {
-      return null;
+      throw new Error("gateway_ipc_failed");
     }
+    if (!proxy.configured) return null;
+    if (proxy.error !== undefined || proxy.response === undefined) {
+      throw new Error(proxy.error ?? "model_unavailable");
+    }
+    return proxy.response;
   }
   const response = await fetch("/__ppomi/responses", {
     method: "POST",
@@ -212,7 +217,7 @@ export async function sendChat(
   try {
     first = await complete(responsesRequest(text));
   } catch {
-    first = null;
+    return { mode: "gateway", lines: [{ kind: "bubble", role: "assistant", text: GATEWAY_FAIL_TEXT }] };
   }
   if (first === null) return { mode: "local", lines: linesFromSpine(await runPath(text)) };
 

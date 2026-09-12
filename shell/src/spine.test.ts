@@ -64,7 +64,7 @@ test("secrets intent is a tool card plus a masked Korean reply", () => {
   assert.doesNotMatch(dumped, /1234567890/);
 });
 
-test("run_path IPC failure uses local Korean path_not_found", async () => {
+test("run_path IPC failure is failed, not path_not_found", async () => {
   const bag = globalThis as { __TAURI__?: { core?: { invoke: () => Promise<never> } } };
   const previous = bag.__TAURI__;
   bag.__TAURI__ = {
@@ -76,8 +76,9 @@ test("run_path IPC failure uses local Korean path_not_found", async () => {
   };
   try {
     const view = await invokeRunPath("지금 데이터 뭐 있어?");
-    assert.equal(view.status, "path_not_found");
-    assert.doesNotMatch(JSON.stringify(view), /invalid JSON|node host/i);
+    assert.equal(view.status, "failed");
+    assert.equal(textFromSpine(view), "실행에 실패했습니다.");
+    assert.doesNotMatch(JSON.stringify(view), /invalid JSON|node host|그 일에 맞는 경로/i);
   } finally {
     if (previous === undefined) delete bag.__TAURI__;
     else bag.__TAURI__ = previous;

@@ -32,7 +32,7 @@ LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
 open --env PPOMI_CHAT=fixture /Applications/뽀미.app
 ```
 
-Prefixing `PPOMI_CHAT=fixture open …` does **not** pass env into the GUI app. `지금 데이터 뭐 있어?` should be the Korean path-not-found bubble (or fixture tool + that text), never `node host returned invalid JSON`. Node spawn clears inherited `NODE_PATH` / Grok Electron injects.
+Prefixing `PPOMI_CHAT=fixture open …` does **not** pass env into the GUI app. A true miss (`지금 데이터 뭐 있어?`) is the Korean path-not-found bubble. Gateway/`run_path` IPC failure is a distinct Korean error (`모델 연결에 실패했습니다.` / `실행에 실패했습니다.`), never `node host returned invalid JSON` and never disguised as path-not-found. Node spawn clears inherited `NODE_PATH` / Grok Electron injects.
 
 The window is the **agent conversation shell** (`agent/src/ui/shell.tsx`)
 inside Tauri — same visual family as Storybook 「대화 셸」. Placeholder verb

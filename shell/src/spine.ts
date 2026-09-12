@@ -119,7 +119,15 @@ export async function invokeRunPath(intent: string, body = "macos", live = false
   try {
     return await invoke("run_path", { intent, body, live }) as SpineView;
   } catch {
-    return previewSpine(intent, body);
+    return {
+      status: "failed",
+      pathId: null,
+      note: "run_path ipc failed",
+      bodyKind: body,
+      live,
+      hook: "",
+      body: null,
+    };
   }
 }
 
