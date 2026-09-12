@@ -32,8 +32,14 @@ import {
   type FixtureWindowsWindow,
 } from "../../packages/ppomi-body-windows/src/index.ts";
 import {
+  AndroidAdapterError,
   AndroidDriver,
   FixtureAndroidNativeTools,
+  LiveAndroidNativeTools,
+  listAdbDevices,
+  liveAndroidClickLabel,
+  pickLiveAndroidClickTarget,
+  resolveAdbSerial,
   type FixtureAndroidWindow,
 } from "../../packages/ppomi-body-android/src/index.ts";
 
@@ -209,14 +215,55 @@ async function runWindows(input: BodyRunInput, live: boolean): Promise<BodyRunRe
 }
 
 async function runAndroid(input: BodyRunInput, live: boolean): Promise<BodyRunResult> {
-  const window: FixtureAndroidWindow = { ...demoWindow, packageName: "com.ppomi.androidtarget" };
-  const result = await runDriver(
-    input.path,
-    new AndroidDriver(new FixtureAndroidNativeTools(window)),
-    fixturePlaybook(input.path),
-  );
-  if (!live) return result;
-  return withHook(result, "live android is MZZ-55c — PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts");
+  if (!live) {
+    const window: FixtureAndroidWindow = { ...demoWindow, packageName: "com.ppomi.androidtarget" };
+    return runDriver(
+      input.path,
+      new AndroidDriver(new FixtureAndroidNativeTools(window)),
+      fixturePlaybook(input.path),
+    );
+  }
+  const { missing, serials } = listAdbDevices();
+  if (missing) {
+    return skipped(
+      input.path,
+      "live android skipped (adb not on PATH). Boot an emulator, pin it, then: PPOMI_ANDROID_SERIAL=emulator-5554 PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body android --live",
+    );
+  }
+  const pinned = process.env.ANDROID_SERIAL ?? process.env.PPOMI_ANDROID_SERIAL;
+  const resolved = resolveAdbSerial(serials, pinned);
+  if (resolved.serial === undefined) {
+    if (resolved.code === "serial_required") {
+      return skipped(
+        input.path,
+        "live android skipped (set PPOMI_ANDROID_SERIAL or ANDROID_SERIAL). Emulator: scripts/android-emulator.sh boot, then pin emulator-5554. A single attached device is never auto-targeted.",
+      );
+    }
+    return skipped(input.path, "live android skipped (pinned serial is not an authorized attached device)");
+  }
+  const tools = new LiveAndroidNativeTools({ serial: resolved.serial });
+  try {
+    tools.android_open({ packageName: "com.android.settings" });
+    const preview = tools.android_screen();
+    const node = pickLiveAndroidClickTarget(preview.nodes);
+    if (node === undefined) {
+      return skipped(
+        input.path,
+        "live android skipped (no safe Settings row — 연결 / Wi-Fi / 블루투스 / 알림 / 배터리 / 디스플레이). Nothing else is tapped.",
+      );
+    }
+    return runDriver(input.path, new AndroidDriver(tools), {
+      id: input.path.id,
+      steps: [{ id: "open-next", kind: "click", target: liveAndroidClickLabel(node), effect: "navigate" }],
+    });
+  } catch (error) {
+    const code = error instanceof AndroidAdapterError ? error.code : "";
+    if (code === "no_adb" || code === "no_device") {
+      return skipped(input.path, `live android skipped (${code})`);
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return skipped(input.path, `live android skipped (${message})`);
+  }
 }
 
 function bodyFor(kind: BodyKind, live: boolean): BodyRuntime {
@@ -245,7 +292,7 @@ function hookFor(kind: BodyKind): string {
     case "windows":
       return "PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts";
     case "android":
-      return "PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts";
+      return "PPOMI_ANDROID_SERIAL=emulator-5554 PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body android --live";
     default: {
       const exhaustive: never = kind;
       return exhaustive;

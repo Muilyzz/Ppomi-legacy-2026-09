@@ -13,9 +13,17 @@ npm --prefix packages/ppomi-body-android test
 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts
 ```
 
-Live Settings dump+tap (physical device or emulator; `adb` on PATH). A live tap needs an explicit device pin — `PPOMI_ANDROID_SERIAL` or `ANDROID_SERIAL` — a single attached phone is never auto-targeted. No adb, no pin, or a pin that is not attached: the live step SKIPs (exit 0). It taps only a known-safe Settings row (연결 / Wi-Fi / 블루투스 / 알림 / 배터리 / 디스플레이); on any other screen it skips rather than tapping the first clickable row.
+Shell/brain addresses this body through Tauri `run_path` (`--body android`). Fixture needs no device. Live is the same dump+tap:
 
 ```sh
-PPOMI_ANDROID_SERIAL=R3CX PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts
+npm --prefix shell run host -- --intent 다음 --body android
+PPOMI_ANDROID_SERIAL=emulator-5554 PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body android --live
+```
+
+Live Settings dump+tap (emulator or phone; `adb` on PATH). A live tap needs an explicit device pin — `PPOMI_ANDROID_SERIAL` or `ANDROID_SERIAL` — a single attached phone is never auto-targeted. No adb, no pin, or a pin that is not attached: the live step SKIPs (exit 0). It taps only a known-safe Settings row (연결 / Wi-Fi / 블루투스 / 알림 / 배터리 / 디스플레이); on any other screen it skips rather than tapping the first clickable row.
+
+```sh
+scripts/android-emulator.sh boot
+PPOMI_ANDROID_SERIAL=emulator-5554 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts
 ANDROID_SERIAL=R3CX PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts
 ```

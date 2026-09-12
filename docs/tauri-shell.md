@@ -51,11 +51,23 @@ PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body macos --
 
 ## Windows / Android 호출 자리
 
-같은 `run_path` / `host.ts --body windows|android`가 각 fixture 1-step을 돌린다. Live UIA · UIAutomator는 기존 패키지 예제(MZZ-55b / MZZ-55c):
+같은 `run_path` / `host.ts --body windows|android`가 각 fixture 1-step을 돌린다.
+
+Windows live UIA는 기존 패키지 예제(MZZ-55b). Android live는 **같은 셸 IPC**가 `ppomi-body-android`의 UIAutomator dump+tap을 호출한다 (MZZ-55c / MZZ-58). Kotlin `Android/` 접근성 서비스는 온디바이스 body이며 두 번째 제품 UI가 아니다.
+
+```sh
+# fixture (no device)
+npm --prefix shell run host -- --intent 다음 --body android
+
+# live UIAutomator — emulator OK; pin is required
+scripts/android-emulator.sh boot
+PPOMI_ANDROID_SERIAL=emulator-5554 PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body android --live
+```
+
+창에서 body `android` + **live**와 같다. `adb` 없음 · 시리얼 미지정 · 기기가 목록에 없음 · 설정 화면에 안전한 행(연결 / Wi-Fi / 블루투스 / 알림 / 배터리 / 디스플레이) 없음 = skip(실패 아님). 붙은 기기 하나라도 자동 선택하지 않는다. 패키지 예제(`packages/ppomi-body-android/example`)는 같은 dump+tap이다.
 
 ```sh
 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts
-PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts
 ```
 
 ## TCC / Launch Services

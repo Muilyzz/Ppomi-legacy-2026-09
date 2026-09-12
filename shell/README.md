@@ -35,8 +35,14 @@ PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body macos --
 
 Or check **live** in the window. Off-macOS / no grant is a skip, not a crash.
 
-Windows / Android fixtures use the same IPC (`--body windows|android`). Live OS
-hooks stay the existing `ppomi-body-*` examples (MZZ-55b / MZZ-55c).
+Windows fixtures use the same IPC (`--body windows`). Live UIA stays the
+`ppomi-body-windows` example (MZZ-55b). Android live uses this same host:
+
+```sh
+PPOMI_ANDROID_SERIAL=emulator-5554 PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body android --live
+```
+
+No adb / no pin / no safe Settings row = skip. Kotlin `Android/` is body only.
 
 Packaged `npm --prefix shell run build` still needs `node` on `PATH` (or
 `PPOMI_NODE`) for the TS host. That is a smoke spine, not a store bundle.

@@ -34,6 +34,26 @@ test("live macos off-darwin skips instead of failing", async () => {
   assert.match(result.note, /not darwin/);
 });
 
+test("live android without a pinned serial skips instead of failing", async () => {
+  const previousPin = process.env.PPOMI_ANDROID_SERIAL;
+  const previousAdb = process.env.ANDROID_SERIAL;
+  delete process.env.PPOMI_ANDROID_SERIAL;
+  delete process.env.ANDROID_SERIAL;
+  try {
+    const result = await runSpine({ intent: "다음", body: "android", live: true });
+    assert.equal(result.status, "completed");
+    assert.equal(result.bodyKind, "android");
+    assert.equal(result.live, true);
+    assert.match(result.note, /live android skipped/);
+    assert.match(result.hook, /--body android --live/);
+  } finally {
+    if (previousPin === undefined) delete process.env.PPOMI_ANDROID_SERIAL;
+    else process.env.PPOMI_ANDROID_SERIAL = previousPin;
+    if (previousAdb === undefined) delete process.env.ANDROID_SERIAL;
+    else process.env.ANDROID_SERIAL = previousAdb;
+  }
+});
+
 test("parseArgs reads intent, body, and live", () => {
   assert.equal(parseBodyKind(undefined), "macos");
   assert.deepEqual(parseArgs(["열어", "--body", "windows", "--live"]), {

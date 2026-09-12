@@ -39,6 +39,18 @@ python3 scripts/android-standalone-test.py
 
 2026-09-09 독립 버전 검증: Android 15/API 35 에뮬레이터에서 Mac MCP 포트 전달을 제거하고 작업·승인 UI를 통해 별도 앱의 한글 입력/적용과 실제 PNG 저장을 확인했다. 승인 전 중지, 외부 호출 및 자기 승인 차단, 강제 종료 후 자동 재실행 방지, 기록 화면과 APK 내부 Swift JNI 로딩을 확인했다. 저장·선택자·모델 주소 검증 4개와 Mac/Android 회계 코어 동일성 14개 사례가 통과했다. 기존 APK MCP 제어 14개와 설치된 Mac 뽀미 MCP 경유 5개 검사도 새 앱에서 통과했다. 최종 debug 빌드와 lint는 오류 0개다. 실제 모델 API 호출과 실기기는 이번 검증에 포함하지 않았다.
 
+## Tauri 셸 1-step (UIAutomator)
+
+소비자 셸(`shell/`)은 Kotlin 접근성 APK를 띄우지 않는다. `run_path --body android`가 `ppomi-body-android`의 dump+tap을 호출한다. 픽스처는 기기 없이, live는 에뮬레이터 또는 폰에 시리얼을 명시한다.
+
+```sh
+npm --prefix shell run host -- --intent 다음 --body android
+scripts/android-emulator.sh boot
+PPOMI_ANDROID_SERIAL=emulator-5554 PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body android --live
+```
+
+한 대만 붙어 있어도 자동 선택하지 않는다. 안전한 설정 행(연결 / Wi-Fi / …)만 탭한다. 온디바이스 접근성 MCP는 아래 보조 앱 경로다.
+
 ## 에뮬레이터 실행
 
 현재 개발 환경은 Android Studio, Android SDK, `Pixel_8_API_35` AVD, scrcpy 4.1을 사용한다. AVD는 Android 15/API 35, Google APIs, ARM64 이미지다. 기본 테스트에는 Google Play 로그인이나 실기기가 필요하지 않다.
