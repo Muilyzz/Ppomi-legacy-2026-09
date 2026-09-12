@@ -1,6 +1,7 @@
 // storybook/evidence-fleet.js — 2026-09-12 증빙 잠금 면. 서버=분개·숫자. 파일은 기기/E2E. id는 디버그에서만.
 // 링크: 기기 · 종류. 클릭=미리보기 팝오버. 로컬 즉시 / 피어 온라인이면 E2E / 오프면 비활성(또는 암호문 캐시).
-// 적격 4종 vs 보조(스냅샷/StepResult). 앱 wire·실제 E2E 암호는 없음. CSS 없음: .ev-fleet .jtitle .sec .card .lbl .meta .key .nav table .ev-pop.
+// 그리드: 기기(행) × collectedAtMs(열). 온라인·열림=채운 썸네일, 미부착·오프=빈 썸네일(가짜 미리보기 없음).
+// 적격 4종 vs 보조(스냅샷/StepResult). 앱 wire·실제 E2E 암호는 없음. CSS 없음: .ev-fleet .jtitle .sec .card .lbl .meta .key .nav table .ev-pop .ev-grid .ev-thumb.
 (function (root) {
 'use strict';
 
@@ -36,6 +37,13 @@ function timeShort(ms) {
 
 function timeFull(ms) { return new Date(ms).toISOString().replace('T', ' ').replace('Z', ''); }
 
+function timeCol(ms) {
+  var d = new Date(ms);
+  var s = timeShort(ms) + ':' + String(d.getUTCSeconds()).padStart(2, '0');
+  var frac = ms % 1000;
+  return frac ? s + '.' + String(frac).padStart(3, '0') : s;
+}
+
 function itemLabel(item, st) {
   var kind = item.kind || '';
   var label = hostLabel(st.fleet, item.host || st.here) + ' · ' + kind + (gradeOf(kind) === '보조' ? '(보조)' : '');
@@ -53,6 +61,34 @@ function linkState(item, fleet, here) {
 }
 
 function linkLabel(state) { return LINK[state] || LINK.disabled; }
+
+// 채움 = 이 기기에서 열리거나 피어가 살아 있음. 오프·미부착·서버 메타만이면 빈 칸(미리보기 없음).
+function thumbFilled(item, fleet, here) {
+  var s = linkState(item, fleet, here);
+  return s === 'open' || s === 'e2e';
+}
+
+function timesOf(items) {
+  var seen = {}, out = [];
+  (items || []).forEach(function (it) {
+    var ms = collectedAt(it);
+    if (ms == null || seen[ms]) return;
+    seen[ms] = 1;
+    out.push(ms);
+  });
+  out.sort(function (a, b) { return a - b; });
+  return out;
+}
+
+function hostsOf(st) {
+  var seen = {}, rows = [];
+  (st.fleet || []).forEach(function (d) { if (d.id && !seen[d.id]) { seen[d.id] = 1; rows.push(d.id); } });
+  (st.items || []).forEach(function (it) {
+    var h = it.host || st.here;
+    if (h && !seen[h]) { seen[h] = 1; rows.push(h); }
+  });
+  return rows;
+}
 
 function presence(fleet, here) {
   if (!fleet || !fleet.length) return '<p class="meta">기기 없음</p>';
@@ -107,6 +143,38 @@ function links(st) {
     (st.debug ? '<th>evidence_id</th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table>';
 }
 
+function grid(st) {
+  var items = st.items || [];
+  var cols = timesOf(items);
+  var rows = hostsOf(st);
+  if (!rows.length || !cols.length) return '<p class="meta">그리드 없음</p>';
+  var head = '<th scope="col">기기</th>' + cols.map(function (ms) {
+    return '<th scope="col" data-collected="' + ms + '">' + esc(timeCol(ms)) + '</th>';
+  }).join('');
+  var body = rows.map(function (host) {
+    var cells = cols.map(function (ms) {
+      var i = -1, it = null;
+      items.forEach(function (x, n) {
+        if (it) return;
+        if ((x.host || st.here) === host && collectedAt(x) === ms) { it = x; i = n; }
+      });
+      if (!it) return '<td></td>';
+      var state = linkState(it, st.fleet, st.here);
+      var fill = thumbFilled(it, st.fleet, st.here);
+      var off = state === 'disabled';
+      return '<td><button type="button" class="ev-thumb" data-open="' + esc(it.evidence_id) + '"' +
+        ' data-fill="' + (fill ? '1' : '0') + '" data-link="' + esc(state) + '"' +
+        (off ? ' disabled' : ' popovertarget="ev-pop-' + i + '"') +
+        ' aria-label="' + esc(itemLabel(it, st)) + '">' +
+        '<span class="ev-thumb-face">' + (fill ? esc(it.kind) : '') + '</span>' +
+        '<small class="meta">' + esc(itemLabel(it, st)) + '</small></button></td>';
+    }).join('');
+    return '<tr data-device="' + esc(host) + '"><th scope="row">' + esc(hostLabel(st.fleet, host)) + '</th>' + cells + '</tr>';
+  }).join('');
+  return '<div class="ev-grid-wrap"><table class="ev-grid ev-table" aria-label="기기 × 시각"><thead><tr>' +
+    head + '</tr></thead><tbody>' + body + '</tbody></table></div>';
+}
+
 function layers(list, st) {
   if (!list || !list.length) return '';
   return '<ol>' + list.map(function (p) {
@@ -132,6 +200,7 @@ function html(st) {
     '<div class="jtitle"><h2 class="key">' + esc(st.title || '증빙') + '</h2> <small class="meta">파일은 기기 · 서버는 메타</small></div>' +
     '<div class="sec">서버</div>' + serverMeta(st) +
     '<div class="sec">기기</div>' + presence(st.fleet, st.here) +
+    '<div class="sec">그리드</div>' + grid(st) +
     '<div class="sec">링크</div>' + links(st) +
     (st.layers && st.layers.length ? '<div class="sec">다단</div>' + layers(st.layers, st) : '') +
     '</div>';
@@ -157,5 +226,5 @@ function mount(el, opts) {
   return {set: set, state: function () { return st; }};
 }
 
-root.EvidenceFleet = {OFFICIAL, AUX, LINK, HOST, gradeOf, hostLabel, itemLabel, collectedAt, timeShort, timeFull, linkState, linkLabel, presence, html, mount};
+root.EvidenceFleet = {OFFICIAL, AUX, LINK, HOST, gradeOf, hostLabel, itemLabel, collectedAt, timeShort, timeFull, timeCol, thumbFilled, timesOf, hostsOf, linkState, linkLabel, presence, grid, html, mount};
 })(globalThis);
