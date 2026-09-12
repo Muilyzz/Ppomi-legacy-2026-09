@@ -58,11 +58,13 @@ input,textarea{background:var(--surface);border:1px solid var(--line);border-rad
 input:focus,textarea:focus{border-color:var(--line-2)}
 
 /* ---- 시크릿(secrets.js): 마크업엔 CSS가 없다 — 꾸밈은 여기서만. Tailwind preflight가 ul 패딩을 지워서 트리는 여기서 다시 들여쓴다 */
+.secrets>.nav{margin:.5rem 0 1rem}
 .secrets ul{list-style:none;margin:0;padding:.125rem 0 0 .875rem}
 .secrets li{margin:.2rem 0}
 .secrets>p{display:flex;flex-wrap:wrap;gap:.25rem .75rem}
 .secrets .entry{color:var(--fg-2)}
 .secrets .mute{font-variant-numeric:tabular-nums}
+.secrets code{overflow-wrap:anywhere}
 
 /* ---- 분개(journal.js): 마크업엔 CSS가 없다 — 꾸밈은 여기서만. 기본 DOM으로도 읽히는 표에 헤어라인·합계·행 선택만 얹는다 */
 .jtitle{display:flex;align-items:baseline;gap:.5rem;margin:0 0 .25rem}
