@@ -11,6 +11,7 @@ export function isHandoffStep(step: PathStep): boolean {
     case "click":
     case "type":
     case "read":
+    case "key":
     case "goto":
     case "fill":
     case "waitFor":
@@ -22,7 +23,7 @@ export function isHandoffStep(step: PathStep): boolean {
   }
 }
 
-/** PageSurface can run these. OS-only kinds and handoffs are excluded. */
+/** PageSurface can run these. OS-only kinds (`focus`, `type`, `key`) and handoffs are excluded. */
 export function isPageAutomatableStep(step: PathStep): boolean {
   switch (step.kind) {
     case "goto":
@@ -40,6 +41,7 @@ export function isPageAutomatableStep(step: PathStep): boolean {
       );
     case "focus":
     case "type":
+    case "key":
     case "human":
     case "payment":
     case "submit":
@@ -53,7 +55,7 @@ export function isPageAutomatableStep(step: PathStep): boolean {
 
 /**
  * Automated page prefix: the leading run of page-automatable steps. It ends at the
- * first handoff *or* the first step a page cannot run (OS `focus` / `type`, a
+ * first handoff *or* the first step a page cannot run (OS `focus` / `type` / `key`, a
  * locator-less `click`, a bare `read`); nothing past that point is included, so a
  * later page step never runs without the step it depends on.
  */
@@ -84,6 +86,7 @@ function needsControl(kind: PathStepKind): boolean {
     case "focus":
     case "click":
     case "type":
+    case "key":
     case "goto":
     case "fill":
       return true;

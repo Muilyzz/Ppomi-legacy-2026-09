@@ -79,3 +79,21 @@ test("page prefix stops at the first step a page cannot run; later page steps ar
   assert.deepEqual(pageStepsUntilHandoff(handoffFirst), []);
   assert.deepEqual(handoffSteps(handoffFirst).map(step => step.id), ["pay"]);
 });
+
+test("key is an OS-only mutation: not a handoff, ends the page prefix, needs ui.control", () => {
+  const iphone = loadPath("kb-star-biz-iphone", { version: "0.1.0" });
+  const [goHome] = iphone.steps;
+  assert.ok(goHome);
+  assert.equal(goHome.kind, "key");
+  assert.equal(isHandoffStep(goHome), false);
+  assert.deepEqual(pageStepsUntilHandoff(iphone), []);
+  assert.deepEqual(handoffSteps(iphone).map(step => step.id), ["human-login", "human-account-detail"]);
+  assert.deepEqual(grantsUsed(iphone), ["ui.read", "ui.control"]);
+
+  const keyThenGoto = documentOf([
+    { id: "home", kind: "key", target: "home", effect: "navigate" },
+    { id: "open", kind: "goto", url: "https://example.test/a", effect: "navigate" },
+  ]);
+  assert.deepEqual(pageStepsUntilHandoff(keyThenGoto), []);
+  assert.deepEqual(grantsUsed(keyThenGoto), ["ui.read", "ui.control"]);
+});

@@ -58,6 +58,7 @@ function toPageStep(step: PathStep): PagePlaybookStep {
       return { id: step.id, kind: "read", ...(require === undefined ? {} : { require }) };
     case "focus":
     case "type":
+    case "key":
     case "human":
     case "payment":
     case "submit":
