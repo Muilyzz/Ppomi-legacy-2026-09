@@ -1,4 +1,4 @@
-// 값 종류 뷰 — 대장 다섯 개 + 분개 집계 하나가 전부 같은 Facts.mount 를 쓴다. 에이전트가 {records, schema} 만 돌려주면 이 화면이 된다.
+// 값 종류/Panel — 스키마 값 종류만 보고 Table · Timeline · Treemap · Floorplan 을 붙인다. 도메인 분기 없음.
 import {fn} from 'storybook/test';
 import '../Ppomi/Sources/Ppomi/Web/facts.js';
 import '../Ppomi/Sources/Ppomi/Web/journal.js';
@@ -20,8 +20,8 @@ const expenses = {
 function F(key, title, type, extra) { return {key, title, type, ...extra}; }
 
 export default {
-  title: '값 종류 뷰',
-  render: (args) => { const el = document.createElement('div'); X.mount(el, args); return el; },
+  title: '값 종류/Panel',
+  render: (args) => { const el = document.createElement('div'); X.Panel.mount(el, args); return el; },
   argTypes: {
     depth: {control: {type: 'number', min: 1}, description: '트리맵 깊이'},
     root: {control: 'text', description: '트리맵 뿌리 경로'},

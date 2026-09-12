@@ -1,5 +1,5 @@
 // 개발자 페이지 — 플레이북 검증 현황. 실제 로컬 자료(번들 Catalog + data/playbooks 의 설치 패키지·발자국·판정 장부, 전부 이 Mac 의 비공개 파일)를 그대로 읽는다.
-// 위: 값 종류 뷰(대상/패키지/기능 트리맵 = 미검증 단계 수, 표). 아래: 고른 기능의 플레이북(명세 나무에 판정 ✓△✗, 발자국 그래프). 판정은 MCP verify_step 이 남기고, 파일이 바뀌면 Vite 가 다시 그린다.
+// 위: 값 종류 Panel(대상/패키지/기능 트리맵 = 미검증 단계 수, 표). 아래: 고른 기능의 플레이북(명세 나무에 판정 ✓△✗, 발자국 그래프). 판정은 MCP verify_step 이 남기고, 파일이 바뀌면 Vite 가 다시 그린다.
 import '../Ppomi/Sources/Ppomi/Web/playbook.js';
 import '../Ppomi/Sources/Ppomi/Web/facts.js';
 import '../Ppomi/Sources/Ppomi/Web/verify.js';
