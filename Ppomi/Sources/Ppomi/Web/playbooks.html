@@ -58,7 +58,7 @@ function drawList(){var root=tree(),h='';
 function drawMap(){var recs=[];(D.packages||[]).forEach(function(p){(p.manifest.capabilities||[]).forEach(function(c){var s=csum(p,c);recs.push({id:p.id+'/'+c.id,fields:{name:c.title||c.id,path:(p.path||'기타')+'/'+p.name+'/'+(c.title||c.id),unverified:s.unverified,total:s.total,ok:s.ok,changed:s.changed,fail:s.fail,pkg:p.id}});});});
   var schema={fields:[{key:'name',title:'기능',type:'text'},{key:'path',title:'자리',type:'path'},{key:'unverified',title:'미검증',type:'amount',unit:'단계'},{key:'total',title:'단계',type:'amount'},{key:'ok',title:'✓',type:'amount'},{key:'changed',title:'△',type:'amount'},{key:'fail',title:'✗',type:'amount'},{key:'pkg',title:'플레이북',type:'ref'}]};
   var paths={};recs.forEach(function(r){paths[r.fields.path]=r;});
-  X.mount(document.getElementById('map'),{records:recs,schema:schema,depth:2,onSelect:function(s){var r=paths[s.path];if(r){SEL={key:'pkg:'+r.fields.pkg+'/'+r.id.split('/')[1],pkg:r.fields.pkg,cap:r.id.split('/')[1]};drawDetail();}}});}
+  X.Panel.mount(document.getElementById('map'),{records:recs,schema:schema,depth:2,onSelect:function(s){var r=paths[s.path];if(r){SEL={key:'pkg:'+r.fields.pkg+'/'+r.id.split('/')[1],pkg:r.fields.pkg,cap:r.id.split('/')[1]};drawDetail();}}});}
 function drawDetail(){var el=document.getElementById('detail');if(!SEL||!byId[SEL.pkg]){el.innerHTML='<div class="sec">명세</div><p class="meta">줄을 고르면 명세 나무가 여기에</p>';return;}
   var p=byId[SEL.pkg];el.innerHTML='';var box=document.createElement('div');el.appendChild(box);
   P.mount(box,{manifest:p.manifest,verification:p.verification,footprints:p.footprints||[],cap:SEL.cap||''});
