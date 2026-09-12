@@ -272,8 +272,13 @@ fn host_json(cmd: Command, stdin_payload: Option<&[u8]>, timeout: Duration, code
     .map_err(|message| HostError::new(code, message))
 }
 
-fn run_path_blocking(intent: &str, body: &str, live: bool) -> Result<Value, HostError> {
+/// `approve` is the one gate token the person just cleared in the window (`<pathId>/<stepId>`);
+/// it is forwarded verbatim as `--approve` and never derived from anything else.
+fn run_path_blocking(intent: &str, body: &str, live: bool, approve: Option<&str>) -> Result<Value, HostError> {
     let mut cmd = host_command(&["--intent", intent, "--body", body]);
+    if let Some(token) = approve.filter(|token| !token.is_empty()) {
+        cmd.arg("--approve").arg(token);
+    }
     if live {
         cmd.arg("--live");
         cmd.env("PPOMI_BODY_LIVE", "1");
@@ -293,8 +298,8 @@ fn join_failed(code: &str) -> impl FnOnce(tauri::Error) -> HostError + '_ {
 
 /// Async so the node run never blocks the main thread and the webview.
 #[tauri::command]
-async fn run_path(intent: String, body: String, live: bool) -> Result<Value, HostError> {
-    tauri::async_runtime::spawn_blocking(move || run_path_blocking(&intent, &body, live))
+async fn run_path(intent: String, body: String, live: bool, approve: Option<String>) -> Result<Value, HostError> {
+    tauri::async_runtime::spawn_blocking(move || run_path_blocking(&intent, &body, live, approve.as_deref()))
         .await
         .map_err(join_failed("run_path_host_failed"))?
 }
