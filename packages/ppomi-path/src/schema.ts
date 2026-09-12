@@ -19,6 +19,7 @@ export const PATH_STEP_KINDS = [
   "click",
   "type",
   "read",
+  "key",
   "goto",
   "fill",
   "waitFor",

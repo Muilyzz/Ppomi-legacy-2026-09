@@ -31,10 +31,12 @@ only: `시킬 일을 적어 주세요`. Type `다음` or `browse` and send: `run
 `src/host.ts` → `ppomi-brain` → `path-home-next` → `ppomi-body-macos`
 fixture click on `Next`. `내 사업자 KB계좌번호 알아?` (and 계좌번호 / KB 계좌 /
 account number) selects `path-secrets-account` and reads `ppomi-secrets`
-(`ppomi/kb-star-biz/account`). Chat shows a tool card plus masked `****last4`
-only — never the plaintext account. Fixture is the default. Path results land
-in chat bubbles / tool cards. Handled outcomes (`path_not_found` included)
-return JSON and exit 0.
+(`ppomi/kb-star-biz/account`). `KB스타기업뱅킹 열어` / `KB 사업자 홈` /
+`path_cold_start` load `kb-star-biz-iphone` from the `ppomi-path` catalog
+(Home → KB, stop at Face ID / human-login). Chat shows a tool card plus a
+short Korean bubble — never the plaintext account. Fixture is the default.
+Path results land in chat bubbles / tool cards. Handled outcomes
+(`path_not_found` included) return JSON and exit 0.
 No IA header, no empty-state chips, no greeting — composer-only empty
 inside the real shell chrome.
 
@@ -58,6 +60,15 @@ Mac window install is still the one signed path:
 
 ```sh
 LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
+```
+
+KB스타기업뱅킹 live is fixture-default; the host documents the iPhone
+Mirroring body hook (MZZ-46 / MZZ-52). Face ID / login stay HITL:
+
+```sh
+npm --prefix shell run host -- --intent 'KB스타기업뱅킹 열어'
+PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 'KB스타기업뱅킹 열어' --live
+PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-iphone-mirroring/example/src/main.ts
 ```
 
 Windows / Android fixtures use the same IPC (`--body windows|android`). Live OS

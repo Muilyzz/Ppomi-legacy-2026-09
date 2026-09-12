@@ -37,12 +37,15 @@ export type Line =
 type Invoke = (cmd: string, args: Record<string, unknown>) => Promise<unknown>;
 
 const MATCH_HOME = /^(다음|browse|next|열어|home)$/i;
+const MATCH_KB = /kb스타기업뱅킹|kb\s*사업자\s*홈|path_cold_start|kb-enterprise/i;
 const MATCH_SECRETS =
   /사업자\s*계좌|사업자\s*kb|kb\s*계좌|kb\s*account|계좌번호|통장번호|account\s*number|\baccount\b|계좌/i;
 
+const KB_PATH_ID = "kb-star-biz-iphone";
 const SECRETS_PATH_ID = "path-secrets-account";
 const SECRETS_MASK = "****7890";
 const SECRETS_KEY = "ppomi/kb-star-biz/account";
+const KB_BUBBLE = "KB스타기업뱅킹을 열었습니다. Face ID로 로그인하면 이어서 볼게요.";
 
 function tauriInvoke(): Invoke | null {
   const core = (globalThis as { __TAURI__?: { core?: { invoke: Invoke } } }).__TAURI__?.core;
@@ -52,6 +55,24 @@ function tauriInvoke(): Invoke | null {
 /** Browser / `vite preview` only. Packaged Tauri always has IPC. */
 export function previewSpine(intent: string, body = "macos"): SpineView {
   const text = intent.trim();
+  if (MATCH_KB.test(text)) {
+    return {
+      status: "needs_human",
+      pathId: KB_PATH_ID,
+      note: "fixture: Home → KB스타기업뱅킹. Face ID·로그인은 당사자.",
+      bodyKind: body,
+      live: false,
+      hook: "",
+      body: {
+        status: "stopped",
+        steps: [
+          { stepId: "go-home", status: "ok", note: "phone_key home" },
+          { stepId: "open-kb", status: "ok", note: "KB스타기업뱅킹" },
+          { stepId: "human-login", status: "needs_human", note: "Face ID·로그인은 당사자." },
+        ],
+      },
+    };
+  }
   if (MATCH_HOME.test(text)) {
     return {
       status: "completed",
@@ -105,6 +126,7 @@ export function textFromSpine(result: SpineView): string {
     case "grant_denied":
       return "권한이 없어 멈추었습니다.";
     case "needs_human":
+      if (result.pathId === KB_PATH_ID) return KB_BUBBLE;
       return "사람 차례입니다.";
     case "protected":
       return "보호된 동작이라 멈추었습니다.";
@@ -113,6 +135,7 @@ export function textFromSpine(result: SpineView): string {
     case "completed":
       if (result.pathId === "path-home-next") return "다음을 눌렀습니다.";
       if (result.pathId === SECRETS_PATH_ID) return secretsBubble(result);
+      if (result.pathId === KB_PATH_ID) return KB_BUBBLE;
       return "실행했습니다.";
     default: {
       const exhaustive: never = result.status;
@@ -131,7 +154,7 @@ function secretsBubble(result: SpineView): string {
 
 export function toolFromSpine(result: SpineView): SpineTool | null {
   if (result.status === "path_not_found" || result.pathId === null) return null;
-  const failed = result.status !== "completed";
+  const failed = result.status !== "completed" && result.status !== "needs_human";
   return {
     name: "run_path",
     label: result.pathId,
