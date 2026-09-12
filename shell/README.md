@@ -32,7 +32,7 @@ LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
 open --env PPOMI_CHAT=fixture /Applications/뽀미.app
 ```
 
-Prefixing `PPOMI_CHAT=fixture open …` does **not** pass env into the GUI app. `open --env` lasts for that launch only: quit, then Dock/Finder starts a new process without it — run `open --env` again. Reopen while the app is still running keeps the env. A true miss (`지금 데이터 뭐 있어?`) is the Korean path-not-found bubble when Gateway is unset. If Gateway/`complete()` throws, local `run_path` still runs (KB / secrets / `다음`). Model-connect (`모델 연결에 실패했습니다.`) only when local also has no path (e.g. `안녕`). `run_path` IPC failure is `실행에 실패했습니다.` — never `node host returned invalid JSON` and never disguised as path-not-found. Node spawn clears inherited `NODE_PATH` / Grok Electron injects. `PPOMI_CHAT=fixture` is an IPC ack; the webview fills the fixture Responses body (no node proxy required).
+Prefixing `PPOMI_CHAT=fixture open …` does **not** pass env into the GUI app. `open --env` lasts for that launch only: quit, then Dock/Finder starts a new process without it. Live Gateway does **not** need `open --env`: put `AI_GATEWAY_API_KEY=…` in `~/.ppomi/.env` (mode 600; optional `$PPOMI_ROOT/shell/.env`). Process env wins if set. `PPOMI_CHAT=fixture` still forces fixture. 「안녕」 / thanks / 뭐해 / 「너 모델 뭐야?」 in fixture or unset Gateway is a short secretary reply, never the path-not-found bubble. Live Gateway may answer that chat in text with no tool. The key is never printed. A true miss (`지금 데이터 뭐 있어?`) is the Korean path-not-found bubble when Gateway is unset. If Gateway/`complete()` throws, local `run_path` still runs (KB / secrets / `다음`). Model-connect (`모델 연결에 실패했습니다.`) only when local also has no path (e.g. `안녕` while Gateway is broken). `run_path` IPC failure is `실행에 실패했습니다.` — never `node host returned invalid JSON` and never disguised as path-not-found. Node spawn clears inherited `NODE_PATH` / Grok Electron injects. `PPOMI_CHAT=fixture` is an IPC ack; the webview fills the fixture Responses body (no node proxy required). The composer footer shows `fixture` or `Gateway` when that loop is on.
 
 The window is the **agent conversation shell** (`agent/src/ui/shell.tsx`)
 inside Tauri — same visual family as Storybook 「대화 셸」. Placeholder verb
@@ -51,7 +51,7 @@ fixture click on `Next`. `내 사업자 KB계좌번호 알아?` and
 (local aliases + fixture/Gateway `run_path(사업자 계좌번호)`).
 `KB스타기업뱅킹 열어` / `KB 사업자 홈` / `path_cold_start` load
 `kb-star-biz-iphone` from the `ppomi-path` catalog (Home → KB, Face ID).
-`지금 데이터 뭐 있어?` has no catalog path yet.
+`지금 데이터 뭐 있어?` has no catalog path yet. Casual chat (`안녕`, `뭐해`, `thanks`, `너 모델 뭐야?`) is a secretary reply, not `run_path`.
 
 No IA header, no empty-state chips, no greeting — composer-only empty
 inside the real shell chrome.
@@ -59,13 +59,18 @@ inside the real shell chrome.
 ### Vercel AI Gateway
 
 The webview never holds the key (Tauri CSP is IPC-only). Packaged app:
-`ai_gateway` IPC → `host.ts --proxy-responses` → `https://ai-gateway.vercel.sh/v1/responses`
-(env `AI_GATEWAY_API_KEY`, optional `AI_GATEWAY_BASE_URL`, `AI_TEXT_MODEL`).
+`ai_gateway` IPC → `host.ts --proxy-responses` → `https://ai-gateway.vercel.sh/v1/responses`.
+Key order: process `AI_GATEWAY_API_KEY`, else `~/.ppomi/.env`, else `$PPOMI_ROOT/shell/.env`
+(optional `AI_GATEWAY_BASE_URL`, `AI_TEXT_MODEL` in the same file). `VERCEL_OIDC_TOKEN` is ignored.
 Vite preview: same proxy at `/__ppomi/responses`, or `?chat=fixture` for an
 offline model-shaped function_call.
 
 ```sh
-# real Gateway (Mac install / host)
+# packaged Mac — Dock / open, no --env
+# ~/.ppomi/.env
+# AI_GATEWAY_API_KEY=…
+open /Applications/뽀미.app
+# real Gateway (CLI host)
 AI_GATEWAY_API_KEY=… PPOMI_CHAT=  npm --prefix shell run host -- --proxy-responses
 # offline model-shaped loop (no key)
 PPOMI_CHAT=fixture npm --prefix shell run dev:ui

@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
-import { proxyResponses } from "./gateway.ts";
+import { gatewayConfig, parseGatewayEnvFile, proxyResponses } from "./gateway.ts";
 import { KB_STAR_BIZ_PATH_ID, parseArgs, parseBodyKind, runSpine, secretsPath } from "./host.ts";
 
 const hostFile = join(dirname(fileURLToPath(import.meta.url)), "host.ts");
@@ -112,7 +112,7 @@ test("bare 알아 stays path_not_found", async () => {
   assert.equal(result.status, "path_not_found");
 });
 
-test("fixture proxy never errors on a full Responses body", async () => {
+test("fixture CLI proxy answers 안녕 as secretary text, not run_path", async () => {
   const result = await proxyResponses(
     { input: [{ role: "user", content: "안녕" }], model: "client", stream: true, store: true },
     { env: { PPOMI_CHAT: "fixture" } },
@@ -121,6 +121,41 @@ test("fixture proxy never errors on a full Responses body", async () => {
   assert.equal(result.fixture, true);
   assert.equal("error" in result, false);
   assert.ok(result.response);
+  const dumped = JSON.stringify(result);
+  assert.match(dumped, /안녕하세요\. 무엇을 도와드릴까요\?/);
+  assert.doesNotMatch(dumped, /function_call|run_path|path_not_found|그 일에 맞는 경로/);
+});
+
+test("host CLI --proxy-responses fixture 너 모델 뭐야? is secretary text", () => {
+  const result = spawnHost(
+    hostFile,
+    ["--proxy-responses"],
+    { AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "fixture" },
+    "{\"input\":[{\"role\":\"user\",\"content\":\"너 모델 뭐야?\"}]}\n",
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const dumped = result.stdout;
+  assert.match(dumped, /뽀미입니다/);
+  assert.doesNotMatch(dumped, /function_call|run_path|path_not_found|그 일에 맞는 경로/);
+});
+
+test("host CLI --proxy-responses fixture 안녕 is a secretary message", () => {
+  const result = spawnHost(
+    hostFile,
+    ["--proxy-responses"],
+    { AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "fixture" },
+    "{\"input\":[{\"role\":\"user\",\"content\":\"안녕\"}]}\n",
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const body = JSON.parse(result.stdout) as {
+    configured: boolean;
+    fixture?: boolean;
+    response?: { output?: readonly { type?: string; name?: string }[] };
+  };
+  assert.equal(body.configured, true);
+  assert.equal(body.fixture, true);
+  assert.equal(body.response?.output?.[0]?.type, "message");
+  assert.doesNotMatch(result.stdout, /function_call|run_path|path_not_found|그 일에 맞는 경로/);
 });
 
 test("gateway probe is configured only when a key or fixture is set", async () => {
@@ -130,6 +165,42 @@ test("gateway probe is configured only when a key or fixture is set", async () =
   assert.deepEqual(fixture, { configured: true, fixture: true });
   const live = await proxyResponses({ probe: true }, { env: { AI_GATEWAY_API_KEY: "k" } });
   assert.equal(live.configured, true);
+});
+
+test("HOME/.ppomi/.env supplies the Gateway key when process env is empty", async () => {
+  const home = mkdtempSync(join(tmpdir(), "ppomi-home-"));
+  try {
+    mkdirSync(join(home, ".ppomi"), { mode: 0o700 });
+    writeFileSync(
+      join(home, ".ppomi", ".env"),
+      "VERCEL_OIDC_TOKEN=unused-oidc\nAI_GATEWAY_API_KEY=file-secret-key\n",
+      { mode: 0o600 },
+    );
+    assert.equal(parseGatewayEnvFile("VERCEL_OIDC_TOKEN=unused-oidc\n").AI_GATEWAY_API_KEY, undefined);
+    assert.equal(gatewayConfig({ HOME: home })?.key, "file-secret-key");
+    const probe = await proxyResponses({ probe: true }, { env: { HOME: home } });
+    assert.deepEqual(probe, { configured: true, fixture: false });
+    const fixtureWins = await proxyResponses({ probe: true }, {
+      env: { HOME: home, PPOMI_CHAT: "fixture" },
+    });
+    assert.deepEqual(fixtureWins, { configured: true, fixture: true });
+    assert.equal(gatewayConfig({ HOME: home, AI_GATEWAY_API_KEY: "process-key" })?.key, "process-key");
+    assert.doesNotMatch(JSON.stringify(probe), /file-secret-key|unused-oidc/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("PPOMI_ROOT/shell/.env is the repo fallback when HOME file has no key", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ppomi-root-"));
+  try {
+    mkdirSync(join(root, "shell"));
+    writeFileSync(join(root, "shell", ".env"), "AI_GATEWAY_API_KEY=root-secret-key\n", { mode: 0o600 });
+    assert.equal(gatewayConfig({ HOME: root, PPOMI_ROOT: root })?.key, "root-secret-key");
+    assert.equal(gatewayConfig({ HOME: root }), null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("gateway proxy posts to the AI Gateway and never echoes the key", async () => {
@@ -154,20 +225,46 @@ test("gateway proxy posts to the AI Gateway and never echoes the key", async () 
   assert.doesNotMatch(JSON.stringify(result), /secret-key/);
 });
 
+test("host CLI --proxy-responses reads ~/.ppomi/.env without echoing the key", () => {
+  const home = mkdtempSync(join(tmpdir(), "ppomi-cli-home-"));
+  try {
+    mkdirSync(join(home, ".ppomi"), { mode: 0o700 });
+    writeFileSync(join(home, ".ppomi", ".env"), "AI_GATEWAY_API_KEY=cli-file-secret\n", { mode: 0o600 });
+    const result = spawnHost(
+      hostFile,
+      ["--proxy-responses"],
+      { HOME: home, PPOMI_ROOT: "", AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "" },
+      "{\"probe\":true}\n",
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const body = JSON.parse(result.stdout) as { configured: boolean; fixture?: boolean };
+    assert.equal(body.configured, true);
+    assert.equal(body.fixture, false);
+    assert.doesNotMatch(result.stdout, /cli-file-secret/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test("host CLI --proxy-responses probe exits 0 without a key", () => {
-  const result = spawnSync(
-    process.execPath,
-    ["--experimental-strip-types", hostFile, "--proxy-responses"],
-    {
-      encoding: "utf8",
-      cwd: join(dirname(hostFile), ".."),
-      input: "{\"probe\":true}\n",
-      env: { ...process.env, AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "" },
-    },
-  );
-  assert.equal(result.status, 0, result.stderr);
-  const body = JSON.parse(result.stdout) as { configured: boolean };
-  assert.equal(body.configured, false);
+  const home = mkdtempSync(join(tmpdir(), "ppomi-empty-home-"));
+  try {
+    const result = spawnSync(
+      process.execPath,
+      ["--experimental-strip-types", hostFile, "--proxy-responses"],
+      {
+        encoding: "utf8",
+        cwd: join(dirname(hostFile), ".."),
+        input: "{\"probe\":true}\n",
+        env: { ...process.env, HOME: home, PPOMI_ROOT: "", AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "" },
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const body = JSON.parse(result.stdout) as { configured: boolean };
+    assert.equal(body.configured, false);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 const tauriDottedHost = join(dirname(hostFile), "..", "src-tauri", "..", "src", "host.ts");
