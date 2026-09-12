@@ -32,6 +32,7 @@ There is no top-level `examples/` tree.
 | `ppomi-body-macos` | `packages/ppomi-body-macos/example` |
 | `ppomi-body-android` | `packages/ppomi-body-android/example` |
 | `ppomi-body-iphone-mirroring` | `packages/ppomi-body-iphone-mirroring/example` |
+| `ppomi-secrets` | `packages/ppomi-secrets/example` |
 | `ppomi-body` | use the OS examples |
 
 `playbook-runtime` / `driver-*` / `adapter-*` are legacy names only.
