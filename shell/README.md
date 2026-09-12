@@ -25,6 +25,15 @@ LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
 
 Same `LOCAL_SIGN_ID` every local Mac build (Swift `make-app.sh`). Quit the old app first — the script does. Do not keep `*-prev.app` or `dist/backup/*.app`; those mixed copies are why TCC listed 「previous」. Do not `tccutil reset` as routine. Ad-hoc is not for permission smoke. `tauri dev` / `target/` are not install paths.
 
+Reinstall after the host JSON hotfix (quit the running app first):
+
+```sh
+PPOMI_CHAT=fixture LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
+PPOMI_CHAT=fixture open /Applications/뽀미.app
+```
+
+`지금 데이터 뭐 있어?` should be the Korean path-not-found bubble (or fixture tool + that text), never `node host returned invalid JSON`. Node spawn clears inherited `NODE_PATH` / Grok Electron injects.
+
 The window is the **agent conversation shell** (`agent/src/ui/shell.tsx`)
 inside Tauri — same visual family as Storybook 「대화 셸」. Placeholder verb
 only: `시킬 일을 적어 주세요`. Send goes through a Vercel AI Gateway

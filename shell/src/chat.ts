@@ -179,10 +179,13 @@ export async function defaultComplete(body: Record<string, unknown>): Promise<Re
   if (previewFixture()) return fixtureResponses(body);
   const invoke = tauriInvoke();
   if (invoke !== null) {
-    const proxy = await invoke("ai_gateway", { body }) as GatewayProxy;
-    if (!proxy.configured) return null;
-    if (proxy.error !== undefined || proxy.response === undefined) throw new Error("모델 응답을 받지 못했습니다.");
-    return proxy.response;
+    try {
+      const proxy = await invoke("ai_gateway", { body }) as GatewayProxy;
+      if (!proxy.configured || proxy.error !== undefined || proxy.response === undefined) return null;
+      return proxy.response;
+    } catch {
+      return null;
+    }
   }
   const response = await fetch("/__ppomi/responses", {
     method: "POST",
@@ -200,7 +203,12 @@ export async function sendChat(
 ): Promise<ChatTurn> {
   const complete = deps.complete ?? defaultComplete;
   const runPath = deps.runPath ?? invokeRunPath;
-  const first = await complete(responsesRequest(text));
+  let first: ResponsesBody | null;
+  try {
+    first = await complete(responsesRequest(text));
+  } catch {
+    first = null;
+  }
   if (first === null) return { mode: "local", lines: linesFromSpine(await runPath(text)) };
 
   const call = functionCallOf(first);
@@ -211,10 +219,15 @@ export async function sendChat(
 
   const spine = await runPath(call.intent);
   const safe = redactSpine(spine);
-  const follow = await complete(responsesRequest(text, [
-    { type: "function_call", call_id: call.call_id, name: call.name, arguments: JSON.stringify({ intent: call.intent }) },
-    { type: "function_call_output", call_id: call.call_id, output: JSON.stringify(safe) },
-  ]));
+  let follow: ResponsesBody | null = null;
+  try {
+    follow = await complete(responsesRequest(text, [
+      { type: "function_call", call_id: call.call_id, name: call.name, arguments: JSON.stringify({ intent: call.intent }) },
+      { type: "function_call_output", call_id: call.call_id, output: JSON.stringify(safe) },
+    ]));
+  } catch {
+    follow = null;
+  }
   const spoken = redactSecrets(assistantTextOf(follow ?? {}) || textFromSpine(safe));
   return {
     mode: "gateway",

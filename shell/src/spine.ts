@@ -95,7 +95,11 @@ export function previewSpine(intent: string, body = "macos"): SpineView {
 export async function invokeRunPath(intent: string, body = "macos", live = false): Promise<SpineView> {
   const invoke = tauriInvoke();
   if (invoke === null) return previewSpine(intent, body);
-  return invoke("run_path", { intent, body, live }) as Promise<SpineView>;
+  try {
+    return await invoke("run_path", { intent, body, live }) as SpineView;
+  } catch {
+    return previewSpine(intent, body);
+  }
 }
 
 export function textFromSpine(result: SpineView): string {

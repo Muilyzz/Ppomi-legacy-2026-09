@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { linesFromSpine, previewSpine, textFromSpine, type SpineView } from "./spine.ts";
+import { invokeRunPath, linesFromSpine, previewSpine, textFromSpine, type SpineView } from "./spine.ts";
 
 const missing: SpineView = {
   status: "path_not_found",
@@ -62,6 +62,26 @@ test("secrets intent is a tool card plus a masked Korean reply", () => {
   const dumped = JSON.stringify(lines);
   assert.doesNotMatch(dumped, /001234567890/);
   assert.doesNotMatch(dumped, /1234567890/);
+});
+
+test("run_path IPC failure uses local Korean path_not_found", async () => {
+  const bag = globalThis as { __TAURI__?: { core?: { invoke: () => Promise<never> } } };
+  const previous = bag.__TAURI__;
+  bag.__TAURI__ = {
+    core: {
+      invoke: async () => {
+        throw new Error("node host returned invalid JSON");
+      },
+    },
+  };
+  try {
+    const view = await invokeRunPath("지금 데이터 뭐 있어?");
+    assert.equal(view.status, "path_not_found");
+    assert.doesNotMatch(JSON.stringify(view), /invalid JSON|node host/i);
+  } finally {
+    if (previous === undefined) delete bag.__TAURI__;
+    else bag.__TAURI__ = previous;
+  }
 });
 
 test("preview secrets matcher covers similar Korean and English intents", () => {
