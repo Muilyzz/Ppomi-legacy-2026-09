@@ -97,6 +97,8 @@ install() {
     hygiene
     require_sign_id
     quit_old
+    [ -d "$ROOT/agent/node_modules/react" ] || npm --prefix "$ROOT/agent" ci
+    [ -d "$ROOT/shell/node_modules/vite" ] || npm --prefix "$ROOT/shell" ci
     npm --prefix "$ROOT/shell" run build
     SRC=$(built_app)
     rm -rf "$APP"

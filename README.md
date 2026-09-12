@@ -30,7 +30,7 @@
 
 ## 제품 표면
 
-소비자 UI는 [`shell/`](shell/)의 **Tauri 2 + TypeScript**다. Swift [`Ppomi/`](Ppomi/)는 OS body(손쉬운 사용·화면 기록·키체인)와 과도기 호스트이며 UI 대체재가 아니다(이름·방향은 오너 결정 대기 — [docs/tauri-shell.md](docs/tauri-shell.md)). 소비자 앱은 **`/Applications/뽀미.app`** 하나, 번들 id `com.muilyzz.ppomi`. `*-prev.app`·`뽀미*.app` 형제나 `dist/backup/` 사본을 실행 가능하게 두지 않는다 — 권한 목록의 「previous」는 그 백업 경로/이름과 섞인 바이너리 때문이다. 창은 fixture만 돌리고 live를 켜지 못한다; 실기기 live는 CLI에서 `--live`와 `PPOMI_BODY_LIVE=1` 둘 다 있을 때만이고, 멈춤은 `completed`가 아니라 `grant_denied`/`needs_human`/`failed`로 보고된다. 설치·실행은 [docs/tauri-shell.md](docs/tauri-shell.md).
+소비자 UI는 [`shell/`](shell/)의 **Tauri 2**가 [`agent/`](agent/) 대화 셸(웹 UI)을 띄운 것이다. Swift [`Ppomi/`](Ppomi/)는 OS body(손쉬운 사용·화면 기록·키체인)와 과도기 호스트이며 UI 대체재가 아니다(이름·방향은 오너 결정 대기 — [docs/tauri-shell.md](docs/tauri-shell.md)). 소비자 앱은 **`/Applications/뽀미.app`** 하나, 번들 id `com.muilyzz.ppomi`. `*-prev.app`·`뽀미*.app` 형제나 `dist/backup/` 사본을 실행 가능하게 두지 않는다 — 권한 목록의 「previous」는 그 백업 경로/이름과 섞인 바이너리 때문이다. 창은 fixture만 돌리고 live를 켜지 못한다; 실기기 live는 CLI에서 `--live`와 `PPOMI_BODY_LIVE=1` 둘 다 있을 때만이고, 멈춤은 `completed`가 아니라 `grant_denied`/`needs_human`/`failed`로 보고된다. 설치·실행은 [docs/tauri-shell.md](docs/tauri-shell.md).
 
 ## 설치
 
@@ -140,6 +140,7 @@ PC 전용 웹(대법원 인터넷등기소 등)은 Parallels의 Windows 창에�
 소비자 셸(Tauri 2):
 
 ```sh
+npm --prefix agent ci
 npm --prefix shell ci
 npm --prefix shell test
 npm --prefix shell run dev     # 창만(fixture). 권한 스모크 아님
