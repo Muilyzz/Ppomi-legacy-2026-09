@@ -1,9 +1,14 @@
 import {
+  DENIED_TEXT,
+  approvalPrompt,
+  approvalTool,
+  deniedTool,
   errorCodeOf,
   errorMessageOf,
   invokeRunPath,
   linesFromSpine,
   textFromSpine,
+  type ApprovalView,
   type Line,
   type SpineTool,
   type SpineView,
@@ -68,13 +73,28 @@ export type GatewayProxy = {
   readonly error?: string;
 };
 
+export type ToolCall = { readonly call_id: string; readonly name: string; readonly intent: string };
+
+/**
+ * A gate the host raised for this run. Nothing has executed. `approveChat` sends the token back
+ * exactly once; `denyChat` never calls the host. A new composer send drops it unanswered.
+ */
+export type PendingApproval = {
+  readonly text: string;
+  readonly call: ToolCall;
+  readonly via: "gateway" | "local";
+  readonly approval: ApprovalView;
+  readonly prompt: string;
+};
+
 export type ChatTurn = {
   readonly mode: "gateway" | "local";
   readonly lines: Line[];
+  readonly pending?: PendingApproval;
 };
 
 export type CompleteFn = (body: Record<string, unknown>) => Promise<ResponsesBody | null>;
-export type RunPathFn = (intent: string) => Promise<SpineView>;
+export type RunPathFn = (intent: string, approve?: string) => Promise<SpineView>;
 
 type Invoke = (cmd: string, args: Record<string, unknown>) => Promise<unknown>;
 
@@ -178,6 +198,7 @@ export function assistantTextOf(response: ResponsesBody): string {
 
 export function toolFromModelCall(call: { name: string; intent: string }, result: SpineView): SpineTool {
   const safe = redactSpine(result);
+  if (safe.approval) return approvalTool(safe.approval, { intent: call.intent, via: "gateway" });
   const failed = safe.status !== "completed" || safe.pathId === null;
   return {
     name: call.name,
@@ -232,12 +253,25 @@ export async function defaultComplete(body: Record<string, unknown>): Promise<Re
 }
 
 /** The regex matcher answered because no Gateway is configured: every card says so. */
-function localTurn(spine: SpineView): ChatTurn {
+function localTurn(text: string, spine: SpineView): ChatTurn {
+  if (spine.approval) {
+    return pendingTurn(text, { call_id: "local", name: "run_path", intent: text }, "local", spine.approval);
+  }
   const lines = linesFromSpine(spine).map(line =>
     line.kind === "tool"
       ? { ...line, tool: { ...line.tool, input: { ...asRecord(line.tool.input), via: "local" } } }
       : line);
   return { mode: "local", lines };
+}
+
+/** The host stopped at a gate: one 승인 대기 card, no follow-up model turn, nothing executed. */
+function pendingTurn(text: string, call: ToolCall, via: "gateway" | "local", approval: ApprovalView): ChatTurn {
+  const pending: PendingApproval = { text, call, via, approval, prompt: approvalPrompt(approval) };
+  return {
+    mode: via,
+    pending,
+    lines: [{ kind: "tool", tool: approvalTool(approval, { intent: call.intent, via }) }],
+  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -263,7 +297,7 @@ export async function sendChat(
     const failure = gatewayFailure(error, "request");
     return { mode: "gateway", lines: [{ kind: "bubble", role: "assistant", text: failure.text }] };
   }
-  if (first === null) return localTurn(await runPath(text));
+  if (first === null) return localTurn(text, await runPath(text));
 
   const call = functionCallOf(first);
   if (call === null) {
@@ -271,7 +305,15 @@ export async function sendChat(
     return { mode: "gateway", lines: [{ kind: "bubble", role: "assistant", text: spoken }] };
   }
 
-  const spine = await runPath(call.intent);
+  return toolTurn(text, call, await runPath(call.intent), complete);
+}
+
+/**
+ * After the host answered a model call: a gate becomes a pending approval (no model follow-up —
+ * nothing ran); otherwise the tool card plus the model's narration of the redacted result.
+ */
+async function toolTurn(text: string, call: ToolCall, spine: SpineView, complete: CompleteFn): Promise<ChatTurn> {
+  if (spine.approval) return pendingTurn(text, call, "gateway", spine.approval);
   const safe = redactSpine(spine);
   let follow: ResponsesBody | null = null;
   let followFailure: string | null = null;
@@ -290,6 +332,32 @@ export async function sendChat(
     lines: [
       { kind: "tool", tool: toolFromModelCall(call, safe) },
       { kind: "bubble", role: "assistant", text: spoken },
+    ],
+  };
+}
+
+/**
+ * 실행: send the one token back for the one gate. The host re-checks every gate, so a second gate
+ * on the same path comes back as a new pending approval; a stale or wrong token runs nothing.
+ */
+export async function approveChat(
+  pending: PendingApproval,
+  deps: { complete?: CompleteFn; runPath?: RunPathFn } = {},
+): Promise<ChatTurn> {
+  const complete = deps.complete ?? defaultComplete;
+  const runPath = deps.runPath ?? invokeRunPath;
+  const spine = await runPath(pending.call.intent, pending.approval.token);
+  if (pending.via === "local") return localTurn(pending.text, spine);
+  return toolTurn(pending.text, pending.call, spine, complete);
+}
+
+/** 취소: the host is never called; the card says 거부됨 and the bubble says nothing ran. */
+export function denyChat(pending: PendingApproval): ChatTurn {
+  return {
+    mode: pending.via,
+    lines: [
+      { kind: "tool", tool: deniedTool(pending.approval, { intent: pending.call.intent, via: pending.via }) },
+      { kind: "bubble", role: "assistant", text: DENIED_TEXT },
     ],
   };
 }

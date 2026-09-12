@@ -19,11 +19,23 @@ export interface SpineView {
   } | null;
   /** Set only by the browser dev preview: the result came from `previewSpine`, not from a host run. */
   readonly preview?: true;
+  /** The host stopped before anything ran and is asking for this approval (host `ApprovalRequest`). */
+  readonly approval?: ApprovalView | null;
 }
 
-export type ToolState = "output-available" | "output-error" | "input-available";
+export interface ApprovalView {
+  readonly pathId: string;
+  readonly stepId: string;
+  readonly effect: "commit" | "secrets" | "live";
+  readonly title: string;
+  readonly what: string;
+  readonly token: string;
+}
+
+export type ToolState = "output-available" | "output-error" | "input-available" | "approval-requested" | "output-denied";
 
 export const RUN_PATH_IPC_FAILED = "run_path_ipc_failed";
+export const DENIED_TEXT = "실행하지 않았습니다.";
 
 export interface SpineTool {
   readonly name: string;
@@ -137,14 +149,15 @@ export function ipcFailedSpine(code: string, body = "macos", live = false): Spin
   };
 }
 
-export async function invokeRunPath(intent: string, body = "macos", live = false): Promise<SpineView> {
+/** `approve` is the token of one gate the person just cleared in the window; it is never inferred. */
+export async function invokeRunPath(intent: string, body = "macos", live = false, approve?: string): Promise<SpineView> {
   const invoke = tauriInvoke();
   if (invoke === null) {
     if (previewAllowed()) return { ...previewSpine(intent, body), preview: true };
     return ipcFailedSpine("no_tauri_ipc", body, live);
   }
   try {
-    return await invoke("run_path", { intent, body, live }) as SpineView;
+    return await invoke("run_path", { intent, body, live, approve: approve ?? null }) as SpineView;
   } catch (error) {
     const code = errorCodeOf(error, "ipc_rejected");
     console.error(`run_path IPC failed (${code}): ${errorMessageOf(error)}`);
@@ -153,8 +166,12 @@ export async function invokeRunPath(intent: string, body = "macos", live = false
 }
 
 export function textFromSpine(result: SpineView): string {
-  const text = statusText(result);
+  const text = result.approval ? approvalPrompt(result.approval) : statusText(result);
   return result.preview === true ? `(미리보기) ${text}` : text;
+}
+
+export function approvalPrompt(approval: ApprovalView): string {
+  return `승인이 필요합니다 — ${approval.what} (${approval.pathId} · ${approval.stepId} · ${approval.effect}) 실행할까요?`;
 }
 
 function statusText(result: SpineView): string {
@@ -188,7 +205,43 @@ function secretsBubble(result: SpineView): string {
   return "저장된 사업자 계좌가 없습니다.";
 }
 
+/** What the approval card shows: the exact path / step / effect and what will happen, plus the token it will send back. */
+export function approvalInput(approval: ApprovalView, extra: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    ...extra,
+    pathId: approval.pathId,
+    stepId: approval.stepId,
+    effect: approval.effect,
+    what: approval.what,
+    token: approval.token,
+  };
+}
+
+/** The card for a gate the host raised: 승인 대기, nothing executed yet. */
+export function approvalTool(approval: ApprovalView, extra: Record<string, unknown> = {}): SpineTool {
+  return {
+    name: "run_path",
+    label: approval.pathId,
+    state: "approval-requested",
+    input: approvalInput(approval, extra),
+    output: { status: "needs_approval", note: "nothing executed" },
+  };
+}
+
+/** The card after 취소: 거부됨, and honest about it — no run happened. */
+export function deniedTool(approval: ApprovalView, extra: Record<string, unknown> = {}): SpineTool {
+  return {
+    name: "run_path",
+    label: approval.pathId,
+    state: "output-denied",
+    input: approvalInput(approval, extra),
+    output: { status: "denied", note: DENIED_TEXT },
+    errorText: `denied: ${approval.token} — ${DENIED_TEXT}`,
+  };
+}
+
 export function toolFromSpine(result: SpineView): SpineTool | null {
+  if (result.approval) return approvalTool(result.approval, { body: result.bodyKind, live: result.live });
   if (result.status === "path_not_found") return null;
   // A failed run with no path (the host never started) still gets a card: the code must be visible.
   if (result.pathId === null && result.status !== "failed") return null;

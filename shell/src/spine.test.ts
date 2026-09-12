@@ -168,6 +168,59 @@ test("?chat=fixture without Tauri is the preview, and it says so", async () => {
   }
 });
 
+const commitGate: SpineView = {
+  status: "needs_human",
+  pathId: "path-demo-submit",
+  note: "needs_approval: path-demo-submit/submit (commit) — nothing executed",
+  bodyKind: "macos",
+  live: false,
+  hook: "",
+  body: null,
+  approval: {
+    pathId: "path-demo-submit",
+    stepId: "submit",
+    effect: "commit",
+    title: "제출",
+    what: "「제출」을(를) 실행합니다 — 되돌릴 수 없는 제출 단계입니다.",
+    token: "path-demo-submit/submit",
+  },
+};
+
+test("a gated result is a 승인 대기 card naming path, step, effect and what will happen — never completed", () => {
+  const tool = toolFromSpine(commitGate);
+  assert.equal(tool?.state, "approval-requested");
+  assert.equal(tool?.label, "path-demo-submit");
+  assert.deepEqual(tool?.input, {
+    body: "macos",
+    live: false,
+    pathId: "path-demo-submit",
+    stepId: "submit",
+    effect: "commit",
+    what: "「제출」을(를) 실행합니다 — 되돌릴 수 없는 제출 단계입니다.",
+    token: "path-demo-submit/submit",
+  });
+  assert.equal(textFromSpine(commitGate), "승인이 필요합니다 — 「제출」을(를) 실행합니다 — 되돌릴 수 없는 제출 단계입니다. (path-demo-submit · submit · commit) 실행할까요?");
+  assert.doesNotMatch(JSON.stringify(linesFromSpine(commitGate)), /completed|output-available|실행했습니다/);
+});
+
+test("invokeRunPath forwards the approval token to the IPC and nothing else", async () => {
+  const seen: Record<string, unknown>[] = [];
+  await withTauri(
+    async (_cmd, args) => {
+      seen.push(args);
+      return done;
+    },
+    async () => {
+      await invokeRunPath("다음");
+      await invokeRunPath("demo submit", "macos", false, "path-demo-submit/submit");
+    },
+  );
+  assert.deepEqual(seen, [
+    { intent: "다음", body: "macos", live: false, approve: null },
+    { intent: "demo submit", body: "macos", live: false, approve: "path-demo-submit/submit" },
+  ]);
+});
+
 test("errorCodeOf reads Rust { code } objects, code: message strings, and falls back", () => {
   assert.equal(errorCodeOf({ code: "gateway_host_failed", message: "x" }, "fallback"), "gateway_host_failed");
   assert.equal(errorCodeOf("host_timeout: node host did not finish", "fallback"), "host_timeout");
