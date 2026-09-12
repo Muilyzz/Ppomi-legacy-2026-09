@@ -1,0 +1,60 @@
+name: windows-executor
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "executors/windows/**"
+      - "scripts/build-windows-executor.mjs"
+      - "scripts/lib/executor-artifact.mjs"
+      - ".github/workflows/windows-executor.yml"
+  pull_request:
+    paths:
+      - "executors/windows/**"
+      - "scripts/build-windows-executor.mjs"
+      - "scripts/lib/executor-artifact.mjs"
+      - ".github/workflows/windows-executor.yml"
+
+# The job only reads the checkout; pull_request builds from forks must never be able to write.
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet run --project executors/windows/PolicyTests/Ppomi.Executor.PolicyTests.csproj
+
+  publish:
+    needs: policy
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rid: [win-x64, win-arm64]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: "10.0.x"
+      - run: node scripts/build-windows-executor.mjs --rid ${{ matrix.rid }}
+      - name: Write SHA256SUMS next to the exe
+        working-directory: shell/src-tauri/resources/executor
+        run: |
+          sha256sum ppomi-executor.exe > SHA256SUMS
+          cat SHA256SUMS
+      # pull_request builds prove the tree compiles but publish nothing: a fork could
+      # otherwise ship a binary that `--download` would stage. Only push-to-main and
+      # workflow_dispatch artifacts are downloadable (scripts/lib/executor-artifact.mjs).
+      - if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ppomi-executor-${{ matrix.rid }}
+          path: |
+            shell/src-tauri/resources/executor/ppomi-executor.exe
+            shell/src-tauri/resources/executor/SHA256SUMS
+          if-no-files-found: error

@@ -57,6 +57,7 @@ node --experimental-strip-types packages/ppomi-vault/example/src/main.ts
 
 # body 1-step fixtures (live UIA/AX skips off-host)
 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts
+# Windows live UIA: node scripts/build-windows-executor.mjs  then  PPOMI_BODY_LIVE=1 (see docs/windows-executor.md)
 node --experimental-strip-types packages/ppomi-body-macos/example/src/main.ts
 # Mac live AX (Safari/Chrome System Events). Deprecated alias: packages/adapter-macos/example
 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-macos/example/src/main.ts

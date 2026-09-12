@@ -52,11 +52,16 @@ The base branch's `WindowsDriver` and fixture predate the measured semantics enc
 `tests/live-edge-uia-smoke.test.ts` launches an isolated Edge profile (`--user-data-dir` in a temp dir, `--force-renderer-accessibility`) on an offline local page with a text input and a button, then runs `app_list → allowApps → app_open → screen_read → ui_type → (stale_screen check) → screen_read → ui_tap → screen_read` through `LiveWindowsExecutorTools`. It skips when not on Windows or when the executor / Edge is missing.
 
 ```sh
-# on the Windows machine, from packages/ppomi-body-windows (Node ≥ 22)
-set PPOMI_EXECUTOR=<path>\ppomi-executor.exe      # default: ..\..\shell\src-tauri\resources\executor\ppomi-executor.exe
+# on the Windows machine, from the repo root (Node ≥ 22, .NET 10 SDK)
+node scripts/build-windows-executor.mjs            # win-x64; --rid win-arm64 on ARM
+# or: node scripts/build-windows-executor.mjs --download
+cd packages/ppomi-body-windows
+set PPOMI_EXECUTOR=..\..\shell\src-tauri\resources\executor\ppomi-executor.exe
 set PPOMI_SMOKE_SHOT=<path>\live-smoke-windows.png  # optional full-screen capture after the final read
 npm run smoke:live
 ```
+
+Build notes: [Windows executor](../../docs/windows-executor.md). The binary is not in git.
 
 ## Out of scope
 
