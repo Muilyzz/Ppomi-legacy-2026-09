@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use serde_json::Value;
 use std::io::Read;
 use std::path::PathBuf;
@@ -10,8 +10,9 @@ use std::time::{Duration, Instant};
 const HOST_TIMEOUT: Duration = Duration::from_secs(60);
 const POLL: Duration = Duration::from_millis(50);
 
-/// Structured IPC error: the webview prints `code: message` instead of `[object Object]`.
-#[derive(Debug, Serialize)]
+/// IPC error with a stable code. It crosses the IPC as the string `code: message`, which the
+/// existing webview already renders verbatim; an object would show as `[object Object]`.
+#[derive(Debug)]
 pub struct HostError {
     pub code: String,
     pub message: String,
@@ -23,6 +24,12 @@ impl HostError {
             code: code.into(),
             message: message.into(),
         }
+    }
+}
+
+impl Serialize for HostError {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&format!("{}: {}", self.code, self.message))
     }
 }
 
@@ -39,8 +46,8 @@ fn repo_root() -> PathBuf {
 }
 
 /// The window has no approval gate yet, so the IPC never arms a live body: `live` is refused
-/// with a structured error, and the arming variables are stripped from the child's environment
-/// so a `PPOMI_BODY_LIVE=1` inherited by the app cannot turn the fixture run into real control.
+/// with a coded error, and the arming variables are stripped from the child's environment so a
+/// `PPOMI_BODY_LIVE=1` inherited by the app cannot turn the fixture run into real control.
 /// Async so the node run does not block the main thread and the webview.
 #[tauri::command]
 async fn run_path(intent: String, body: String, live: bool) -> Result<Value, HostError> {

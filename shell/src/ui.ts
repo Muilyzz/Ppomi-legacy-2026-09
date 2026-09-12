@@ -1,14 +1,5 @@
 type Invoke = (cmd: string, args: Record<string, unknown>) => Promise<unknown>;
 
-interface StepRowView {
-  readonly stepId: string;
-  readonly driver: string;
-  readonly status: string;
-  readonly attempt: string;
-  readonly code?: string;
-  readonly observation: { readonly summary: string };
-}
-
 interface SpineView {
   readonly status: string;
   readonly pathId: string | null;
@@ -20,8 +11,6 @@ interface SpineView {
     readonly status: string;
     readonly steps: readonly { readonly stepId: string; readonly status: string; readonly note: string }[];
   } | null;
-  /** Core `RunResult`; `null` when the body stopped before `Runtime` (refusal, skip, path miss). */
-  readonly run?: { readonly status: string; readonly stepResults: readonly StepRowView[] } | null;
 }
 
 interface Line {
@@ -46,20 +35,18 @@ function el(id: string): HTMLElement {
 }
 
 function render(result: SpineView): string {
-  const run = result.run ?? null;
-  const rows = run !== null
-    ? run.stepResults.map(row =>
-      `  - ${row.stepId}  ${row.status}  ${row.attempt}  ${row.driver}${row.code !== undefined ? `  ${row.code}` : ""}  ${row.observation.summary}`)
-    : (result.body?.steps ?? []).map(step => `  - ${step.stepId}  ${step.status}  ${step.note}`);
+  const steps = result.body?.steps ?? [];
+  const rows = steps
+    .map(step => `  - ${step.stepId}  ${step.status}  ${step.note}`)
+    .join("\n");
   return [
     `status   ${result.status}`,
     `path     ${result.pathId ?? "(none)"}`,
     `body     ${result.bodyKind}${result.live ? " live" : " fixture"}`,
-    `run      ${run !== null ? run.status : "(stopped before Runtime)"}`,
     `note     ${result.note}`,
-    ...rows,
+    rows,
     `hook     ${result.hook}`,
-  ].join("\n");
+  ].filter(line => line.length > 0).join("\n");
 }
 
 function paint(): void {
@@ -85,19 +72,9 @@ async function send(): Promise<void> {
     const result = await invoke()("run_path", { intent: text, body: "macos", live: false }) as SpineView;
     lines.push({ role: "assistant", text: render(result) });
   } catch (error) {
-    lines.push({ role: "assistant", text: describeError(error) });
+    lines.push({ role: "assistant", text: error instanceof Error ? error.message : String(error) });
   }
   paint();
-}
-
-/** `run_path` rejects with `{ code, message }` from Rust; keep both visible. */
-function describeError(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
-    const code = "code" in error && typeof error.code === "string" ? `${error.code}: ` : "";
-    return `${code}${error.message}`;
-  }
-  return String(error);
 }
 
 el("composer").addEventListener("submit", event => {
