@@ -57,6 +57,9 @@ details p{font-size:var(--fs-1);color:var(--fg-2);margin:.25rem 0 0;max-width:60
 input,textarea{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:.375rem .625rem;outline:none}
 input:focus,textarea:focus{border-color:var(--line-2)}
 
+/* ---- 상태(status.js): 큰 면. 본문은 훅만 — 높이는 여기서 페이지를 채운다 */
+.status{min-height:100dvh}
+
 /* ---- 시크릿(secrets.js): 마크업엔 CSS가 없다 — 꾸밈은 여기서만. Tailwind preflight가 ul 패딩을 지워서 트리는 여기서 다시 들여쓴다 */
 .secrets ul{list-style:none;margin:0;padding:.125rem 0 0 .875rem}
 .secrets li{margin:.2rem 0}
