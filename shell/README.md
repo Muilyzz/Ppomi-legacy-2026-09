@@ -7,14 +7,22 @@ Swift `Ppomi/` remains the transitional Mac body host. Do not delete it here.
 
 ## Mac install / run
 
-Need Node 22.6+, Rust (1.77+), and on a Mac: Xcode + macOS 26 WebView.
+Need Node 22.6+, Rust (1.85+), and on a Mac: Xcode + macOS 26 WebView.
 
 ```sh
 npm --prefix shell ci
 npm --prefix shell test          # brain → path → body fixture (no window)
 npm --prefix shell run build:ui
-npm --prefix shell run dev       # window + 실행
+npm --prefix shell run dev       # window + 실행 (not the TCC install)
 ```
+
+Consumer app is **one path**: `/Applications/뽀미.app`, bundle id `com.muilyzz.ppomi`.
+
+```sh
+LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
+```
+
+Same `LOCAL_SIGN_ID` every local Mac build (Swift `make-app.sh`). Quit the old app first — the script does. Do not keep `*-prev.app` or `dist/backup/*.app`; those mixed copies are why TCC listed 「previous」. Do not `tccutil reset` as routine. Ad-hoc is not for permission smoke. `tauri dev` / `target/` are not install paths.
 
 `실행` with intent `다음` (or `browse`) calls `run_path` → `src/host.ts` →
 `ppomi-brain` → `path-home-next` → `ppomi-body-macos` fixture click on `Next`.

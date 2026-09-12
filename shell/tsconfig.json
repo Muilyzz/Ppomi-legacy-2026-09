@@ -14,5 +14,5 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["src/host.ts", "src/host.test.ts"]
+  "include": ["src/host.ts", "src/host.test.ts", "src/install-hygiene.test.ts"]
 }

@@ -9,11 +9,13 @@
 | body | `packages/ppomi-body`, `ppomi-body-*` | OS 한 걸음 |
 | Swift `Ppomi/` | `Ppomi/` | 과도기 Mac 호스트 · 기존 AX/MCP. 빅뱅 삭제 금지 |
 
-과거 `shell/`(실행기 플러그인 · `agent/` 번들 · Clerk 딥링크)은 `main`에 없고 병렬 브랜치에만 있다. 이 문서는 그 스택을 되살리지 않는다. 식별자 `com.ppomi.shell`과 아이콘만 재사용한다.
+과거 `shell/`(실행기 플러그인 · `agent/` 번들 · Clerk 딥링크)은 `main`에 없고 병렬 브랜치에만 있다. 이 문서는 그 스택을 되살리지 않는다. 아이콘만 재사용한다. 번들 id는 제품과 같은 **`com.muilyzz.ppomi`**.
 
 ## Mac 설치 · 빌드 · 실행
 
-Apple 실리콘 Mac, macOS 26, Node 22.6+, Rust 1.77+, Xcode.
+Apple 실리콘 Mac, macOS 26, Node 22.6+, Rust 1.85+, Xcode.
+
+UI 배선만:
 
 ```sh
 npm --prefix shell ci
@@ -23,9 +25,19 @@ npm --prefix shell run dev
 
 창에서 intent `다음` → **실행**. IPC `run_path`가 Node `shell/src/host.ts`를 띄우고 `ppomi-brain`이 `path-home-next`를 고른 뒤 `ppomi-body-macos` fixture가 `Next`를 클릭한다.
 
-릴리스 스모크: `npm --prefix shell run build`. 패키지 앱도 TS 호스트를 위해 `node`(또는 `PPOMI_NODE`)가 PATH에 있어야 한다. 스토어 배포 번들은 후속.
+소비자 앱·권한 스모크는 **설치 경로 하나**: `/Applications/뽀미.app`. `tauri dev` / `target/` / `dist/` 번들에 손쉬운 사용을 주지 않는다.
 
-기존 Swift 앱 스모크(`scripts/make-app.sh`, `/Applications/뽀미.app`)는 그대로 둔다.
+```sh
+# 매번 같은 Apple Development 이름 (Swift make-app.sh 와 동일)
+LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
+open /Applications/뽀미.app
+```
+
+스크립트는 실행 중인 뽀미를 먼저 종료하고, 그 경로만 덮어쓴다. `*-prev.app`·`dist/backup/` 복사본은 만들지 않으며, 있으면 거부한다. 권한 목록의 「previous」는 그런 백업 경로/이름과 섞인 바이너리 때문에 Launch Services/TCC가 옛 사본을 따로 집은 것이다. 일상 설치에 `tccutil reset`을 쓰지 않는다.
+
+애드혹 서명은 패키징 확인용이다. 권한 스모크에 쓰지 않는다. 배포 공증은 `SIGN_ID` / `NOTARY_PROFILE`(후속).
+
+패키지 앱도 TS 호스트를 위해 `node`(또는 `PPOMI_NODE`)가 PATH에 있어야 한다. Swift `Ppomi/`는 과도기 body 호스트 — `swift run` 또는 `scripts/make-app.sh`의 `dist/Ppomi.app`이며, `/Applications/뽀미.app`의 형제 백업이 아니다.
 
 ## Live Mac body
 
@@ -45,6 +57,16 @@ PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body macos --
 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-windows/example/src/main.ts
 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts
 ```
+
+## TCC / Launch Services
+
+| 고정 | 값 |
+| --- | --- |
+| 설치 경로 | `/Applications/뽀미.app` |
+| 번들 id | `com.muilyzz.ppomi` |
+| 로컬 서명 | `LOCAL_SIGN_ID` (매 빌드 같은 Apple Development) |
+
+하지 말 것: 옛 앱을 `뽀미-prev.app`으로 남기기, `dist/backup/`에 실행 가능한 `.app` 두기, 애드혹으로 권한 스모크, 일상 `tccutil reset`. 서명 전환 사고의 일회 복구 기록은 [release-status](release-status.md#개발-서명-전환-후-권한-복구)에만 있다.
 
 ## 비범위
 

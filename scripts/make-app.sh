@@ -1,5 +1,6 @@
 #!/bin/sh
 # dist/Ppomi.app from the SwiftPM release build: scripts/make-app.sh (from anywhere).
+# Consumer install path is /Applications/뽀미.app (scripts/install-shell.sh). Do not rename this output to *-prev.app or copy it into dist/backup.
 # Ad-hoc output is for packaging checks only: its cdhash identity changes with every build and breaks TCC continuity.
 # For the installed local app use LOCAL_SIGN_ID="Apple Development: …" so the designated requirement stays stable.
 # Developer ID + 공증:  SIGN_ID="Developer ID Application: … (TEAMID)" NOTARY_PROFILE=<keychain profile> VERSION=0.1.0 scripts/make-app.sh
