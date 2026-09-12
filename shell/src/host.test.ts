@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
@@ -148,6 +150,46 @@ test("host CLI --proxy-responses probe exits 0 without a key", () => {
   assert.equal(result.status, 0, result.stderr);
   const body = JSON.parse(result.stdout) as { configured: boolean };
   assert.equal(body.configured, false);
+});
+
+const tauriDottedHost = join(dirname(hostFile), "..", "src-tauri", "..", "src", "host.ts");
+
+function spawnHost(entry: string, args: readonly string[], env: NodeJS.ProcessEnv = {}, input?: string) {
+  return spawnSync(process.execPath, ["--experimental-strip-types", entry, ...args], {
+    encoding: "utf8",
+    cwd: join(dirname(hostFile), ".."),
+    input,
+    env: {
+      ...process.env,
+      NODE_PATH: "/Applications/Grok.app/Contents/Resources/app/node_modules",
+      NODE_OPTIONS: "",
+      ...env,
+    },
+  });
+}
+
+test("host CLI --intent works with Tauri-style .. path and Grok NODE_PATH", () => {
+  const result = spawnHost(tauriDottedHost, ["--intent", "지금 데이터 뭐 있어?"]);
+  assert.equal(result.status, 0, result.stderr);
+  const body = JSON.parse(result.stdout) as { status: string };
+  assert.equal(body.status, "path_not_found");
+});
+
+test("host CLI --proxy-responses runs via symlink and dotted path", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ppomi-host-"));
+  const link = join(dir, "host.ts");
+  symlinkSync(hostFile, link);
+  try {
+    for (const entry of [tauriDottedHost, link]) {
+      const result = spawnHost(entry, ["--proxy-responses"], { AI_GATEWAY_API_KEY: "", PPOMI_CHAT: "fixture" }, "{\"probe\":true}\n");
+      assert.equal(result.status, 0, `${entry}\n${result.stderr}`);
+      const body = JSON.parse(result.stdout) as { configured: boolean; fixture?: boolean };
+      assert.equal(body.configured, true, entry);
+      assert.equal(body.fixture, true, entry);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("live secrets off-darwin skips instead of failing", async () => {

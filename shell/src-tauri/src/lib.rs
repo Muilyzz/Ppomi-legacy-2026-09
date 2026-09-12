@@ -21,7 +21,8 @@ fn node_bin() -> PathBuf {
 }
 
 fn host_script() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../src/host.ts")
+    let raw = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../src/host.ts");
+    raw.canonicalize().unwrap_or(raw)
 }
 
 fn repo_root() -> PathBuf {
@@ -45,23 +46,66 @@ fn with_gui_path(cmd: &mut Command) {
     }
 }
 
-fn parse_host_output(stdout: &str, stderr: &str, success: bool) -> Result<Value, String> {
+fn prepare_host(cmd: &mut Command) {
+    with_gui_path(cmd);
+    // Grok Bot / Electron inject NODE_PATH into GUI apps; keep Ppomi + Gateway env.
+    cmd.env_remove("NODE_PATH");
+    cmd.env_remove("NODE_OPTIONS");
+    cmd.env_remove("ELECTRON_RUN_AS_NODE");
+    cmd.env_remove("ELECTRON_NO_ASAR");
+}
+
+fn preview_text(text: &str) -> String {
+    const MAX: usize = 160;
+    let trimmed = text.trim();
+    if trimmed.chars().count() <= MAX {
+        return trimmed.to_string();
+    }
+    trimmed.chars().take(MAX).collect::<String>() + "…"
+}
+
+fn last_json_value(stdout: &str) -> Option<Value> {
     let trimmed = stdout.trim();
     if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+        return Some(value);
+    }
+    for line in trimmed.lines().rev() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Ok(value) = serde_json::from_str::<Value>(line) {
+            return Some(value);
+        }
+    }
+    let start = trimmed.rfind('{')?;
+    let end = trimmed.rfind('}')?;
+    if end < start {
+        return None;
+    }
+    serde_json::from_str::<Value>(&trimmed[start..=end]).ok()
+}
+
+fn parse_host_output(stdout: &str, stderr: &str, success: bool) -> Result<Value, String> {
+    if let Some(value) = last_json_value(stdout) {
         return Ok(value);
     }
-    if !success {
-        return Err(if stderr.trim().is_empty() {
-            format!("node host exited without JSON")
+    let out = preview_text(stdout);
+    let err = preview_text(stderr);
+    let detail = match (out.is_empty(), err.is_empty()) {
+        (true, true) => String::new(),
+        (false, true) => format!("; stdout={out}"),
+        (true, false) => format!("; stderr={err}"),
+        (false, false) => format!("; stdout={out}; stderr={err}"),
+    };
+    if !success && out.is_empty() {
+        return Err(if err.is_empty() {
+            "node host exited without JSON".into()
         } else {
-            stderr.trim().to_string()
+            err
         });
     }
-    Err(if stderr.trim().is_empty() {
-        format!("node host returned invalid JSON")
-    } else {
-        format!("node host returned invalid JSON; {}", stderr.trim())
-    })
+    Err(format!("node host returned invalid JSON{detail}"))
 }
 
 #[tauri::command]
@@ -74,7 +118,7 @@ fn run_path(intent: String, body: String, live: bool) -> Result<Value, String> {
         .arg("--body")
         .arg(&body)
         .current_dir(repo_root());
-    with_gui_path(&mut cmd);
+    prepare_host(&mut cmd);
     if live {
         cmd.arg("--live");
         cmd.env("PPOMI_BODY_LIVE", "1");
@@ -97,13 +141,20 @@ fn ai_gateway(body: Value) -> Result<Value, String> {
         .arg("--proxy-responses")
         .current_dir(repo_root())
         .stdin(Stdio::piped());
-    with_gui_path(&mut cmd);
+    prepare_host(&mut cmd);
     let mut child = cmd
         .spawn()
         .map_err(|error| format!("node host failed to start: {error}"))?;
-    if let Some(stdin) = child.stdin.as_mut() {
+    {
+        let mut stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| "node host stdin missing".to_string())?;
         stdin
             .write_all(body.to_string().as_bytes())
+            .map_err(|error| format!("node host stdin failed: {error}"))?;
+        stdin
+            .flush()
             .map_err(|error| format!("node host stdin failed: {error}"))?;
     }
     let output = child
@@ -138,5 +189,30 @@ mod tests {
     fn gateway_probe_json_is_host_stdout() {
         let value = parse_host_output("{\"configured\":false,\"fixture\":false}\n", "", true).unwrap();
         assert_eq!(value["configured"], false);
+    }
+
+    #[test]
+    fn last_json_object_survives_stdout_noise() {
+        let value = parse_host_output(
+            "(node:1) ExperimentalWarning: strip types\n{\"status\":\"path_not_found\"}\nextra chatter\n",
+            "ignored",
+            true,
+        )
+        .unwrap();
+        assert_eq!(value["status"], "path_not_found");
+    }
+
+    #[test]
+    fn last_braced_json_survives_wrapped_noise() {
+        let value = parse_host_output("prefix {\"configured\":true,\"fixture\":true} trailing", "", true).unwrap();
+        assert_eq!(value["fixture"], true);
+    }
+
+    #[test]
+    fn invalid_json_error_includes_stdout_and_stderr_preview() {
+        let err = parse_host_output("not-json", "boom", true).unwrap_err();
+        assert!(err.contains("invalid JSON"), "{err}");
+        assert!(err.contains("not-json"), "{err}");
+        assert!(err.contains("boom"), "{err}");
     }
 }

@@ -66,6 +66,22 @@ test("unset Gateway falls back to the local matcher without crashing", async () 
   }]);
 });
 
+test("gateway proxy IPC failure is Korean path_not_found, not Rust invalid JSON", async () => {
+  const turn = await sendChat("지금 데이터 뭐 있어?", {
+    complete: async () => {
+      throw new Error("node host returned invalid JSON");
+    },
+    runPath: async intent => previewSpine(intent),
+  });
+  assert.equal(turn.mode, "local");
+  assert.deepEqual(turn.lines, [{
+    kind: "bubble",
+    role: "assistant",
+    text: "그 일에 맞는 경로가 아직 없습니다.",
+  }]);
+  assert.doesNotMatch(JSON.stringify(turn), /invalid JSON|node host/i);
+});
+
 test("local fallback still paints the CEO regex intent as a secrets card", async () => {
   const turn = await sendChat("내 사업자 KB계좌번호 알아?", {
     complete: async () => null,
