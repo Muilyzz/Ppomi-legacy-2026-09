@@ -24,8 +24,10 @@ LOCAL_SIGN_ID="Apple Development: …" scripts/install-shell.sh
 
 Same `LOCAL_SIGN_ID` every local Mac build (Swift `make-app.sh`). Quit the old app first — the script does. Do not keep `*-prev.app` or `dist/backup/*.app`; those mixed copies are why TCC listed 「previous」. Do not `tccutil reset` as routine. Ad-hoc is not for permission smoke. `tauri dev` / `target/` are not install paths.
 
-`실행` with intent `다음` (or `browse`) calls `run_path` → `src/host.ts` →
-`ppomi-brain` → `path-home-next` → `ppomi-body-macos` fixture click on `Next`.
+The window is messages + composer only (placeholder hint OK). Type `다음` or
+`browse` and send: `run_path` → `src/host.ts` → `ppomi-brain` →
+`path-home-next` → `ppomi-body-macos` fixture click on `Next`. No mode header
+(절차 · 기억 · 할 일) and no suggestion chips.
 
 Live Mac AX (손쉬운 사용 on the terminal or the app):
 
@@ -33,7 +35,7 @@ Live Mac AX (손쉬운 사용 on the terminal or the app):
 PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body macos --live
 ```
 
-Or check **live** in the window. Off-macOS / no grant is a skip, not a crash.
+Off-macOS / no grant is a skip, not a crash.
 
 Windows / Android fixtures use the same IPC (`--body windows|android`). Live OS
 hooks stay the existing `ppomi-body-*` examples (MZZ-55b / MZZ-55c).

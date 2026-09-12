@@ -23,7 +23,7 @@ npm --prefix shell test
 npm --prefix shell run dev
 ```
 
-창에서 intent `다음` → **실행**. IPC `run_path`가 Node `shell/src/host.ts`를 띄우고 `ppomi-brain`이 `path-home-next`를 고른 뒤 `ppomi-body-macos` fixture가 `Next`를 클릭한다.
+창은 대화(메시지 + 입력)만. 입력 `다음` → 보내기. IPC `run_path`가 Node `shell/src/host.ts`를 띄우고 `ppomi-brain`이 `path-home-next`를 고른 뒤 `ppomi-body-macos` fixture가 `Next`를 클릭한다. 모드 머리글(절차 · 기억 · 할 일)과 제안 칩은 두지 않는다.
 
 소비자 앱·권한 스모크는 **설치 경로 하나**: `/Applications/뽀미.app`. `tauri dev` / `target/` / `dist/` 번들에 손쉬운 사용을 주지 않는다.
 
@@ -47,7 +47,7 @@ open /Applications/뽀미.app
 PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body macos --live
 ```
 
-창의 **live** 체크와 같다. Safari(또는 `PPOMI_MAC_BROWSER=chrome`)로 example.com을 열고 "More information"만 클릭한다. 손쉬운 사용이 없거나 Mac이 아니면 skip(실패 아님). 예제는 `packages/ppomi-body-macos/example`.
+Safari(또는 `PPOMI_MAC_BROWSER=chrome`)로 example.com을 열고 "More information"만 클릭한다. 손쉬운 사용이 없거나 Mac이 아니면 skip(실패 아님). 예제는 `packages/ppomi-body-macos/example`.
 
 ## Windows / Android 호출 자리
 
