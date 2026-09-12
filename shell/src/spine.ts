@@ -124,7 +124,8 @@ export function textFromSpine(result: SpineView): string {
 function secretsBubble(result: SpineView): string {
   const blob = `${result.note} ${result.body?.steps.map(step => step.note).join(" ") ?? ""}`;
   const masked = blob.match(/\*{4}\d{4}/);
-  if (masked !== null) return `저장된 사업자 계좌는 ${masked[0]}입니다.`;
+  // Bubble is markdown; backticks keep ****last4 visible.
+  if (masked !== null) return `저장된 사업자 계좌는 \`${masked[0]}\`입니다.`;
   return "저장된 사업자 계좌가 없습니다.";
 }
 
