@@ -95,6 +95,13 @@ tr[data-event]{cursor:pointer} tr[data-event]:hover td{background:var(--surface-
 .ev-pop-preview{min-height:6rem;margin:.75rem 0 0;display:flex;align-items:center;justify-content:center;gap:.4rem;background:var(--surface-2);border:1px dashed var(--line);border-radius:var(--r)}
 .ev-spin{display:inline-block;width:1rem;height:1rem;border:.15rem solid var(--line-2);border-top-color:var(--fg);border-radius:50%;animation:ev-spin .7s linear infinite}
 @keyframes ev-spin{to{transform:rotate(360deg)}}
+.ev-grid-wrap{overflow-x:auto;margin:.5rem 0}
+.ev-grid th,.ev-grid td{vertical-align:top}
+.ev-thumb{display:flex;flex-direction:column;align-items:stretch;width:7.5rem;padding:0;border:0;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.ev-thumb-face{display:block;height:4.5rem;box-sizing:border-box;border-radius:var(--r)}
+.ev-thumb[data-fill="1"] .ev-thumb-face{background:var(--surface-2);border:1px solid var(--line);padding:.35rem;font-size:.75rem}
+.ev-thumb[data-fill="0"] .ev-thumb-face{background:transparent;border:1px dashed var(--line)}
+.ev-thumb .meta{display:block;margin-top:.25rem;white-space:normal}
 
 /* ---- 값 종류 뷰(facts.js): SVG 기하는 자료(inline), 여기는 꾸밈. 출처 등급은 선 무늬로 겹친다 — 추정은 긴 점선, 개략·AI 추정은 짧은 점선 */
 .fx svg{display:block;width:100%;height:auto;margin:4px 0} .fx svg text{fill:currentColor}
