@@ -25,3 +25,89 @@
   .control-slot { flex: 0 0 auto; padding: .25rem .5rem; }
   .control .records-body { display: none; }   /* 아이패드 세로: 장부 본문은 접히고 탭만 레일에 */
 }
+
+
+/* StepResult 기록 조각(HighlightOverlay · StepTimeline). 색은 토큰만. StepRecordPanel 이 조합한다. */
+.highlight-overlay { margin: 0; display: grid; gap: .5rem; min-width: 0; }
+.highlight-overlay[hidden], .highlight-overlay[data-empty="true"] { display: none; }
+.highlight-overlay-frame {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.highlight-overlay-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.highlight-overlay-placeholder {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--fg-2);
+  font-size: var(--fs-2);
+}
+.highlight-overlay-boxes { list-style: none; margin: 0; padding: 0; }
+/* Boxes are fractions of the picture; until the picture's rect is measured they would sit on the frame. */
+.highlight-overlay-boxes[data-measured="false"] { visibility: hidden; }
+.highlight-overlay-box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  pointer-events: none;
+}
+.highlight-overlay-box[data-selected="true"] { outline: 2px solid var(--fg); outline-offset: 2px; }
+.highlight-overlay-box-label {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  margin-bottom: .125rem;
+  padding: 0 .25rem;
+  background: var(--surface);
+  color: var(--accent-fg);
+  font-size: var(--fs-1);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.highlight-overlay-caption { color: var(--fg-2); font-size: var(--fs-1); overflow-wrap: anywhere; }
+
+.step-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+.step-card {
+  display: grid;
+  gap: .25rem;
+  width: 100%;
+  text-align: left;
+  padding: .75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+}
+/* Focus is the workbench ink ring; selection is a fill plus an inset accent bar, so the two never look alike. */
+.step-card:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.step-card[aria-pressed="true"] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.step-card-status { font-size: var(--fs-1); font-weight: 500; color: var(--fg-2); }
+.step-card-title { font-size: var(--fs-3); font-weight: 500; }
+.step-card-meta, .step-card-summary, .step-card-timing { font-size: var(--fs-2); color: var(--fg-2); }
+.step-card-timing { font-variant-numeric: tabular-nums; }
+.step-card-code { font: inherit; font-family: var(--mono); font-size: var(--fs-1); }
+.step-card[data-status="ok"] .step-card-status { color: var(--accent-fg); }
+.step-card[data-status="retryable"] { border-style: dashed; }
+.step-card[data-status="ambiguous"] { border-style: dashed; }
+.step-card[data-status="ambiguous"] .step-card-status { color: var(--accent-fg); }
+.step-card[data-status="protected"] { color: var(--fg-2); }
+.step-card[data-status="needs_human"] { border-width: 2px; border-color: var(--turn); }
+.step-card[data-status="failed"] .step-card-status { color: var(--bad); }
+
+.step-result-preview { display: grid; gap: .75rem; min-width: 0; }
+
+/* 작업대 기록 패널 「스텝 기록」: 머리 · 증빙 오버레이(또는 한 줄) · 타임라인. 색은 토큰만. */
+.step-record-panel { display: grid; gap: .75rem; min-width: 0; align-content: start; }
+.step-record-header { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; }
+.step-record-title { margin: 0; color: var(--fg); font-size: var(--fs-3); font-weight: 500; }
+.step-record-count, .step-record-empty, .step-record-no-evidence { margin: 0; color: var(--fg-2); font-size: var(--fs-2); }
+.step-record-count { font-variant-numeric: tabular-nums; }
+.step-record-empty { padding: 1.5rem 0; text-align: center; }
+.step-record-no-evidence { padding: .75rem; border: 1px dashed var(--line-2); border-radius: var(--r); }
