@@ -272,12 +272,8 @@ fn host_json(cmd: Command, stdin_payload: Option<&[u8]>, timeout: Duration, code
     .map_err(|message| HostError::new(code, message))
 }
 
-fn run_path_blocking(intent: &str, body: &str, live: bool) -> Result<Value, HostError> {
-    let mut cmd = host_command(&["--intent", intent, "--body", body]);
-    if live {
-        cmd.arg("--live");
-        cmd.env("PPOMI_BODY_LIVE", "1");
-    }
+fn run_path_blocking(intent: &str, body: &str) -> Result<Value, HostError> {
+    let cmd = host_command(&["--intent", intent, "--body", body]);
     host_json(cmd, None, RUN_PATH_TIMEOUT, "run_path_host_failed")
 }
 
@@ -291,10 +287,18 @@ fn join_failed(code: &str) -> impl FnOnce(tauri::Error) -> HostError + '_ {
     move |error| HostError::new(code, format!("node host task failed: {error}"))
 }
 
-/// Async so the node run never blocks the main thread and the webview.
+/// The window has no approval gate for real-device control yet, so the IPC never arms a live
+/// body: `live` is refused with a coded error (#79), and the allow-listed child environment
+/// carries no arming variable. Async so the node run never blocks the main thread and the webview.
 #[tauri::command]
 async fn run_path(intent: String, body: String, live: bool) -> Result<Value, HostError> {
-    tauri::async_runtime::spawn_blocking(move || run_path_blocking(&intent, &body, live))
+    if live {
+        return Err(HostError::new(
+            "live_refused",
+            "live is CLI-only until the window has an approval gate: PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 다음 --body macos --live",
+        ));
+    }
+    tauri::async_runtime::spawn_blocking(move || run_path_blocking(&intent, &body))
         .await
         .map_err(join_failed("run_path_host_failed"))?
 }
