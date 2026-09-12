@@ -45,6 +45,7 @@ CEO 한 줄:
      에이전트가 path_cold_start(app: kb-enterprise) 를 호출한다.
      iPhone 미러링이 붙은 뒤 Home(phone_key home) → KB스타기업뱅킹 열기(phone_open).
      Face ID·로그인 화면에서 멈춘다. 계좌·비밀은 읽지 않는다.
+     손·눈이 없으면 권한 허용 CTA(시스템 프롬프트)가 먼저다. 거절 뒤에만 시작하기.
   같은 동작: Ppomi --mcp 에 같은 한 줄을 보내 path_cold_start(app: kb-enterprise)
 
 web / Clerk (ppomi-web, who — 앱 로그인과 별개):
@@ -82,6 +83,8 @@ self_check() {
     echo "$out" | grep -q 'KB 사업자 계좌' || { echo "self-check: missing chat line" >&2; exit 1; }
     echo "$out" | grep -q 'Home → KB' || { echo "self-check: missing Home → KB" >&2; exit 1; }
     echo "$out" | grep -q 'example 아님' || { echo "self-check: missing main-app-not-example" >&2; exit 1; }
+    echo "$out" | grep -q '권한 허용 CTA' || { echo "self-check: missing permission CTA" >&2; exit 1; }
+    echo "$out" | grep -q '시작하기' || { echo "self-check: missing 시작하기 fallback" >&2; exit 1; }
     echo "$out" | grep -q '/account' || { echo "self-check: missing /account" >&2; exit 1; }
     echo "$out" | grep -q 'make-app.sh' || { echo "self-check: missing make-app.sh" >&2; exit 1; }
     echo "$out" | grep -qi 'ppomi-mac-shell' && { echo "self-check: invented package name" >&2; exit 1; }

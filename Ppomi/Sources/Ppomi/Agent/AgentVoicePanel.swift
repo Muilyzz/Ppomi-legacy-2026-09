@@ -55,6 +55,7 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
         }
         NotificationCenter.default.addObserver(self, selector: #selector(pushUIScale), name: Fonts.scaleChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(endpointChanged), name: AgentNativePolicy.endpointChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(permissionNeed(_:)), name: Permissions.promptNotification, object: nil)
     }
 
     @objc private func endpointChanged() { invalidateSession() }
@@ -95,6 +96,15 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
 
     /// The page reads uiScale from bootstrap; a later change reaches the live document here.
     @objc private func pathColdStart() { onPathColdStart?() }
+
+    @objc private func permissionNeed(_ note: Notification) {
+        let kind = (note.userInfo?["kind"] as? String) ?? "prompt"
+        pushPermissionNeed(kind)
+    }
+    private func pushPermissionNeed(_ kind: String) {
+        guard let json = jsonArg(kind) else { return }
+        webView?.evaluateJavaScript("window.ppomiPermissionNeed?.(\(json)[0])")
+    }
 
     @objc private func pushUIScale() {
         webView?.evaluateJavaScript("document.documentElement.style.setProperty('--ui-scale', '\(AppSettings.uiScale)')")
@@ -250,6 +260,12 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
             guard args.isEmpty else { reply(id, error: AgentNativeError.invalidRequest); return }
             reply(id, result: ["declined": true]); return
         }
+        if method == "requestPermissions" {
+            guard args.isEmpty else { reply(id, error: AgentNativeError.invalidRequest); return }
+            let need = Permissions.presentAllowSheet()
+            if Permissions.ready { pushPermissionNeed("ready") }
+            reply(id, result: ["ready": Permissions.ready, "need": need.rawValue]); return
+        }
         if method == "setEndpoint" {
             do {
                 guard !session.isActive, hostWindow?.isKeyWindow == true, let value = args["endpoint"] as? String else {
@@ -278,7 +294,8 @@ final class AgentVoicePanel: NSObject, AgentConversationWindow, NSWindowDelegate
                     return ["platform": "macos", "deviceLabel": "Mac", "configured": configured,
                             "endpoint": endpoint, "tools": AgentNativePolicy.toolNames + MCPServer.tools.map(\.name),
                             "toolSpecs": MCPServer.toolSpecs, "toolGuide": self.mcp?.instructions ?? "",
-                            "bankProfileSupported": true, "uiScale": AppSettings.uiScale] as [String: Any]
+                            "bankProfileSupported": true, "uiScale": AppSettings.uiScale,
+                            "accessibility": Permissions.accessibility, "screenCapture": Permissions.screenCapture] as [String: Any]
                 case "bankProfileRequest", "bankProfileSubmit", "bankProfileCancel":
                     // Only our bundled main-frame UI can call these methods; they are not model executeTool names.
                     // Session changes revoke outstanding card tokens before another save can occur.

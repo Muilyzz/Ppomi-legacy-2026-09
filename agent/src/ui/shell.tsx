@@ -196,6 +196,15 @@ export function CallBar({ word, onEnd }: { word: ReactNode; onEnd: () => void })
   </div>;
 }
 
+/** 입력창 위 권한 CTA. 버튼 → 네이티브 작은 얼럿 → 시스템 허용. 새 키트 없음(걸려온 통화 띠와 같은 뼈대). */
+export function PermissionCTA({ onAllow }: { onAllow: () => void }) {
+  return <div className="mb-2 flex flex-wrap items-center gap-3 rounded-xl border bg-card px-3.5 py-2.5 text-sm" role="region" aria-label="권한 허용">
+    <strong className="font-medium">손쉬운 사용·화면 기록</strong>
+    <span className="min-w-0 flex-1 break-words text-muted-foreground">폰을 만지려면 허용이 필요해요.</span>
+    <Button size="sm" onClick={onAllow}>권한 허용</Button>
+  </div>;
+}
+
 /** 걸려온 통화: 뽀미가 사람 차례(승인·질문)나 예약된 일로 부른다. 받기 = 통화 시작(뽀미가 용건을 말한다), 나중에 = 띠를 내린다. */
 export function IncomingCall({ reason, onAccept, onLater }: { reason: ReactNode; onAccept: () => void; onLater: () => void }) {
   return <div className="mb-2 flex flex-wrap items-center gap-3 rounded-xl border bg-card px-3.5 py-2.5 text-sm" role="alert" aria-label="걸려온 통화">

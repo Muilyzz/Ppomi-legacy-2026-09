@@ -5,6 +5,7 @@ export type Bootstrap = {
   endpoint: string;
   tools: string[];
   accessibility?: boolean;
+  screenCapture?: boolean;
   controlApps?: { label: string; packageName: string }[];
   bankProfileSupported?: boolean;
   /** Mac: every MCP tool (phone/Windows/profile/playbook…) as JSON-schema specs; executeTool returns {text, error}. */
@@ -140,7 +141,8 @@ export type Method =
   | "bankProfileRequest"
   | "bankProfileSubmit"
   | "bankProfileCancel"
-  | "setEndpoint";
+  | "setEndpoint"
+  | "requestPermissions";
 declare global {
   interface Window {
     webkit?: {
@@ -156,6 +158,8 @@ declare global {
     ppomiIncomingCall?: (reason: string) => void;
     /** 네이티브(OS 통화 화면)가 이미 받았다: 띠 없이 바로 통화를 연다. */
     ppomiAnswerCall?: (reason: string) => void;
+    /** Native: first-time 손·눈 miss (prompt) or already denied (settings). ready hides the CTA. */
+    ppomiPermissionNeed?: (kind: "prompt" | "settings" | "ready") => void;
   }
 }
 // All payloads and callbacks are memory-only. A timeout never retries a mutation.

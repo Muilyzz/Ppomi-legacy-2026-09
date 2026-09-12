@@ -149,7 +149,8 @@ final class AppState: ObservableObject {
     private var askDB: DB?, askTimer: Timer?, answered: String?   // answered: the id we already pressed, until askViaDB clears it
     @Published var greetOnArrival = true                 // 뽀미 speaks first when the phone reconnects (menu; state table "greet:on")
     @Published var voiceToggle = 0                       // bumps: open/close the realtime session (⌥Space, the menu) — VoiceSession listens
-    @Published var setupNeeded = 0                       // bumps: a phone tool was refused for missing 손·눈 (state table "setup:needed") — StartupCheck opens 설정 › 시작하기
+    @Published var setupNeeded = 0                       // bumps: missing 손·눈 and macOS will not re-prompt — AppDelegate opens 설정 › 시작하기
+    @Published var permissionPrompt = 0                  // bumps: first miss — system prompt + chat CTA, not Settings
     @Published var voiceOpen = 0                         // bumps: open it (`Ppomi --voice` left "voice:open" in the state table)
 
     func talk() { voiceToggle += 1 }
@@ -174,6 +175,7 @@ final class AppState: ObservableObject {
     func pollAsk() {
         guard let db = askDB else { return }
         if ((try? db.state("voice:open")) ?? nil) != nil { try? db.exec("DELETE FROM state WHERE key = 'voice:open'", []); voiceOpen += 1 }
+        if ((try? db.state("setup:prompt")) ?? nil) != nil { try? db.exec("DELETE FROM state WHERE key = 'setup:prompt'", []); permissionPrompt += 1 }
         if ((try? db.state("setup:needed")) ?? nil) != nil { try? db.exec("DELETE FROM state WHERE key = 'setup:needed'", []); setupNeeded += 1 }
         guard let q = Tools.pendingQuestion(db), q.id != answered else {
             if ask != nil { ask = nil; if case .humanTurn = phase { phase = .idle } }
