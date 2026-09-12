@@ -75,7 +75,14 @@ function assertMaskedAccount(result: { status: string; pathId: string | null; no
 }
 
 test("Korean business-account intents choose the secrets path", async () => {
-  for (const intent of [ceoIntent, "KB 계좌번호", "사업자 계좌 알려줘", "account number", "통장번호"]) {
+  for (const intent of [
+    ceoIntent,
+    "KB스타비즈에 넣어둔 번호 마지막만 보여줘",
+    "KB 계좌번호",
+    "사업자 계좌 알려줘",
+    "account number",
+    "통장번호",
+  ]) {
     const result = await runSpine({ intent, body: "macos", live: false });
     assertMaskedAccount(result);
   }

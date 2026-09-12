@@ -177,10 +177,17 @@ test("errorCodeOf reads Rust { code } objects, code: message strings, and falls 
 });
 
 test("preview secrets matcher covers similar Korean and English intents", () => {
-  for (const intent of ["KB 계좌번호", "사업자 계좌", "account number", "통장번호"]) {
+  for (const intent of [
+    "KB 계좌번호",
+    "사업자 계좌",
+    "account number",
+    "통장번호",
+    "KB스타비즈에 넣어둔 번호 마지막만 보여줘",
+  ]) {
     assert.equal(previewSpine(intent).pathId, "path-secrets-account", intent);
   }
   assert.equal(previewSpine("알아?").status, "path_not_found");
+  assert.equal(previewSpine("지금 데이터 뭐 있어?").status, "path_not_found");
 });
 
 test("KB open intents are a tool card plus a short Korean Face ID bubble", () => {

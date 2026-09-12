@@ -36,7 +36,7 @@ const INSTRUCTIONS = [
   "Call run_path when the person wants a host path.",
   "Home / next / browse → intent 다음.",
   "KB스타기업뱅킹 열어 / KB 사업자 홈 / path_cold_start → pass the spoken intent.",
-  "Saved business or KB account / KB스타비즈 / last four digits → intent 사업자 계좌번호.",
+  "Saved business or KB account / KB스타비즈 / 넣어둔 번호 / last four digits → intent 사업자 계좌번호.",
   "Never write a full account number. Only ****last4 from the tool result.",
 ].join(" ");
 

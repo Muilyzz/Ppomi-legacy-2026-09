@@ -50,9 +50,11 @@ const secretsView: SpineView = {
   body: { status: "completed", steps: [{ stepId: "read-account", status: "ok", note: "****7890 ppomi/kb-star-biz/account" }] },
 };
 
-test("CEO Gateway prompt is not a local-only regex match", () => {
-  assert.equal(previewSpine(CEO_GATEWAY_PROMPT).status, "path_not_found");
+test("CEO paraphrase and catalog intent both select the secrets path", () => {
+  assert.equal(previewSpine(CEO_GATEWAY_PROMPT).pathId, "path-secrets-account");
+  assert.equal(previewSpine("내 사업자 KB계좌번호 알아?").pathId, "path-secrets-account");
   assert.equal(fixtureIntent(CEO_GATEWAY_PROMPT), SECRETS_CATALOG_INTENT);
+  assert.equal(fixtureIntent("내 사업자 KB계좌번호 알아?"), SECRETS_CATALOG_INTENT);
 });
 
 test("fixture model calls run_path; ToolCard is from that call, not linesFromSpine(user text)", async () => {
@@ -79,17 +81,17 @@ test("fixture model calls run_path; ToolCard is from that call, not linesFromSpi
   assert.doesNotMatch(dumped, /1234567890/);
 });
 
-test("unset Gateway falls back to the local matcher without crashing", async () => {
+test("unset Gateway still hits secrets for the CEO paraphrase", async () => {
   const turn = await sendChat(CEO_GATEWAY_PROMPT, {
     complete: async () => null,
     runPath: async intent => previewSpine(intent),
   });
   assert.equal(turn.mode, "local");
-  assert.deepEqual(turn.lines, [{
-    kind: "bubble",
-    role: "assistant",
-    text: "그 일에 맞는 경로가 아직 없습니다.",
-  }]);
+  assert.equal(turn.lines[0]?.kind, "tool");
+  assert.equal(turn.lines[1]?.kind, "bubble");
+  if (turn.lines[0]?.kind !== "tool" || turn.lines[1]?.kind !== "bubble") return;
+  assert.equal(turn.lines[0].tool.label, "path-secrets-account");
+  assert.equal(turn.lines[1].text, "저장된 사업자 계좌는 `****7890`입니다.");
 });
 
 test("gateway IPC failure is a visible gateway error with its code — no regex fallback, no run_path", async () => {
