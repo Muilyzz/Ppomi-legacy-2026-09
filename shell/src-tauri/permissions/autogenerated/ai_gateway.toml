@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ai-gateway"
+description = "Enables the ai_gateway command without any pre-configured scope."
+commands.allow = ["ai_gateway"]
+
+[[permission]]
+identifier = "deny-ai-gateway"
+description = "Denies the ai_gateway command without any pre-configured scope."
+commands.deny = ["ai_gateway"]

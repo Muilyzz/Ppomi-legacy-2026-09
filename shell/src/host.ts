@@ -1,4 +1,5 @@
-import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { proxyResponses } from "./gateway.ts";
 import { allowGrant, grantableEffects, orchestrate } from "../../packages/ppomi-brain/src/index.ts";
 import type {
@@ -419,7 +420,12 @@ async function readStdinJson(): Promise<unknown> {
 function isMain(): boolean {
   const entry = process.argv[1];
   if (entry === undefined) return false;
-  return import.meta.url === pathToFileURL(entry).href;
+  const self = fileURLToPath(import.meta.url);
+  try {
+    return realpathSync(entry) === realpathSync(self);
+  } catch {
+    return import.meta.url === pathToFileURL(entry).href;
+  }
 }
 
 async function main(): Promise<void> {
@@ -431,7 +437,8 @@ async function main(): Promise<void> {
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
-if (isMain()) {
+// --proxy-responses must run even if isMain() misses a strip-types / symlink argv path.
+if (process.argv.includes("--proxy-responses") || isMain()) {
   main().catch(error => {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`${message}\n`);
