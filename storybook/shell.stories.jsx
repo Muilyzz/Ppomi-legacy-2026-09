@@ -6,7 +6,7 @@ import * as f from '../agent/src/ui/fixtures';
 
 export default {
   title: '대화 셸',
-  parameters: {skin: ['shell'], componentOutline: false},
+  parameters: {skin: ['shell']},
   render: (args) => { const el = document.createElement('div'); createRoot(el).render(<Shell {...args} />); return el; },
   argTypes: {
     platform: {control: 'radio', options: ['macos', 'android']},
