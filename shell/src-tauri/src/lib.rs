@@ -309,10 +309,26 @@ async fn ai_gateway(body: Value) -> Result<Value, HostError> {
         .map_err(join_failed("gateway_host_failed"))?
 }
 
+#[tauri::command]
+fn open_clerk_account() -> Result<Value, String> {
+    let mut cmd = Command::new(node_bin());
+    cmd.arg("--experimental-strip-types")
+        .arg(host_script())
+        .arg("--clerk-handoff")
+        .current_dir(repo_root())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    prepare_host(&mut cmd);
+    cmd.spawn()
+        .map_err(|error| format!("node host failed to start: {error}"))?;
+    Ok(serde_json::json!({ "opened": true }))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![run_path, ai_gateway])
+        .invoke_handler(tauri::generate_handler![run_path, ai_gateway, open_clerk_account])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

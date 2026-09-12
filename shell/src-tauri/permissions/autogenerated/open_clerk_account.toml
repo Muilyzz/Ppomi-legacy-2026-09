@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-clerk-account"
+description = "Enables the open_clerk_account command without any pre-configured scope."
+commands.allow = ["open_clerk_account"]
+
+[[permission]]
+identifier = "deny-open-clerk-account"
+description = "Denies the open_clerk_account command without any pre-configured scope."
+commands.deny = ["open_clerk_account"]

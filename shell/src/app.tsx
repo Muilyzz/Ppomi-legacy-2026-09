@@ -22,15 +22,38 @@ function modeCaption(mode: ChatMode): string {
   }
 }
 
+function tauriInvoke(): ((cmd: string) => Promise<unknown>) | null {
+  return (globalThis as { __TAURI__?: { core?: { invoke: (cmd: string) => Promise<unknown> } } }).__TAURI__?.core?.invoke ?? null;
+}
+
 function App() {
   const [lines, setLines] = useState<Line[]>([]);
   const [status, setStatus] = useState<"ready" | "submitted">("ready");
   const [error, setError] = useState("");
   const [mode, setMode] = useState<ChatMode>("local");
+  const [signingIn, setSigningIn] = useState(false);
 
   useEffect(() => {
     void probeChatMode().then(setMode);
   }, []);
+
+  const login = async () => {
+    const invoke = tauriInvoke();
+    if (invoke === null) return;
+    setSigningIn(true);
+    try {
+      await invoke("open_clerk_account");
+      const deadline = Date.now() + 5 * 60 * 1000;
+      while (Date.now() < deadline) {
+        const next = await probeChatMode();
+        setMode(next);
+        if (next === "gateway") break;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    } finally {
+      setSigningIn(false);
+    }
+  };
 
   const send = async (text: string) => {
     setStatus("submitted");
@@ -65,9 +88,21 @@ function App() {
           }
           composer={
             <>
-              {modeCaption(mode) !== "" && (
-                <p className="text-muted-foreground px-1 pb-1 text-xs" aria-label="chat mode">{modeCaption(mode)}</p>
-              )}
+              <div className="flex items-center justify-between gap-2 px-1 pb-1">
+                {modeCaption(mode) !== "" && (
+                  <p className="text-muted-foreground text-xs" aria-label="chat mode">{modeCaption(mode)}</p>
+                )}
+                {mode === "local" && tauriInvoke() !== null && (
+                  <button
+                    type="button"
+                    className="text-muted-foreground text-xs underline-offset-2 hover:underline"
+                    onClick={() => void login()}
+                    disabled={signingIn}
+                  >
+                    {signingIn ? "로그인 중" : "로그인"}
+                  </button>
+                )}
+              </div>
               <Composer
                 status={status}
                 placeholder="시킬 일을 적어 주세요"
