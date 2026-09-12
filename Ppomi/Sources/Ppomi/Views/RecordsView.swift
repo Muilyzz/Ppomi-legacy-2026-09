@@ -75,6 +75,7 @@ private extension AppState.Tab {
         case .playbooks: "절차"
         case .health: "건강"
         case .spatial: "3D"
+        case .secrets: "상태·비밀"
         }
     }
 }
@@ -105,6 +106,7 @@ private struct RecordsPage: View {
             case .spatial: SpatialAssetsView()
             case .playbooks: PlaybooksView()
             case .health: HealthView()
+            case .secrets: SecretsView()
             }
         }
         .environment(\.recordsPageIsActive, (state.recordsFocused || state.recordsOnScreen) && state.tab == tab)   // 평상시 제어 열의 상태 뷰도 살아 있는 페이지

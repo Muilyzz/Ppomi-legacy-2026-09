@@ -52,7 +52,7 @@ final class AgentSidebar: WorkbenchSurface, ConversationHost {
     }
 }
 
-/// 제어 머리띠: the target picker and the 기록 button, nothing else.
+/// 제어 머리띠: 기록 · 상태·비밀 · 나. 대상 창은 도구가 정한다.
 struct ControlTargetToolbar: View {
     @EnvironmentObject private var state: AppState
     @State private var me = false
@@ -86,6 +86,10 @@ struct ControlTargetToolbar: View {
                 .controlSize(.ppomiSmall)
                 .disabled(!recordsAvailable)
                 .accessibilityIdentifier("records-open")
+            Button("상태·비밀") { state.show(.secrets) }
+                .controlSize(.ppomiSmall)
+                .disabled(!recordsAvailable)
+                .accessibilityIdentifier("secrets-open")
             // 프로필 아이콘 = 나: 로그인 전엔 실루엣, 뒤엔 구글 사진. 누르면 계정과 자동입력 프로필(잠금 뒤) 시트. 아이패드와 같은 자리, 메뉴엔 아무것도 없다.
             Button { me = true } label: { AvatarView(session: GoogleAccount.session, size: 20) }
                 .buttonStyle(.plain)

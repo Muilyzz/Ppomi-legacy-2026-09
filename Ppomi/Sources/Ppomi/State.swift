@@ -141,7 +141,7 @@ final class AppState: ObservableObject {
     @Published var recordsServerStatus: String?
     @Published var selectedDay: Date = Calendar.current.startOfDay(for: Date())
     @Published var evidenceFocus: EvidenceFocus? = nil   // the 증빙·전표 window; nil until first open
-    enum Tab: String, CaseIterable { case timeline, evidence, accounting, playbooks, health, spatial }
+    enum Tab: String, CaseIterable { case timeline, evidence, accounting, playbooks, health, spatial, secrets }
     @Published var tab: Tab = .timeline                  // what the workbench shows in either size mode
     @Published var listening = false                     // a voice conversation is open (after 뽀미야, until 그만 or 25 s quiet)
     /// A question from another process (the MCP server) or the voice session's tools, waiting for a workbench button.
