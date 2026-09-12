@@ -1,5 +1,5 @@
-// 증빙 잠금 큰 면. OCR 스티치(증거)는 그대로 두고, 여기만 presence·링크·적격/보조·미리보기. 앱 wire 없음.
-// https://linear.app/muilyzz/issue/MZZ-67
+// 증빙 잠금 큰 면. OCR 스티치(증거)는 그대로 두고, 여기만 presence·링크·적격/보조·hover 미리보기. 앱 wire 없음.
+// https://linear.app/muilyzz/issue/MZZ-70
 import {fn} from 'storybook/test';
 import './evidence-fleet.js';
 import {title, here, fleet, server, items, layers, pick} from './evidence-fleet-fixture.js';
@@ -14,7 +14,8 @@ export default {
     title: {control: 'text'},
     debug: {control: 'boolean', description: '내부 id'},
     fleet: {table: {disable: true}}, items: {table: {disable: true}},
-    server: {table: {disable: true}}, layers: {table: {disable: true}}, open: {table: {disable: true}},
+    server: {table: {disable: true}}, layers: {table: {disable: true}},
+    hover: {table: {disable: true}}, session: {table: {disable: true}}, inflight: {table: {disable: true}},
   },
   args: {title, here, fleet, server, items, layers, debug: false, onOpen: fn()},
 };
@@ -26,4 +27,8 @@ export const PeerOffline = {name: '피어 오프라인 · 비활성', args: {ite
 export const Eligible = {name: '적격 · 연결/미연결', args: {items: pick(['ev_tax_001', 'ev_card_002', 'ev_cash_003', 'ev_bill_004']), layers: []}};
 export const Auxiliary = {name: '보조만 · 스냅샷·StepResult', args: {items: pick(['ev_snap_1', 'ev_step_1']), layers: []}};
 export const Presence = {name: '기기 presence · Mac/Win/Phone', args: {items: [], layers: [], server: {memo: '서버 메타만', evidence_ids: []}}};
-export const Preview = {name: '클릭 · 미리보기', args: {open: 'ev_tax_001', items: pick(['ev_tax_001']), layers: []}};
+const one = (id, extra) => ({server: {memo: '소액현금 9월', amount: 164000, unit: '원', evidence_ids: [id]}, items: pick([id]), layers: [], ...extra});
+export const Hover = {name: 'hover · 미리보기', args: one('ev_tax_001', {hover: 'ev_tax_001'})};
+export const Spinner = {name: '수신 중 · 스피너', args: one('ev_card_002', {hover: 'ev_card_002', inflight: {ev_card_002: true}})};
+export const EncryptedCache = {name: '오프라인 · 암호문 캐시', args: one('ev_step_1', {hover: 'ev_step_1'})};
+export const SessionCache = {name: '세션 캐시 · re-hover 즉시', args: one('ev_card_002', {hover: 'ev_card_002', session: {ev_card_002: true}})};

@@ -69,12 +69,40 @@ test('큰 면: 서버 숫자, presence, 네 링크 상태, 다단. id·파일 �
   assert.match(h, /보조 · 미연결/);
   assert.match(h, /1 폰 훑어보기/);
   assert.match(h, /3 공식 첨부/);
-  assert.match(h, /popover/);
+  assert.match(h, /class="ev-hover"/);
+  assert.match(h, /<div class="ev-hover"/);
+  assert.match(h, /role="tooltip"/);
   assert.match(h, /미리보기 · 파일은 기기 · 바이트 없음/);
+  assert.match(h, /미리보기 · E2E · 바이트 없음/);
+  assert.match(h, /암호문 캐시 · 오프라인 · 원문 없음/);
+  assert.match(h, /오프라인 · 미리보기 불가/);
+  assert.doesNotMatch(h, /popover|popovertarget/);
   assert.doesNotMatch(visible(h), /ev_tax_001|ev_card_002|ev_cash_003|ev_bill_004|ev_snap_1|ev_step_1|ev_gone_1/);
   assert.doesNotMatch(h, /<code>ev_/);
   assert.doesNotMatch(h, /\.xlsx|data:image|PK\x03\x04/);
   assert.doesNotMatch(h, /<style/);
+});
+
+test('미리보기 종류: 로컬·E2E·수신·세션·암호문·오프·미부착. 원문 바이트 없음', () => {
+  const tax = items[0], card = items[1], snap = items[4], step = items[5];
+  assert.equal(F.previewKind(tax, st), 'local');
+  assert.equal(F.previewKind(card, st), 'e2e');
+  assert.equal(F.previewKind(card, {...st, inflight: {ev_card_002: true}}), 'receive');
+  assert.equal(F.previewKind(card, {...st, session: {ev_card_002: true}}), 'session');
+  assert.equal(F.previewKind(step, st), 'ciphertext');
+  assert.equal(F.previewKind(snap, st), 'offline');
+  assert.equal(F.previewKind(null, st), 'empty');
+  const shown = F.html({...st, hover: 'ev_tax_001', items: pick(['ev_tax_001']), layers: []});
+  assert.match(shown, /data-show="1"/);
+  assert.match(shown, /data-preview="local"/);
+  const spin = F.html({...st, hover: 'ev_card_002', inflight: {ev_card_002: true}, items: pick(['ev_card_002']), layers: []});
+  assert.match(spin, /ev-spin/);
+  assert.match(spin, /aria-busy="true"/);
+  assert.match(spin, /수신 중/);
+  const sess = F.html({...st, hover: 'ev_card_002', session: {ev_card_002: true}, items: pick(['ev_card_002']), layers: []});
+  assert.match(sess, /세션 미리보기 · 바이트 없음/);
+  assert.doesNotMatch(sess, /ev-spin|수신 중/);
+  assert.doesNotMatch(spin + sess, /<img|data:image|\.xlsx|PK\x03\x04/);
 });
 
 test('디버그면 id가 서버·표·다단에 보인다', () => {
@@ -83,15 +111,33 @@ test('디버그면 id가 서버·표·다단에 보인다', () => {
   assert.match(h, /<th>evidence_id<\/th>/);
 });
 
-test('열기는 onOpen, 오프라인 버튼은 호출 안 함', () => {
+test('열기는 onOpen, 오프라인 버튼은 호출 안 함. 클릭은 미리보기 안 연다', () => {
   const opened = [];
   const el = {innerHTML: '', listeners: [], addEventListener(_t, fn) { this.listeners.push(fn); }, contains() { return true; }};
   F.mount(el, {here, fleet, items: pick(['ev_tax_001', 'ev_snap_1']), onOpen: (id) => opened.push(id)});
   assert.match(el.innerHTML, /disabled>Phone · 스냅샷\(보조\) · 9.12 00:05</);
+  assert.doesNotMatch(el.innerHTML, /data-show/);
   const click = (id, disabled) => el.listeners[0]({target: {closest: (q) => q === '[data-open]' ? {dataset: {open: id}, disabled} : null}});
   click('ev_tax_001', false);
   click('ev_snap_1', true);
   assert.deepEqual(opened, ['ev_tax_001']);
+  assert.equal(el.listeners.length, 2);
+});
+
+test('E2E hover 1회는 스피너 후 세션 캐시. re-hover는 다시 안 받는다', async () => {
+  const el = {innerHTML: '', listeners: [], addEventListener(_t, fn) { this.listeners.push(fn); }, contains() { return true; }};
+  const ui = F.mount(el, {here, fleet, items: pick(['ev_card_002']), receiveMs: 0});
+  const hover = (id) => el.listeners[1]({target: {closest: (q) => q === '[data-hover]' ? {dataset: {hover: id}} : null}});
+  hover('ev_card_002');
+  assert.match(el.innerHTML, /수신 중/);
+  assert.equal(ui.state().inflight.ev_card_002, true);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.match(el.innerHTML, /세션 미리보기 · 바이트 없음/);
+  assert.equal(ui.state().session.ev_card_002, true);
+  assert.equal(ui.state().inflight.ev_card_002, undefined);
+  el.innerHTML = 'keep';
+  hover('ev_card_002');
+  assert.equal(el.innerHTML, 'keep');
 });
 
 test('스냅샷 행은 적격으로 안 보이고, 빈 기기·적대 문자열은 이스케이프', () => {

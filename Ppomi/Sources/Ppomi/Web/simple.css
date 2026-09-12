@@ -66,8 +66,13 @@ tr[data-event]:hover td,tr[data-record]:hover td,tr[aria-selected="true"] td{bac
 .ev-fleet .entry{text-decoration:underline;text-underline-offset:3px}
 .ev-fleet button[disabled]{opacity:.45;cursor:not-allowed;text-decoration:none}
 .ev-fleet ol{margin:4px 0 0;padding-left:20px}
-.ev-pop{min-width:256px;max-width:352px}
-.ev-pop-preview{min-height:96px;margin:12px 0 8px;display:flex;align-items:center;justify-content:center;background:#f4f4f4;border:1px dashed #e5e5e5;border-radius:4px}
+.ev-fleet td{overflow:visible}
+.ev-hover{position:relative;display:inline-block}
+.ev-tip{display:none;position:absolute;left:0;top:calc(100% + 4px);z-index:3;margin:0;min-width:256px;max-width:352px;white-space:normal}
+.ev-hover:hover .ev-tip,.ev-hover:has(:focus-visible) .ev-tip,.ev-hover[data-show] .ev-tip{display:block}
+.ev-pop-preview{min-height:96px;margin:12px 0 0;display:flex;align-items:center;justify-content:center;gap:6px;background:#f4f4f4;border:1px dashed #e5e5e5;border-radius:4px}
+.ev-spin{display:inline-block;width:16px;height:16px;border:2px solid #ccc;border-top-color:#111;border-radius:50%;animation:ev-spin .7s linear infinite}
+@keyframes ev-spin{to{transform:rotate(360deg)}}
 
 /* ---- 값 종류 뷰(facts.js): SVG 기하는 자료(inline), 여기는 꾸밈. 출처 등급은 선 무늬로 겹친다 — 추정은 긴 점선, 개략·AI 추정은 짧은 점선 */
 .fx svg{display:block;width:100%;height:auto;margin:4px 0} .fx svg text{fill:currentColor}
