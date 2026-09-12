@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { proxyResponses } from "./gateway.ts";
-import { parseArgs, parseBodyKind, runSpine, secretsPath } from "./host.ts";
+import { KB_STAR_BIZ_PATH_ID, parseArgs, parseBodyKind, runSpine, secretsPath } from "./host.ts";
 
 const hostFile = join(dirname(fileURLToPath(import.meta.url)), "host.ts");
 
@@ -190,6 +190,57 @@ test("host CLI --proxy-responses runs via symlink and dotted path", () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+const kbOpenIntent = "KB스타기업뱅킹 열어";
+
+function assertKbColdStart(result: {
+  status: string;
+  pathId: string | null;
+  note: string;
+  body: { steps: readonly { stepId: string; status: string; note: string }[] } | null;
+}): void {
+  assert.equal(result.status, "needs_human");
+  assert.equal(result.pathId, KB_STAR_BIZ_PATH_ID);
+  assert.equal(result.body?.steps.find(step => step.stepId === "go-home")?.status, "ok");
+  assert.equal(result.body?.steps.find(step => step.stepId === "open-kb")?.status, "ok");
+  assert.equal(result.body?.steps.find(step => step.stepId === "human-login")?.status, "needs_human");
+  const dumped = JSON.stringify(result);
+  assert.doesNotMatch(dumped, new RegExp(fixtureAccount));
+  assert.doesNotMatch(dumped, /1234567890/);
+  assert.doesNotMatch(dumped, /\d{6}-\d{2}-\d{6}|\d{12,14}/);
+}
+
+test("Korean KB open intents choose the catalog path and stop at human login", async () => {
+  for (const intent of [kbOpenIntent, "KB 사업자 홈", "path_cold_start"]) {
+    const result = await runSpine({ intent, body: "macos", live: false });
+    assertKbColdStart(result);
+  }
+});
+
+test("host CLI exits 0 for KB스타기업뱅킹 열어 and is not path_not_found", () => {
+  const result = spawnSync(
+    process.execPath,
+    ["--experimental-strip-types", hostFile, "--intent", kbOpenIntent],
+    {
+      encoding: "utf8",
+      cwd: join(dirname(hostFile), ".."),
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const body = JSON.parse(result.stdout) as {
+    status: string;
+    pathId: string | null;
+    note: string;
+    body: { steps: readonly { stepId: string; status: string; note: string }[] } | null;
+  };
+  assertKbColdStart(body);
+});
+
+test("bare 열어 still uses the home path", async () => {
+  const result = await runSpine({ intent: "열어", body: "macos", live: false });
+  assert.equal(result.status, "completed");
+  assert.equal(result.pathId, "path-home-next");
 });
 
 test("live secrets off-darwin skips instead of failing", async () => {

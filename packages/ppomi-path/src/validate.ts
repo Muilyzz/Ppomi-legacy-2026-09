@@ -164,6 +164,7 @@ function requireTargetForKind(step: PathStep, index: number): PathStep {
   switch (step.kind) {
     case "payment":
     case "submit":
+    case "key":
       if (step.target === undefined) {
         throw new PathError(
           "step_target",
