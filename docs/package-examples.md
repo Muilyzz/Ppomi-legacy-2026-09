@@ -62,6 +62,9 @@ node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts
 # Android live dump+tap (Settings via AndroidDriver + LiveAndroidNativeTools)
 PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-android/example/src/main.ts
 node --experimental-strip-types packages/ppomi-body-iphone-mirroring/example/src/main.ts
+# iPhone Mirroring live hook (KB path in the Tauri host is fixture-default)
+PPOMI_BODY_LIVE=1 node --experimental-strip-types packages/ppomi-body-iphone-mirroring/example/src/main.ts
+PPOMI_BODY_LIVE=1 npm --prefix shell run host -- --intent 'KB스타기업뱅킹 열어' --live
 ```
 
 ## Rules
