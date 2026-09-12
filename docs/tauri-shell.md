@@ -47,6 +47,10 @@ open /Applications/뽀미.app
 
 패키지 앱도 TS 호스트를 위해 `node`(또는 `PPOMI_NODE`)가 PATH에 있어야 한다. Swift `Ppomi/`는 과도기 body 호스트 — `swift run` 또는 `scripts/make-app.sh`의 `dist/Ppomi.app`이며, `/Applications/뽀미.app`의 형제 백업이 아니다.
 
+## 승인 게이트 (오너 결정 A)
+
+모델(또는 로컬 매처)이 고른 `run_path`는 경로가 **안전할 때만** 바로 돈다: 모든 단계가 body 효과 `navigate` / `input`(brain `input`·`save`; `lookup`은 읽기)이고, 시크릿/볼트 읽기도 live 무장도 없을 때. 그 외는 **아무 단계도 실행하기 전에** 멈춘다 — `status needs_human`, `body.stopReason needs_human`, `approval { pathId, stepId, effect: commit | secrets | live, title, what, token }`. 창은 `승인 대기` ToolCard(경로 · 단계 · 효과 · 무엇이 일어나는지)와 **실행 / 취소** 버튼을 그린다. 실행 = 그 토큰(`<pathId>/<stepId>`, live는 `live`) 하나를 같은 intent와 함께 한 번 더 보낸다(`run_path … approve`) — 그 실행에만 유효하고 host는 저장하지 않는다; 취소 = host를 부르지 않고 `거부됨` 카드 + `실행하지 않았습니다.`; 새 입력을 보내면 미답 승인은 버려진다. brain `transmit`은 `commit`으로 내려가 승인 뒤 그 단계만 `input`으로 실행되고, `financial_submit`은 토큰이 있어도 `commit`으로 남아 런타임이 사람에게 넘긴다(`commit step: the person takes this step`). CLI: `--approve <pathId>/<stepId>`(반복 가능), `--live`는 사람이 직접 친 live 승인이고 `PPOMI_BODY_LIVE=1`만으로는 live 게이트에서 멈춘다. 토큰은 환경에서 오지 않는다(#96 `env_clear` 허용 목록 그대로).
+
 ## 실패는 실패로 (Gateway · IPC)
 
 `run_path` / `ai_gateway`는 node 자식의 stdout·stderr를 파이프로 받고(타임아웃 60 s / 120 s, 넘기면 kill), 마지막 JSON 객체만 결과로 쓴다. 실패는 전부 `{ code, message }` — `run_path_host_failed` / `gateway_host_failed` — 이고 빈 결과나 지어낸 결과는 없다. 창에서는 IPC 실패가 `실행에 실패했습니다.` + `output-error` 카드(`run_path_ipc_failed: <code>`), Gateway 실패가 `모델 연결에 실패했습니다. 게이트웨이 오류: <code>`(`gateway_ipc_failed` · `gateway_host_failed` · `model_unavailable`)로 보인다 — `path_not_found` 말풍선으로 숨기지 않고, 로컬 regex 매처로 조용히 내려가지 않는다. 키도 픽스처도 없을 때만 로컬 매처가 답하고, 그 카드는 `via: "local"`이다(`via: "gateway"`는 모델 function_call만). 브라우저 `previewSpine`은 `vite dev` 또는 `?chat=fixture`에서만 쓰이고 `(미리보기)`로 표시된다; 그 밖에 IPC가 없으면 `run_path_ipc_failed: no_tauri_ipc`. 자식 환경은 허용 목록만 넘긴다(`PATH`·`HOME`·`TMPDIR`·`LANG`/`LC_*`·`PPOMI_CHAT`·`PPOMI_NODE`·`PPOMI_MAC_BROWSER`·`AI_GATEWAY_API_KEY`·`AI_GATEWAY_BASE_URL`·`AI_TEXT_MODEL`); `PPOMI_BODY_LIVE`·`PPOMI_BODY_AX`·`PPOMI_BODY`·`PPOMI_SECRETS_LIVE`·`NODE_*`·`DYLD_*`/`LD_*`는 창에서 절대 자식에 닿지 않는다. 창의 `live` 거부(`live_refused`)는 #79와 함께 온다.

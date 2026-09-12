@@ -100,6 +100,23 @@ hooks stay the existing `ppomi-body-*` examples (MZZ-55b / MZZ-55c).
 Packaged `npm --prefix shell run build` still needs `node` on `PATH` (or
 `PPOMI_NODE`) for the TS host. That is a smoke spine, not a store bundle.
 
+Approval gate (owner decision A). A model- or matcher-initiated `run_path`
+runs at once only when the path is safe: every step lowers to body effect
+`navigate` / `input` (brain `input` / `save`; `lookup` is a read), no secrets
+read, no live arming. Otherwise the host stops **before any step runs** —
+`status needs_human`, `approval { pathId, stepId, effect: commit | secrets |
+live, title, what, token }` — and the window shows a 승인 대기 ToolCard (path,
+step, effect, what will happen) with 실행 / 취소. 실행 sends that one token
+(`<pathId>/<stepId>`, `live` for live) back with the same intent once
+(`run_path … approve`); it is valid for that run only and the host stores
+nothing. 취소 never calls the host: 거부됨 card + `실행하지 않았습니다.`. A new
+send drops an unanswered gate. Brain `transmit` lowers to `commit` and runs as
+`input` only for the approved step; `financial_submit` stays `commit` even
+with a token — the runtime hands it to the person. CLI: `--approve
+<pathId>/<stepId>` (repeatable); `--live` is the person's own live approval,
+`PPOMI_BODY_LIVE=1` alone stops at the live gate. Tokens never come from the
+environment (#96 allow-list unchanged).
+
 Failures stay failures. `run_path` / `ai_gateway` pipe the node child's
 stdout and stderr (60 s / 120 s timeout, then kill) and use the last JSON
 object; anything else is `{ code, message }` — `run_path_host_failed` /
