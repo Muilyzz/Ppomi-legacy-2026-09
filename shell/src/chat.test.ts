@@ -6,6 +6,7 @@ import {
   SECRETARY_IDENTITY,
   SECRETARY_TEXT,
   SECRETS_CATALOG_INTENT,
+  assistantTextOf,
   defaultComplete,
   fixtureIntent,
   fixtureResponses,
@@ -299,6 +300,40 @@ test("task miss still uses the path_not_found bubble", async () => {
   assert.equal(turn.lines[1]?.kind, "bubble");
   if (turn.lines[1]?.kind !== "bubble") return;
   assert.equal(turn.lines[1].text, "그 일에 맞는 경로가 아직 없습니다.");
+});
+
+test("complete() sends a Clerk session to the host proxy and never a Gateway key", async () => {
+  const bag = globalThis as { __TAURI__?: { core?: { invoke: (cmd: string, args: Record<string, unknown>) => Promise<unknown> } } };
+  const previous = bag.__TAURI__;
+  const seen: Record<string, unknown>[] = [];
+  bag.__TAURI__ = {
+    core: {
+      invoke: async (cmd, args) => {
+        assert.equal(cmd, "ai_gateway");
+        seen.push(args);
+        return {
+          configured: true,
+          fixture: false,
+          response: { output: [{ type: "message", content: [{ type: "output_text", text: "뽀미입니다." }] }] },
+        };
+      },
+    },
+  };
+  try {
+    const body = await defaultComplete(
+      { input: [{ role: "user", content: "너 모델 뭐야?" }] },
+      { session: async () => "clerk.session.jwt" },
+    );
+    assert.equal(assistantTextOf(body ?? {}), "뽀미입니다.");
+    assert.deepEqual(seen[0], {
+      body: { input: [{ role: "user", content: "너 모델 뭐야?" }], clerkSession: "clerk.session.jwt" },
+    });
+    assert.doesNotMatch(JSON.stringify(seen), /AI_GATEWAY|sk_|file-secret/);
+    assert.equal(await probeChatMode({ session: async () => "clerk.session.jwt" }), "gateway");
+  } finally {
+    if (previous === undefined) delete bag.__TAURI__;
+    else bag.__TAURI__ = previous;
+  }
 });
 
 test("probeChatMode reads fixture from the gateway probe", async () => {

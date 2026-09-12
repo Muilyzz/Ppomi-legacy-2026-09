@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fixtureResponses } from "./chat.ts";
+import { clerkSessionToken, verifyClerkSession } from "./clerk-session.ts";
 
 const GATEWAY = "https://ai-gateway.vercel.sh/v1";
 const TEXT_MODEL = "openai/gpt-6-astra";
@@ -37,6 +38,11 @@ export function parseGatewayEnvFile(text: string): Record<string, string> {
 
 function usableKey(value: string | undefined): boolean {
   return Boolean(value) && !/\s/.test(value ?? "");
+}
+
+/** Process env only. `open --env AI_GATEWAY_API_KEY` is HITL, not the product path. */
+export function processGatewayKey(env: NodeJS.ProcessEnv): string | undefined {
+  return usableKey(env.AI_GATEWAY_API_KEY) ? env.AI_GATEWAY_API_KEY : undefined;
 }
 
 export function mergeGatewayFileEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -86,18 +92,38 @@ function asRecord(body: unknown): Record<string, unknown> {
   return body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : {};
 }
 
+function liveConfigured(
+  raw: NodeJS.ProcessEnv,
+  body: unknown,
+  config: { key: string; base: string; model: string } | null,
+): boolean {
+  if (raw.PPOMI_CHAT === "fixture") return true;
+  if (config === null) return false;
+  if (processGatewayKey(raw) !== undefined) return true;
+  return verifyClerkSession(clerkSessionToken(body, raw));
+}
+
 export async function proxyResponses(
   body: unknown,
   deps: { env?: NodeJS.ProcessEnv; fetch?: typeof fetch } = {},
 ): Promise<Record<string, unknown>> {
-  const env = mergeGatewayFileEnv(deps.env ?? process.env);
-  const fixture = env.PPOMI_CHAT === "fixture";
+  const raw = deps.env ?? process.env;
+  const env = mergeGatewayFileEnv(raw);
+  const fixture = raw.PPOMI_CHAT === "fixture";
   const config = gatewayConfig(env);
-  if (isProbe(body)) return { configured: fixture || config !== null, fixture };
+  const live = liveConfigured(raw, body, config);
+  if (isProbe(body)) return { configured: live, fixture };
   if (fixture) return { configured: true, fixture: true, response: fixtureResponses(asRecord(body)) };
-  if (config === null) return { configured: false, fixture: false };
+  if (!live || config === null) return { configured: false, fixture: false };
   const payload = asRecord(body);
-  const { model: _model, stream: _stream, store: _store, ...rest } = payload;
+  const {
+    model: _model,
+    stream: _stream,
+    store: _store,
+    clerkSession: _clerkSession,
+    probe: _probe,
+    ...rest
+  } = payload;
   let response: Response;
   try {
     response = await (deps.fetch ?? fetch)(`${config.base}/responses`, {

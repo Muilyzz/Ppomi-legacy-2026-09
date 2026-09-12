@@ -68,6 +68,11 @@ export type CompleteFn = (body: Record<string, unknown>) => Promise<ResponsesBod
 export type RunPathFn = (intent: string) => Promise<SpineView>;
 
 type Invoke = (cmd: string, args: Record<string, unknown>) => Promise<unknown>;
+export type ClerkSessionFn = () => Promise<string | undefined>;
+
+function withClerkSession(body: Record<string, unknown>, token: string | undefined): Record<string, unknown> {
+  return token ? { ...body, clerkSession: token } : body;
+}
 
 function tauriInvoke(): Invoke | null {
   const core = (globalThis as { __TAURI__?: { core?: { invoke: Invoke } } }).__TAURI__?.core;
@@ -215,17 +220,21 @@ export function responsesRequest(text: string, extraInput: readonly Record<strin
   };
 }
 
-export async function defaultComplete(body: Record<string, unknown>): Promise<ResponsesBody | null> {
-  if (previewFixture()) return fixtureResponses(body);
+export async function defaultComplete(
+  body: Record<string, unknown>,
+  deps: { session?: ClerkSessionFn } = {},
+): Promise<ResponsesBody | null> {
+  const payload = withClerkSession(body, await (deps.session ?? (async () => undefined))());
+  if (previewFixture()) return fixtureResponses(payload);
   const invoke = tauriInvoke();
   if (invoke !== null) {
     let proxy: GatewayProxy;
     try {
-      proxy = await invoke("ai_gateway", { body }) as GatewayProxy;
+      proxy = await invoke("ai_gateway", { body: payload }) as GatewayProxy;
     } catch {
       throw new Error("gateway_ipc_failed");
     }
-    if (proxy.fixture) return proxy.response ?? fixtureResponses(body);
+    if (proxy.fixture) return proxy.response ?? fixtureResponses(payload);
     if (!proxy.configured) return null;
     if (proxy.error !== undefined || proxy.response === undefined) {
       throw new Error(proxy.error ?? "model_unavailable");
@@ -235,19 +244,20 @@ export async function defaultComplete(body: Record<string, unknown>): Promise<Re
   const response = await fetch("/__ppomi/responses", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
   if (response.status === 503) return null;
   if (!response.ok) throw new Error("모델 응답을 받지 못했습니다.");
   return await response.json() as ResponsesBody;
 }
 
-export async function probeChatMode(): Promise<ChatMode> {
+export async function probeChatMode(deps: { session?: ClerkSessionFn } = {}): Promise<ChatMode> {
+  const probe = withClerkSession({ probe: true }, await (deps.session ?? (async () => undefined))());
   if (previewFixture()) return "fixture";
   const invoke = tauriInvoke();
   if (invoke !== null) {
     try {
-      const proxy = await invoke("ai_gateway", { body: { probe: true } }) as GatewayProxy;
+      const proxy = await invoke("ai_gateway", { body: probe }) as GatewayProxy;
       if (proxy.fixture) return "fixture";
       if (proxy.configured) return "gateway";
     } catch {
