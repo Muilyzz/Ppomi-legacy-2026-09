@@ -13,6 +13,6 @@
 - http://localhost:6006/?path=/story/증빙--presence — Mac/Win/Phone 온라인 표시
 - http://localhost:6006/?path=/story/증빙--preview — 클릭 미리보기 팝오버
 
-서버 칸은 분개·숫자만. 링크 라벨은 `Mac · 세금계산서`처럼 기기 · 종류. 내부 id는 툴바 **debug** 기본 끔. 클릭은 미리보기 팝오버(제목·종류·기기·연결·placeholder). 스냅샷·엑셀은 기기에 두고 스토리에 바이트를 넣지 않는다. 링크는 로컬 즉시 / 피어 온라인이면 E2E / 오프면 비활성(또는 암호문 캐시 안내). 앱 wire·실제 E2E 암호는 없음.
+서버 칸은 분개·숫자만(불투명 ref). 링크 라벨은 `Mac · 세금계산서 · 9.12 01:10`처럼 기기 · 종류 · 시각. 로컬 파일 키는 `(기기, collectedAtMs)` — ms. 내부 id는 툴바 **debug** 기본 끔. 클릭은 미리보기 팝오버(제목·종류·기기·연결·수집시각·placeholder). 스냅샷·엑셀은 기기에 두고 스토리에 바이트를 넣지 않는다. 링크는 로컬 즉시 / 피어 온라인이면 E2E / 오프면 비활성(또는 암호문 캐시 안내). 앱 wire·실제 E2E 암호는 없음.
 
 기존 OCR 스티치(은행·인바디·임대)는 사이드바 **증거**. 테스트: `cd storybook && node --test evidence-fleet.test.mjs`.

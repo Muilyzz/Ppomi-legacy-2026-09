@@ -23,9 +23,24 @@ function hostLabel(fleet, host) {
   return (d && d.label) || HOST[host] || host || 'local';
 }
 
+function collectedAt(item) {
+  var n = Number(item && item.collectedAtMs);
+  return Number.isFinite(n) ? n : null;
+}
+
+function timeShort(ms) {
+  var d = new Date(ms);
+  return (d.getUTCMonth() + 1) + '.' + d.getUTCDate() + ' ' +
+    String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
+}
+
+function timeFull(ms) { return new Date(ms).toISOString().replace('T', ' ').replace('Z', ''); }
+
 function itemLabel(item, st) {
   var kind = item.kind || '';
-  return hostLabel(st.fleet, item.host || st.here) + ' · ' + kind + (gradeOf(kind) === '보조' ? '(보조)' : '');
+  var label = hostLabel(st.fleet, item.host || st.here) + ' · ' + kind + (gradeOf(kind) === '보조' ? '(보조)' : '');
+  var ms = collectedAt(item);
+  return ms == null ? label : label + ' · ' + timeShort(ms);
 }
 
 // 자기 기기(host 없음·local·here)는 즉시. 피어가 살아 있으면 E2E. 아니면 비활성 — 암호문 캐시가 있을 때만 그 안내.
@@ -60,11 +75,13 @@ function popover(it, st, i) {
   var state = linkState(it, st.fleet, st.here);
   var host = it.host || st.here || 'local';
   var title = it.title || itemLabel(it, st);
+  var ms = collectedAt(it);
+  var when = ms == null ? '' : ' · ' + timeFull(ms);
   return '<div class="card ev-pop" popover id="ev-pop-' + i + '" data-pop="' + esc(it.evidence_id) + '">' +
     '<div class="jtitle"><span class="lbl">' + esc(title) + '</span></div>' +
     '<div>' + esc(it.kind) + ' · ' + esc(gradeOf(it.kind)) + '</div>' +
     '<p class="meta">' + esc(hostLabel(st.fleet, host)) + ' · ' + esc(linkLabel(state)) + ' · ' +
-    esc(it.linked ? '연결' : '미연결') + debugId(it.evidence_id, st.debug) + '</p>' +
+    esc(it.linked ? '연결' : '미연결') + when + debugId(it.evidence_id, st.debug) + '</p>' +
     '<div class="ev-pop-preview"><span class="meta">미리보기 · 파일은 기기 · 바이트 없음</span></div>' +
     '<p><button type="button" class="entry" popovertarget="ev-pop-' + i + '" popovertargetaction="hide">닫기</button></p></div>';
 }
@@ -76,7 +93,10 @@ function links(st) {
     var state = linkState(it, st.fleet, st.here);
     var note = state === 'cache' ? ' <small class="meta">암호문만 · 원문 없음</small>' : '';
     var off = state === 'disabled';
-    return '<tr data-evidence="' + esc(it.evidence_id) + '" data-link="' + esc(state) + '">' +
+    var ms = collectedAt(it);
+    return '<tr data-evidence="' + esc(it.evidence_id) + '" data-link="' + esc(state) + '"' +
+      ' data-host="' + esc(it.host || st.here || 'local') + '"' +
+      (ms == null ? '' : ' data-collected="' + ms + '"') + '>' +
       '<td><button type="button" class="entry" data-open="' + esc(it.evidence_id) + '"' +
       (off ? ' disabled' : ' popovertarget="ev-pop-' + i + '"') + '>' +
       esc(itemLabel(it, st)) + '</button>' + note + popover(it, st, i) + '</td>' +
@@ -137,5 +157,5 @@ function mount(el, opts) {
   return {set: set, state: function () { return st; }};
 }
 
-root.EvidenceFleet = {OFFICIAL, AUX, LINK, HOST, gradeOf, hostLabel, itemLabel, linkState, linkLabel, presence, html, mount};
+root.EvidenceFleet = {OFFICIAL, AUX, LINK, HOST, gradeOf, hostLabel, itemLabel, collectedAt, timeShort, timeFull, linkState, linkLabel, presence, html, mount};
 })(globalThis);
